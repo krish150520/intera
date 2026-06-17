@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "685777373489",
+    "project_id": "intera-1505",
+    "storage_bucket": "intera-1505.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:685777373489:android:f1f6f366acfe2aae720810",
+        "android_client_info": {
+          "package_name": "com.example.intera"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXXVvf5dn2gRFfTojH0HE_HJs9VegbPds"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
