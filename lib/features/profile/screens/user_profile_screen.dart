@@ -5,9 +5,11 @@ import '../../../core/theme/colors.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
+import '../../messaging/services/messaging_service.dart';
+import '../../messaging/screens/chat_screen.dart';
 import 'connections_list_screen.dart'; // ◄── IMPORT THE PUBLIC CONNECTIONS SCREEN
 
-class UserProfileScreen extends StatelessWidget {
+class UserProfileScreen extends StatefulWidget {
   final String userId;
   final String userName;
   final String userAvatar;
@@ -20,20 +22,108 @@ class UserProfileScreen extends StatelessWidget {
   });
 
   @override
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  final _messagingService = MessagingService();
+  bool _isOpeningChat = false;
+
+  /// Opens (or creates) the conversation with this profile's user and
+  /// navigates to ChatScreen. If the recipient doesn't follow me back yet,
+  /// this still proceeds - it just opens as a message request, and
+  /// ChatScreen shows the appropriate banner / "request sent" state.
+  Future<void> _onMessageTap(String currentUid) async {
+    if (_isOpeningChat) return;
+    setState(() => _isOpeningChat = true);
+
+    try {
+      final myDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUid)
+          .get();
+      final myData = myDoc.data() ?? {};
+      final myName = myData['name'] ?? 'User';
+      final myAvatar = myData['avatarUrl'] ?? '';
+
+      final result = await _messagingService.getOrCreateConversation(
+        otherUid: widget.userId,
+        myName: myName,
+        myAvatar: myAvatar,
+        otherName: widget.userName,
+        otherAvatar: widget.userAvatar,
+      );
+
+      if (!mounted) return;
+
+      if (result.access == ConversationAccess.pending) {
+        // Let the sender know up front this will go out as a request,
+        // rather than surprising them inside the chat screen.
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Send message request?'),
+            content: Text(
+              '${widget.userName} doesn\'t follow you yet, so this will '
+              'be sent as a message request. They\'ll see it once they '
+              'accept.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Send Request'),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) {
+          setState(() => _isOpeningChat = false);
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            conversationId: result.conversationId,
+            otherUid: widget.userId,
+            otherName: widget.userName,
+            otherAvatar: widget.userAvatar,
+            initialAccess: result.access,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open chat: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isOpeningChat = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final isMe = currentUid == userId;
+    final isMe = currentUid == widget.userId;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        title: Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
         builder: (context, userSnapshot) {
           if (userSnapshot.hasError) {
             return Center(child: Text('Error loading profile: ${userSnapshot.error}'));
@@ -59,28 +149,67 @@ class UserProfileScreen extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: AppColors.primary.withOpacity(0.1),
-                          backgroundImage: userAvatar.isNotEmpty ? NetworkImage(userAvatar) : null,
-                          child: userAvatar.isEmpty
-                              ? Text(userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                                  style: TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.bold))
-                              : null,
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircleAvatar(
+                              radius: 40,
+                              backgroundColor: AppColors.primary.withOpacity(0.1),
+                              backgroundImage: widget.userAvatar.isNotEmpty ? NetworkImage(widget.userAvatar) : null,
+                              child: widget.userAvatar.isEmpty
+                                  ? Text(widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : 'U',
+                                      style: TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.bold))
+                                  : null,
+                            ),
+                            // Message icon button, anchored to the avatar -
+                            // only shown on other people's profiles.
+                            if (!isMe)
+                              Positioned(
+                                bottom: -2,
+                                right: -2,
+                                child: GestureDetector(
+                                  onTap: _isOpeningChat
+                                      ? null
+                                      : () => _onMessageTap(currentUid),
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                    child: _isOpeningChat
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(6),
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.send_rounded,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const Expanded(child: SizedBox()),
                         
                         // Statistics Row
-                        _buildStatColumn('Posts', FirebaseFirestore.instance.collection('posts').where('authorId', isEqualTo: userId).snapshots().map((s) => s.docs.length)),
+                        _buildStatColumn('Posts', FirebaseFirestore.instance.collection('posts').where('authorId', isEqualTo: widget.userId).snapshots().map((s) => s.docs.length)),
                         
                         // FIXED: Wrapped Followers column in an interactive detector routing to the public screen layout
                         GestureDetector(
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => ConnectionsListScreen(
-                                userId: userId, 
+                                userId: widget.userId, 
                                 isFollowersMode: true, 
-                                profileOwnerName: userName,
+                                profileOwnerName: widget.userName,
                               ),
                             ),
                           ),
@@ -92,9 +221,9 @@ class UserProfileScreen extends StatelessWidget {
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => ConnectionsListScreen(
-                                userId: userId, 
+                                userId: widget.userId, 
                                 isFollowersMode: false, 
-                                profileOwnerName: userName,
+                                profileOwnerName: widget.userName,
                               ),
                             ),
                           ),
@@ -103,7 +232,7 @@ class UserProfileScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -118,7 +247,7 @@ class UserProfileScreen extends StatelessWidget {
                     
                     if (!isMe)
                       StreamBuilder<bool>(
-                        stream: FollowService().isFollowingStream(currentUserId: currentUid, targetUserId: userId),
+                        stream: FollowService().isFollowingStream(currentUserId: currentUid, targetUserId: widget.userId),
                         builder: (context, followSnapshot) {
                           final isFollowing = followSnapshot.data ?? false;
                           return SizedBox(
@@ -135,7 +264,7 @@ class UserProfileScreen extends StatelessWidget {
                                 try {
                                   await FollowService().toggleFollowUser(
                                     currentUserId: currentUid,
-                                    targetUserId: userId,
+                                    targetUserId: widget.userId,
                                     isCurrentlyFollowing: isFollowing,
                                   );
                                 } catch (e) {
@@ -177,7 +306,7 @@ class UserProfileScreen extends StatelessWidget {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('posts')
-                      .where('authorId', isEqualTo: userId)
+                      .where('authorId', isEqualTo: widget.userId)
                       .orderBy('createdAt', descending: true)
                       .snapshots(),
                   builder: (context, postSnapshot) {

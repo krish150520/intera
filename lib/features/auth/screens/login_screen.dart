@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_textfield.dart';
 
-/// Screen 3: Login Screen
-/// Authenticates users via email and password, verifying their Firestore metadata profile on success.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -28,74 +26,53 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  /// Verifies or provisions a corresponding Firestore database profile document
-  Future<void> _ensureUserProfileExists(User firebaseUser) async {
-    final userDocRef = FirebaseFirestore.instance.collection('users').doc(firebaseUser.uid);
-    final docSnapshot = await userDocRef.get();
-
-    if (!docSnapshot.exists) {
-      // Lazy-provision profile document if auth credentials exist but the document was skipped
-      final String fallbackName = firebaseUser.displayName ?? 'New User';
-      final String fallbackUsername = '@${(firebaseUser.email ?? 'user').split('@')[0]}';
-
-      await userDocRef.set({
-        'id': firebaseUser.uid,
-        'name': fallbackName,
-        'username': fallbackUsername,
-        'bio': 'Welcome to my INTERA workspace profile!',
-        'avatarUrl': firebaseUser.photoURL ?? '',
-        'karmaPoints': 100, // Welcome gift points initialization
-        'followersCount': 0,
-        'followingCount': 0,
-        'skills': [],
-        'isAnonymous': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-  }
-
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     try {
-      // 1. Authenticate with core Firebase engine
-      final UserCredential credentials = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _identifierController.text.trim(),
-        password: _passwordController.text.trim(),
+      final credentials = await AuthService.instance.signIn(
+        email: _identifierController.text,
+        password: _passwordController.text,
       );
 
       if (credentials.user != null) {
-        // 2. Guarantee structural document data mapping alignment
-        await _ensureUserProfileExists(credentials.user!);
+        await AuthService.instance.ensureUserProfileExists(credentials.user!);
       }
 
       if (!mounted) return;
-
-      // Reset routing history and push user directly to feed screens
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
+      final route = AuthService.instance.isVerified ? AppRoutes.main : AppRoutes.verifyEmail;
+      Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message ?? 'Authentication rejected.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected pipeline issue: $e')),
+        SnackBar(content: Text(e.message ?? 'Authentication rejected.'), backgroundColor: Colors.redAccent),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// Implements real production password reset email sequences
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final credentials = await AuthService.instance.signInWithGoogle();
+      if (credentials.user != null) {
+        await AuthService.instance.ensureUserProfileExists(credentials.user!);
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'sign-in-cancelled') return; // user backed out, no error needed
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Google sign-in failed.'), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _handleForgotPassword() async {
     final email = _identifierController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
@@ -109,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      await AuthService.instance.sendPasswordReset(email);
       if (!mounted) return;
       showDialog(
         context: context,
@@ -117,10 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
           title: const Text('Reset Link Issued'),
           content: Text('A secure link has been transmitted over to $email. Please check your inbox or spam folders to complete your configuration changes.'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Understood'),
-            )
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Understood')),
           ],
         ),
       );
@@ -151,17 +125,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Welcome back',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: Colors.black87),
-                  ),
+                  const Text('Welcome back',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: Colors.black87)),
                   const SizedBox(height: 6),
-                  Text(
-                    'Log in to continue earning Karma.',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  ),
+                  Text('Log in to continue earning Karma.',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
                   const SizedBox(height: 36),
-                  
                   CustomTextField(
                     label: AppStrings.emailOrPhone,
                     controller: _identifierController,
@@ -178,49 +147,53 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 18),
-                  
                   CustomTextField(
                     label: AppStrings.password,
                     controller: _passwordController,
                     obscureText: true,
                     prefixIcon: Icons.lock_open_rounded,
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Password string entry required.';
-                      }
-                      if (value.length < 6) {
-                        return 'Password lengths must clear at least 6 characters.';
-                      }
+                      if (value == null || value.isEmpty) return 'Password string entry required.';
+                      if (value.length < 6) return 'Password lengths must clear at least 6 characters.';
                       return null;
                     },
                   ),
-                  
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: _handleForgotPassword,
-                      child: const Text(
-                        AppStrings.forgotPassword,
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
+                      child: const Text(AppStrings.forgotPassword,
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
-                  CustomButton(
-                    label: AppStrings.login,
-                    isLoading: _isLoading,
-                    onPressed: _handleLogin,
+                  CustomButton(label: AppStrings.login, isLoading: _isLoading, onPressed: _handleLogin),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('or', style: TextStyle(color: Colors.grey.shade500)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
+                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    label: const Text('Continue with Google'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  
                   Center(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pushNamed(AppRoutes.signup),
-                      child: const Text(
-                        AppStrings.dontHaveAccount,
-                        style: TextStyle(color: Colors.black54),
-                      ),
+                      child: const Text(AppStrings.dontHaveAccount, style: TextStyle(color: Colors.black54)),
                     ),
                   ),
                 ],

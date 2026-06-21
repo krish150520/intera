@@ -53,12 +53,12 @@ class AppTextStyles {
   static const TextStyle karmaPositive = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.bold,
-    color: AppColors.karmaPositive,
+    color: AppColors.success,
   );
 
   static const TextStyle karmaNegative = TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.bold,
-    color: AppColors.karmaNegative,
+    color: AppColors.error,
   );
 }

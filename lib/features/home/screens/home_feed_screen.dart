@@ -5,10 +5,33 @@ import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
 import '../widgets/post_card.dart';
+import '../../notifications/screens/notifications_screen.dart';
+import '../../messaging/screens/messages_list_screen.dart';
 
-/// Screen 5: Home Feed Screen
-/// Displays real-time live database updates for stories, tasks, questions,
-/// and common social feed posts.
+// ─────────────────────────────────────────────────────────────────────────────
+// Story data model
+// ─────────────────────────────────────────────────────────────────────────────
+class _StoryEntry {
+  final String uid;
+  final String name;
+  final String? avatar;
+  final String storyId;
+  final bool isMe;
+  bool viewed;
+
+  _StoryEntry({
+    required this.uid,
+    required this.name,
+    this.avatar,
+    required this.storyId,
+    required this.isMe,
+    this.viewed = false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HomeFeedScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
 
@@ -16,161 +39,257 @@ class HomeFeedScreen extends StatefulWidget {
   State<HomeFeedScreen> createState() => _HomeFeedScreenState();
 }
 
-class _HomeFeedScreenState extends State<HomeFeedScreen> {
-  // ── Design tokens ──────────────────────────────────────────────────────────
-  static const Color _bg      = Color(0xFFF5F3FF);
+class _HomeFeedScreenState extends State<HomeFeedScreen>
+    with SingleTickerProviderStateMixin {
+  // ── Design tokens ─────────────────────────────────────────────────────────
+  static const Color _bg      = Color(0xFFEEF0FB);
   static const Color _surface = Color(0xFFFFFFFF);
-  static const Color _muted   = Color(0xFFEDE9FF);
-  static const Color _border  = Color(0xFFE9E4FF);
-  static const Color _primary = Color(0xFF7C3AED);
+  static const Color _cardBg  = Color(0xFFF5F4FF);
+  static const Color _border  = Color(0xFFE4E2F8);
+  static const Color _primary = Color(0xFF6C63D5);
   static const Color _textHi  = Color(0xFF2D1B69);
-  static const Color _textDim = Color(0xFFA89FCC);
+  static const Color _textDim = Color(0xFF9E9BD0);
 
-  // Temporary mock data mapping for stories space.
-  // TODO: Convert this collection space to a dedicated 'stories' StreamBuilder collection later
-  final List<Map<String, dynamic>> _mockStories = [
-    {'name': 'My Story', 'avatar': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Me',    'isMe': true,  'hasUnread': false},
-    {'name': 'Alex M.',  'avatar': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',  'isMe': false, 'hasUnread': true},
-    {'name': 'Sarah J.', 'avatar': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', 'isMe': false, 'hasUnread': true},
-    {'name': 'David K.', 'avatar': 'https://api.dicebear.com/7.x/avataaars/svg?seed=David', 'isMe': false, 'hasUnread': false},
-  ];
+  // ── Rail animation ────────────────────────────────────────────────────────
+  bool _railExpanded = false;
+  AnimationController? _railAnim;
+  Animation<double>? _railWidth; // animates 64 → 100
 
-  /// Updates post metrics (like count and user dynamic arrays) live in Cloud Firestore
-  void _handleLikeEngine(String postId, List likedByArray) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final docRef = FirebaseFirestore.instance.collection('posts').doc(postId);
-    if (likedByArray.contains(uid)) {
-      await docRef.update({
-        'likeCount': FieldValue.increment(-1),
-        'likedBy': FieldValue.arrayRemove([uid]),
-      });
-    } else {
-      await docRef.update({
-        'likeCount': FieldValue.increment(1),
-        'likedBy': FieldValue.arrayUnion([uid]),
-      });
-    }
-  }
+  // ── Story data ────────────────────────────────────────────────────────────
+  List<_StoryEntry> _stories = [];
+  bool _storiesLoading = true;
 
-  /// Toggles saving a reference pointer collection directly on the document node
-  void _handleSaveEngine(String postId, List savedByArray) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final docRef = FirebaseFirestore.instance.collection('posts').doc(postId);
-    if (savedByArray.contains(uid)) {
-      await docRef.update({'savedBy': FieldValue.arrayRemove([uid])});
-    } else {
-      await docRef.update({'savedBy': FieldValue.arrayUnion([uid])});
-    }
-  }
+  String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  void _openPostDetail(Post post) {
-    Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post);
-  }
-
-  void _onStoryTap(int index) {
-    if (_mockStories[index]['isMe']) {
-      // FIXED: Safely maps navigation straight to your new story editor workspace view
-      Navigator.of(context).pushNamed(AppRoutes.createStory);
-    } else {
-      setState(() {
-        _mockStories[index]['hasUnread'] = false;
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _railAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _railWidth = Tween<double>(begin: 64, end: 100).animate(
+      CurvedAnimation(parent: _railAnim!, curve: Curves.easeOutCubic),
+    );
+    _loadStories();
   }
 
   @override
+  void dispose() {
+    _railAnim?.dispose();
+    super.dispose();
+  }
+
+  // ── Toggle rail width ─────────────────────────────────────────────────────
+  void _toggleRail() {
+    setState(() => _railExpanded = !_railExpanded);
+    if (_railExpanded) {
+      _railAnim?.forward();
+    } else {
+      _railAnim?.reverse();
+    }
+  }
+
+  // ── Load stories ──────────────────────────────────────────────────────────
+  Future<void> _loadStories() async {
+    final myUid = _myUid;
+    if (myUid.isEmpty) return;
+    setState(() => _storiesLoading = true);
+
+    try {
+      final now = DateTime.now();
+      final List<_StoryEntry> entries = [];
+
+      // My story slot — always first
+      final mySnap = await FirebaseFirestore.instance
+          .collection('stories')
+          .where('authorId', isEqualTo: myUid)
+          .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
+          .limit(1)
+          .get();
+
+      entries.add(_StoryEntry(
+        uid: myUid,
+        name: 'My Story',
+        avatar: FirebaseAuth.instance.currentUser?.photoURL,
+        storyId: mySnap.docs.isNotEmpty ? mySnap.docs.first.id : '',
+        isMe: true,
+        viewed: true,
+      ));
+
+      // Get following UIDs
+      final followingSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(myUid)
+          .collection('following')
+          .get();
+
+      final followingUids = followingSnap.docs.map((d) => d.id).toList();
+
+      if (followingUids.isNotEmpty) {
+        for (var i = 0; i < followingUids.length; i += 30) {
+          final chunk = followingUids.sublist(
+            i,
+            (i + 30) > followingUids.length ? followingUids.length : i + 30,
+          );
+
+          final snap = await FirebaseFirestore.instance
+              .collection('stories')
+              .where('authorId', whereIn: chunk)
+              .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
+              .orderBy('expiresAt', descending: true)
+              .get();
+
+          final seen = <String>{};
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            final authorId = data['authorId'] as String;
+            if (seen.contains(authorId)) continue;
+            seen.add(authorId);
+            final viewedBy = List<String>.from(data['viewedBy'] ?? []);
+            entries.add(_StoryEntry(
+              uid: authorId,
+              name: data['authorName'] ?? 'User',
+              avatar: data['authorAvatar'],
+              storyId: doc.id,
+              isMe: false,
+              viewed: viewedBy.contains(myUid),
+            ));
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _stories = entries;
+          _storiesLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _storiesLoading = false);
+    }
+  }
+
+  // ── Story tap ─────────────────────────────────────────────────────────────
+  void _onStoryTap(_StoryEntry story) {
+    if (story.isMe) {
+      Navigator.of(context).pushNamed(AppRoutes.createStory);
+      return;
+    }
+    if (!story.viewed && story.storyId.isNotEmpty) {
+      FirebaseFirestore.instance
+          .collection('stories')
+          .doc(story.storyId)
+          .update({'viewedBy': FieldValue.arrayUnion([_myUid])});
+      setState(() => story.viewed = true);
+    }
+    // TODO: push to full-screen story viewer
+  }
+
+  // ── Like / save ───────────────────────────────────────────────────────────
+  void _handleLike(String postId, List likedBy) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final ref = FirebaseFirestore.instance.collection('posts').doc(postId);
+    if (likedBy.contains(uid)) {
+      await ref.update({'likeCount': FieldValue.increment(-1), 'likedBy': FieldValue.arrayRemove([uid])});
+    } else {
+      await ref.update({'likeCount': FieldValue.increment(1), 'likedBy': FieldValue.arrayUnion([uid])});
+    }
+  }
+
+  void _handleSave(String postId, List savedBy) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final ref = FirebaseFirestore.instance.collection('posts').doc(postId);
+    if (savedBy.contains(uid)) {
+      await ref.update({'savedBy': FieldValue.arrayRemove([uid])});
+    } else {
+      await ref.update({'savedBy': FieldValue.arrayUnion([uid])});
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────────────────
+  @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final currentUid = _myUid;
 
     return Scaffold(
       backgroundColor: _bg,
       appBar: _buildAppBar(),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('posts')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.wifi_off_rounded, color: _textDim, size: 36),
-                  const SizedBox(height: 10),
-                  const Text('Could not load feed',
-                      style: TextStyle(color: _textHi, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text('${snapshot.error}',
-                      style: const TextStyle(color: _textDim, fontSize: 12),
-                      textAlign: TextAlign.center),
-                ],
-              ),
-            );
-          }
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Animated left rail ───────────────────────────────────────
+          AnimatedBuilder(
+            animation: _railWidth ?? AlwaysStoppedAnimation(64),
+            builder: (context, _) =>
+                _buildRail(_railWidth?.value ?? 64),
+          ),
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: _primary, strokeWidth: 2),
-            );
-          }
+          // ── Post feed ────────────────────────────────────────────────
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('posts')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return _buildError(snapshot.error.toString());
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                        color: _primary, strokeWidth: 2),
+                  );
+                }
 
-          final docs = snapshot.data?.docs ?? [];
+                final docs = snapshot.data?.docs ?? [];
 
-          // ── Layout: left rail (stories) + scrollable feed (posts) ─────────
-          return RefreshIndicator(
-            color: _primary,
-            backgroundColor: _surface,
-            onRefresh: () async {
-              // StreamBuilder refreshes natively on updates, slight structural anchor delay
-              await Future.delayed(const Duration(milliseconds: 300));
-            },
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Left side rail: stories ──────────────────────────────
-                _buildSideRail(),
-
-                // ── Right: scrollable post feed ──────────────────────────
-                Expanded(
+                return RefreshIndicator(
+                  color: _primary,
+                  backgroundColor: _surface,
+                  onRefresh: () async {
+                    await _loadStories();
+                    await Future.delayed(const Duration(milliseconds: 200));
+                  },
                   child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(0, 12, 12, 100),
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
-                      final docSnapshot = docs[index];
-                      final data = docSnapshot.data() as Map<String, dynamic>? ?? {};
-                      final docId = docSnapshot.id;
+                      final doc = docs[index];
+                      final data = doc.data() as Map<String, dynamic>? ?? {};
                       final List likedBy = data['likedBy'] ?? [];
                       final List savedBy = data['savedBy'] ?? [];
-                      final postItem = Post.fromFirestore(docSnapshot, currentUid);
-
+                      final post = Post.fromFirestore(doc, currentUid);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: PostCard(
-                          post: postItem,
-                          onTap: () => _openPostDetail(postItem),
-                          onLike: () => _handleLikeEngine(docId, likedBy),
-                          onSave: () => _handleSaveEngine(docId, savedBy),
-                          onComment: () => _openPostDetail(postItem),
-                          onShare: () {
-                            // TODO: Implement native sharing operations system link sheets
-                          },
+                          post: post,
+                          onTap: () => Navigator.of(context)
+                              .pushNamed(AppRoutes.postDetail, arguments: post),
+                          onLike: () => _handleLike(doc.id, likedBy),
+                          onSave: () => _handleSave(doc.id, savedBy),
+                          onComment: () => Navigator.of(context)
+                              .pushNamed(AppRoutes.postDetail, arguments: post),
+                          onShare: () {},
                         ),
                       );
                     },
                   ),
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  // ── App bar ────────────────────────────────────────────────────────────────
+  // ── App bar ───────────────────────────────────────────────────────────────
   AppBar _buildAppBar() {
     return AppBar(
       backgroundColor: _bg,
@@ -186,110 +305,208 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         ),
       ),
       actions: [
-        Container(
-          margin: const EdgeInsets.only(right: 16),
-          width: 36,
-          height: 36,
-          decoration: const BoxDecoration(color: _muted, shape: BoxShape.circle),
-          child: const Icon(Icons.notifications_outlined, color: _primary, size: 20),
+        _appBarBtn(
+          icon: Icons.send_outlined,
+          onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MessagesListScreen())),
         ),
+        const SizedBox(width: 10),
+        _appBarBtn(
+          icon: Icons.notifications_outlined,
+          onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+        ),
+        const SizedBox(width: 16),
       ],
     );
   }
 
-  // ── Left side rail ─────────────────────────────────────────────────────────
-  Widget _buildSideRail() {
+  Widget _appBarBtn({required IconData icon, required VoidCallback onTap}) {
+    return ClipOval(
+      child: Material(
+        color: _cardBg,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: _primary.withOpacity(0.18),
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(icon, color: _primary, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Left rail ─────────────────────────────────────────────────────────────
+  Widget _buildRail(double width) {
     return Container(
-      width: 64,
+      width: width,
       decoration: const BoxDecoration(
         color: _surface,
-        border: Border(right: BorderSide(color: _border, width: 1)),
+        border: Border(right: BorderSide(color: _border, width: 0.5)),
       ),
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        itemCount: _mockStories.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 20),
-        itemBuilder: (context, index) {
-          final story     = _mockStories[index];
-          final bool isMe      = story['isMe']      ?? false;
-          final bool hasUnread = story['hasUnread'] ?? false;
-
-          return GestureDetector(
-            onTap: () => _onStoryTap(index),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Avatar with ring
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Unread ring
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: hasUnread ? _primary : _border,
-                          width: hasUnread ? 2 : 1.5,
-                        ),
-                      ),
-                    ),
-                    // Avatar
-                    CircleAvatar(
-                      radius: 19,
-                      backgroundColor: _muted,
-                      backgroundImage: story['avatar'] != null
-                          ? NetworkImage(story['avatar'])
-                          : null,
-                      child: story['avatar'] == null
-                          ? Text(
-                              (story['name'] as String)[0],
-                              style: const TextStyle(
-                                color: _primary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            )
-                          : null,
-                    ),
-                    // "Add" badge for own story
-                    if (isMe)
-                      Positioned(
-                        bottom: 0,
-                        right: 8,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: const BoxDecoration(
-                            color: _primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add, size: 10, color: Colors.white),
-                        ),
-                      ),
-                  ],
+      child: Column(
+        children: [
+          // Arrow toggle button
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
+            child: GestureDetector(
+              onTap: _toggleRail,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _border),
                 ),
-                const SizedBox(height: 5),
-                // Name label
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    (story['name'] as String).split(' ')[0],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
-                      color: hasUnread ? _textHi : _textDim,
-                    ),
+                child: AnimatedRotation(
+                  turns: _railExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 280),
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: _primary,
                   ),
                 ),
-              ],
+              ),
             ),
-          );
-        },
+          ),
+
+          // Stories
+          Expanded(
+            child: _storiesLoading
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: _primary, strokeWidth: 2),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _stories.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 18),
+                    itemBuilder: (context, index) =>
+                        _buildStoryTile(_stories[index], width),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoryTile(_StoryEntry story, double railWidth) {
+    final hasUnread = !story.viewed && !story.isMe;
+    final showName = railWidth > 80;
+
+    return GestureDetector(
+      onTap: () => _onStoryTap(story),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              // Gradient ring for unread, plain border for viewed
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: hasUnread
+                      ? const LinearGradient(
+                          colors: [Color(0xFF6C63D5), Color(0xFF3B2F8F)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  border: !hasUnread
+                      ? Border.all(color: _border, width: 1.5)
+                      : null,
+                ),
+              ),
+              // Avatar
+              CircleAvatar(
+                radius: 19,
+                backgroundColor: _cardBg,
+                backgroundImage:
+                    (story.avatar != null && story.avatar!.isNotEmpty)
+                        ? NetworkImage(story.avatar!)
+                        : null,
+                child: (story.avatar == null || story.avatar!.isEmpty)
+                    ? Text(
+                        story.name[0],
+                        style: const TextStyle(
+                          color: _primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      )
+                    : null,
+              ),
+              // Add badge
+              if (story.isMe)
+                Positioned(
+                  bottom: 0,
+                  right: 8,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: const BoxDecoration(
+                      color: _primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.add, size: 10, color: Colors.white),
+                  ),
+                ),
+            ],
+          ),
+          // Name fades in when expanded
+          if (showName) ...[
+            const SizedBox(height: 5),
+            AnimatedOpacity(
+              opacity: showName ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 180),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  story.isMe ? 'My' : story.name.split(' ').first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight:
+                        hasUnread ? FontWeight.w600 : FontWeight.w400,
+                    color: hasUnread ? _textHi : _textDim,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Error state ───────────────────────────────────────────────────────────
+  Widget _buildError(String msg) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off_rounded, color: _textDim, size: 36),
+          const SizedBox(height: 10),
+          const Text('Could not load feed',
+              style: TextStyle(color: _textHi, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(msg,
+              style: const TextStyle(color: _textDim, fontSize: 12),
+              textAlign: TextAlign.center),
+        ],
       ),
     );
   }

@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/services/auth_service.dart';
 
-/// Screen 1: Splash Screen
-/// Shows the app logo and a loading animation, then routes to Welcome.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,10 +19,28 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateNext() async {
-    await Future.delayed(const Duration(seconds: 2));
+    String route = AppRoutes.welcome;
+
+    try {
+      await Future.delayed(const Duration(seconds: 2));
+
+      final auth = AuthService.instance;
+      if (auth.isLoggedIn) {
+        await auth.reloadUser(); // best-effort refresh; safe even if it fails internally
+        route = auth.isVerified ? AppRoutes.main : AppRoutes.verifyEmail;
+      }
+    } catch (e, st) {
+      debugPrint('Splash navigation error: $e\n$st');
+      // route stays AppRoutes.welcome — safe fallback
+    }
+
     if (!mounted) return;
-    // TODO: check auth/session state and route to AppRoutes.main if logged in.
-    Navigator.of(context).pushReplacementNamed(AppRoutes.welcome);
+
+    try {
+      Navigator.of(context).pushReplacementNamed(route);
+    } catch (e, st) {
+      debugPrint('Navigation failed for route "$route": $e\n$st');
+    }
   }
 
   @override

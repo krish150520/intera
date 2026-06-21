@@ -10,8 +10,6 @@ import '../../profile/screens/user_profile_screen.dart';
 import '../../home/screens/post_detail_screen.dart';
 import '../../videos/screens/community_detail_screen.dart';
 
-/// Screen 7: Search Screen
-/// Lets users query dynamic prefix matches for Users, Posts, Videos, and Communities.
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -20,7 +18,6 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
-  // ── Design tokens ──────────────────────────────────────────────────────────
   static const Color _bg       = Color(0xFFF5F3FF);
   static const Color _surface  = Color(0xFFFFFFFF);
   static const Color _muted    = Color(0xFFEDE9FF);
@@ -79,7 +76,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  // ── Search bar ─────────────────────────────────────────────────────────────
   Widget _buildSearchBar() {
     return SizedBox(
       height: 40,
@@ -114,7 +110,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  // ── Tab bar ────────────────────────────────────────────────────────────────
   Widget _buildTabBar() {
     return TabBar(
       controller: _tabController,
@@ -151,32 +146,42 @@ class _UserResultsList extends StatelessWidget {
   final String searchQuery;
   const _UserResultsList({required this.searchQuery});
 
-  // FIXED: Fully synchronized to write parallel index mappings to followerIds/followingIds collections 
-  void _toggleFollow(String targetUid, bool isFollowing) async {
+  /// Follows/unfollows using the followers/following SUBCOLLECTIONS your
+  /// security rules actually expect — not array fields on the user doc
+  /// (those get rejected by the rules when writing to another user's doc).
+  Future<void> _toggleFollow(BuildContext context, String targetUid, bool isFollowing) async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) return;
 
-    final currentUserDoc = FirebaseFirestore.instance.collection('users').doc(currentUid);
-    final targetUserDoc  = FirebaseFirestore.instance.collection('users').doc(targetUid);
+    final firestore = FirebaseFirestore.instance;
+    final currentUserDoc = firestore.collection('users').doc(currentUid);
+    final targetUserDoc = firestore.collection('users').doc(targetUid);
+    final followingRef = currentUserDoc.collection('following').doc(targetUid);
+    final followerRef = targetUserDoc.collection('followers').doc(currentUid);
+
+    final batch = firestore.batch();
 
     if (isFollowing) {
-      await currentUserDoc.update({
-        'followingCount': FieldValue.increment(-1),
-        'followingIds': FieldValue.arrayRemove([targetUid]),
-      });
-      await targetUserDoc.update({
-        'followersCount': FieldValue.increment(-1),
-        'followerIds': FieldValue.arrayRemove([currentUid]),
-      });
+      batch.delete(followingRef);
+      batch.delete(followerRef);
+      batch.update(currentUserDoc, {'followingCount': FieldValue.increment(-1)});
+      batch.update(targetUserDoc, {'followersCount': FieldValue.increment(-1)});
     } else {
-      await currentUserDoc.update({
-        'followingCount': FieldValue.increment(1),
-        'followingIds': FieldValue.arrayUnion([targetUid]),
-      });
-      await targetUserDoc.update({
-        'followersCount': FieldValue.increment(1),
-        'followerIds': FieldValue.arrayUnion([currentUid]),
-      });
+      batch.set(followingRef, {'createdAt': FieldValue.serverTimestamp()});
+      batch.set(followerRef, {'createdAt': FieldValue.serverTimestamp()});
+      batch.update(currentUserDoc, {'followingCount': FieldValue.increment(1)});
+      batch.update(targetUserDoc, {'followersCount': FieldValue.increment(1)});
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Follow toggle failed: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update follow status. Try again.')),
+        );
+      }
     }
   }
 
@@ -188,89 +193,102 @@ class _UserResultsList extends StatelessWidget {
 
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
+    // Pull the current user's "following" list once so we can check
+    // membership locally instead of one query per search result.
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
-          .orderBy('username')
-          .startAt([searchQuery])
-          .endAt([searchQuery + '\uF8FF'])
+          .doc(currentUid)
+          .collection('following')
           .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Query Index Error: ${snapshot.error}'));
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2));
-        }
+      builder: (context, followingSnapshot) {
+        final followingIds = followingSnapshot.data?.docs.map((d) => d.id).toSet() ?? <String>{};
 
-        final docs = snapshot.data?.docs ?? [];
-        final filtered = docs.where((d) => d.id != currentUid).toList();
+        return StreamBuilder<QuerySnapshot>(
+          // Requires a `usernameLower` field on each user doc — see note below.
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .orderBy('usernameLower')
+              .startAt([searchQuery])
+              .endAt(['$searchQuery\uF8FF'])
+              .limit(30)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) return Center(child: Text('Query Index Error: ${snapshot.error}'));
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2));
+            }
 
-        if (filtered.isEmpty) return const _EmptyResultsPlaceholder(label: 'No users found matching query');
+            final docs = snapshot.data?.docs ?? [];
+            final filtered = docs.where((d) => d.id != currentUid).toList();
 
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-          itemCount: filtered.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final docId = filtered[index].id;
-            final data  = filtered[index].data() as Map<String, dynamic>;
-            final String name      = data['name']      ?? 'User';
-            final String username  = data['username']  ?? 'user';
-            final String avatarUrl = data['avatarUrl'] ?? '';
-            
-            // FIXED: Reads your newly synchronized followerIds collection map arrays natively
-            final List followerIds = data['followerIds'] ?? [];
-            final bool isFollowing = followerIds.contains(currentUid);
+            if (filtered.isEmpty) return const _EmptyResultsPlaceholder(label: 'No users found matching query');
 
-            return GestureDetector(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => UserProfileScreen(userId: docId, userName: name, userAvatar: avatarUrl),
-              )),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _border),
-                ),
-                child: Row(
-                  children: [
-                    CustomAvatar(name: name, imageUrl: avatarUrl, radius: 22),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name, style: const TextStyle(color: _textHi, fontWeight: FontWeight.w600, fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text(
-                            username.startsWith('@') ? username : '@$username',
-                            style: const TextStyle(color: _textDim, fontSize: 12),
-                          ),
-                        ],
-                      ),
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final docId = filtered[index].id;
+                final data  = filtered[index].data() as Map<String, dynamic>;
+                final String name      = data['name']      ?? 'User';
+                final String username  = data['username']  ?? 'user';
+                final String avatarUrl = data['avatarUrl'] ?? '';
+
+                final bool isFollowing = followingIds.contains(docId);
+
+                return GestureDetector(
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => UserProfileScreen(userId: docId, userName: name, userAvatar: avatarUrl),
+                  )),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _border),
                     ),
-                    GestureDetector(
-                      onTap: () => _toggleFollow(docId, isFollowing),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: isFollowing ? Colors.transparent : _primary,
-                          borderRadius: BorderRadius.circular(20),
-                          border: isFollowing ? Border.all(color: _border) : null,
-                        ),
-                        child: Text(
-                          isFollowing ? 'Following' : 'Follow',
-                          style: TextStyle(
-                            color: isFollowing ? _textDim : Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                    child: Row(
+                      children: [
+                        CustomAvatar(name: name, imageUrl: avatarUrl, radius: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name, style: const TextStyle(color: _textHi, fontWeight: FontWeight.w600, fontSize: 14)),
+                              const SizedBox(height: 2),
+                              Text(
+                                username.startsWith('@') ? username : '@$username',
+                                style: const TextStyle(color: _textDim, fontSize: 12),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                        GestureDetector(
+                          onTap: () => _toggleFollow(context, docId, isFollowing),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: isFollowing ? Colors.transparent : _primary,
+                              borderRadius: BorderRadius.circular(20),
+                              border: isFollowing ? Border.all(color: _border) : null,
+                            ),
+                            child: Text(
+                              isFollowing ? 'Following' : 'Follow',
+                              style: TextStyle(
+                                color: isFollowing ? _textDim : Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -298,11 +316,13 @@ class _PostResultsList extends StatelessWidget {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return StreamBuilder<QuerySnapshot>(
+      // Requires a `contentLower` field on each post doc — see note below.
       stream: FirebaseFirestore.instance
           .collection('posts')
-          .orderBy('content')
+          .orderBy('contentLower')
           .startAt([searchQuery])
-          .endAt([searchQuery + '\uF8FF'])
+          .endAt(['$searchQuery\uF8FF'])
+          .limit(30)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -391,7 +411,8 @@ class _CommunityResultsList extends StatelessWidget {
           .collection('communities')
           .orderBy('searchName')
           .startAt([searchQuery])
-          .endAt([searchQuery + '\uF8FF'])
+          .endAt(['$searchQuery\uF8FF'])
+          .limit(30)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));

@@ -12,7 +12,20 @@
           "package_name": "com.example.intera"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "685777373489-lrs4nbs4775a17nd41coqo7bfpul0m36.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.intera",
+            "certificate_hash": "8cf9a579e72e8e47df6ad0d5e08ec43e38df7d9b"
+          }
+        },
+        {
+          "client_id": "685777373489-1a8fku9uksk62ic4ks73ifj5nitl3dps.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAXXVvf5dn2gRFfTojH0HE_HJs9VegbPds"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "685777373489-1a8fku9uksk62ic4ks73ifj5nitl3dps.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "685777373489-rllp6q5as7poqog4mc4sam75tjtib4rq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.intera"
+              }
+            }
+          ]
         }
       }
     }

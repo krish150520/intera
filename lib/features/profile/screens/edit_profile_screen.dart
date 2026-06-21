@@ -138,8 +138,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (_selectedImageFile != null) {
         final storageRef = FirebaseStorage.instance
             .ref()
-            .child('profile_pictures/${user.uid}.jpg');
-
+            .child('profile_pictures/${user.uid}/avatar.jpg');
         final uploadTask = storageRef.putFile(_selectedImageFile!);
         final snapshot = await uploadTask;
         finalAvatarUrl = await snapshot.ref.getDownloadURL();

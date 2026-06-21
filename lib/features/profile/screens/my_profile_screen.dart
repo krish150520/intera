@@ -10,6 +10,7 @@ import '../../home/widgets/post_card.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../videos/screens/community_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -634,9 +635,14 @@ class _ConnectionsListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final query = isFollowersMode
-        ? FirebaseFirestore.instance.collection('users').where('followingIds', arrayContains: userId)
-        : FirebaseFirestore.instance.collection('users').where('followerIds', arrayContains: userId);
+    // FollowService stores connections as subcollections, NOT as array
+    // fields on the user doc:
+    //   users/{uid}/followers/{otherUid}  -> people who follow {uid}
+    //   users/{uid}/following/{otherUid}  -> people {uid} follows
+    // The subcollection doc ID is the other user's UID.
+    final CollectionReference collectionRef = isFollowersMode
+        ? FirebaseFirestore.instance.collection('users').doc(userId).collection('followers')
+        : FirebaseFirestore.instance.collection('users').doc(userId).collection('following');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -651,7 +657,7 @@ class _ConnectionsListScreen extends StatelessWidget {
         foregroundColor: _textDark,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
+        stream: collectionRef.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
@@ -660,9 +666,9 @@ class _ConnectionsListScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator(color: _primary));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          final connectionDocs = snapshot.data?.docs ?? [];
 
-          if (docs.isEmpty) {
+          if (connectionDocs.isEmpty) {
             return Center(
               child: Text(
                 isFollowersMode ? 'No followers yet.' : 'Not following anyone yet.',
@@ -672,25 +678,58 @@ class _ConnectionsListScreen extends StatelessWidget {
           }
 
           return ListView.separated(
-            itemCount: docs.length,
+            itemCount: connectionDocs.length,
             separatorBuilder: (_, __) =>
                 const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFEAE8FB)),
             itemBuilder: (context, index) {
-              final data     = docs[index].data() as Map<String, dynamic>;
-              final String name     = data['name'] ?? 'User';
-              final String username = data['username'] ?? 'user';
-              final String avatar   = data['avatarUrl'] ?? '';
+              // The subcollection doc ID IS the other user's UID - we still
+              // need to fetch their actual profile doc to get name/avatar.
+              final String targetUid = connectionDocs[index].id;
 
-              return ListTile(
-                leading: CustomAvatar(name: name, imageUrl: avatar.isNotEmpty ? avatar : null, radius: 20),
-                title: Text(name,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _textDark)),
-                subtitle: Text(
-                  username.startsWith('@') ? username : '@$username',
-                  style: const TextStyle(fontSize: 12, color: _textMuted),
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFD8D5F8)),
-                onTap: () {},
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(targetUid).get(),
+                builder: (context, userSnapshot) {
+                  if (userSnapshot.connectionState == ConnectionState.waiting) {
+                    return const ListTile(
+                      leading: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _primary),
+                      ),
+                    );
+                  }
+
+                  if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                    return const SizedBox.shrink(); // Hide if profile was deleted
+                  }
+
+                  final data     = userSnapshot.data!.data() as Map<String, dynamic>;
+                  final String name     = data['name'] ?? 'User';
+                  final String username = data['username'] ?? 'user';
+                  final String avatar   = data['avatarUrl'] ?? '';
+
+                  return ListTile(
+                    leading: CustomAvatar(name: name, imageUrl: avatar.isNotEmpty ? avatar : null, radius: 20),
+                    title: Text(name,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _textDark)),
+                    subtitle: Text(
+                      username.startsWith('@') ? username : '@$username',
+                      style: const TextStyle(fontSize: 12, color: _textMuted),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFD8D5F8)),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => UserProfileScreen(
+                            userId: targetUid,
+                            userName: name,
+                            userAvatar: avatar,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               );
             },
           );

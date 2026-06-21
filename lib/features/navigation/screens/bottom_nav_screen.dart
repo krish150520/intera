@@ -8,6 +8,7 @@ import '../../create/screens/create_post_screen.dart';
 import '../../videos/screens/communities_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../profile/screens/my_profile_screen.dart';
+import '../../tasks/screens/task_screen.dart'; // Update path as needed
 
 class BottomNavScreen extends StatefulWidget {
   const BottomNavScreen({super.key});
@@ -31,19 +32,19 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     HomeFeedScreen(),
     SearchScreen(),
     CreatePostScreen(),
-    CommunitiesScreen(), // ◄── SWAPPED HERE
-    NotificationsScreen(),
+    CommunitiesScreen(),
+    HelpRequestScreen(),    // ◄── REPLACED NotificationsScreen
     MyProfileScreen(),
   ];
 
   // FIXED: Updated icon data blueprints and label strings to mirror a communal dashboard hub style
-  static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,         label: AppStrings.home),
-    _NavItem(icon: Icons.search_rounded,         activeIcon: Icons.search_rounded,        label: AppStrings.search),
-    _NavItem(icon: Icons.add_rounded,            activeIcon: Icons.add_rounded,           label: AppStrings.create),
-    _NavItem(icon: Icons.group_outlined,         activeIcon: Icons.group_rounded,         label: 'Communities'), // ◄── SWAPPED HERE
-    _NavItem(icon: Icons.notifications_outlined, activeIcon: Icons.notifications_rounded, label: AppStrings.notifications),
-    _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: AppStrings.profile),
+ static const List<_NavItem> _items = [
+    _NavItem(icon: Icons.home_outlined,         activeIcon: Icons.home_rounded,         label: AppStrings.home),
+    _NavItem(icon: Icons.search_rounded,        activeIcon: Icons.search_rounded,       label: AppStrings.search),
+    _NavItem(icon: Icons.add_rounded,           activeIcon: Icons.add_rounded,          label: AppStrings.create),
+    _NavItem(icon: Icons.group_outlined,        activeIcon: Icons.group_rounded,        label: 'Communities'),
+    _NavItem(icon: Icons.task_alt_outlined,     activeIcon: Icons.task_rounded,         label: 'Tasks'), // ◄── UPDATED
+    _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,      label: AppStrings.profile),
   ];
 
   // Index of the "Create" button — rendered differently (elevated square)

@@ -19,7 +19,7 @@ class Post {
   final bool isLiked;
   final bool isSaved;
   final DateTime createdAt;
-
+  static const String typeHelpRequest = 'helpRequest';
   // Help-request specific
   final int? rewardKarma;
 
@@ -48,24 +48,25 @@ class Post {
     final List likedBy = data['likedBy'] ?? [];
     final List savedBy = data['savedBy'] ?? [];
     
-    // Safely extract Firestore Timestamp and convert to native Dart DateTime
+    // Parse Date
     DateTime parsedDate = DateTime.now();
-    if (data['createdAt'] != null && data['createdAt'] is Timestamp) {
+    if (data['createdAt'] is Timestamp) {
       parsedDate = (data['createdAt'] as Timestamp).toDate();
     }
 
+    // Robust Type Parsing: Handles both "helpRequest" and "PostType.helpRequest"
+    String rawType = (data['type'] ?? 'text').toString();
+    if (rawType.contains('.')) rawType = rawType.split('.').last;
+
     return Post(
       id: doc.id,
-      authorId: data['authorId'] ?? '', // FIXED: Maps cleanly to the core schema field
+      authorId: data['authorId'] ?? '',
       authorName: data['authorName'] ?? 'Anonymous',
       authorUsername: data['authorUsername'] ?? '@user',
-      authorAvatarUrl: data['authorAvatarUrl'] ?? data['authorAvatar'], // Cross-compat fallback
-      type: PostType.values.firstWhere(
-        (e) => e.name == (data['type'] ?? 'text'),
-        orElse: () => PostType.text,
-      ),
+      authorAvatarUrl: data['authorAvatarUrl'] ?? data['authorAvatar'],
+      type: PostType.values.asNameMap()[rawType] ?? PostType.text,
       content: data['content'] ?? '',
-      imageUrl: data['imageUrl'] ?? data['mediaUrl'], // Cross-compat fallback
+      imageUrl: data['imageUrl'] ?? data['mediaUrl'],
       likeCount: data['likeCount'] ?? 0,
       commentCount: data['commentCount'] ?? 0,
       shareCount: data['shareCount'] ?? 0,
@@ -74,87 +75,5 @@ class Post {
       createdAt: parsedDate,
       rewardKarma: data['karmaReward'] ?? data['rewardKarma'],
     );
-  }
-
-  Post copyWith({
-    int? likeCount,
-    int? commentCount,
-    int? shareCount,
-    bool? isLiked,
-    bool? isSaved,
-  }) {
-    return Post(
-      id: id,
-      authorId: authorId, // FIXED: Maintained immutable tracking copy
-      authorName: authorName,
-      authorUsername: authorUsername,
-      authorAvatarUrl: authorAvatarUrl,
-      type: type,
-      content: content,
-      imageUrl: imageUrl,
-      likeCount: likeCount ?? this.likeCount,
-      commentCount: commentCount ?? this.commentCount,
-      shareCount: shareCount ?? this.shareCount,
-      isLiked: isLiked ?? this.isLiked,
-      isSaved: isSaved ?? this.isSaved,
-      createdAt: createdAt,
-      rewardKarma: rewardKarma,
-    );
-  }
-
-  /// Sample posts for UI development before backend integration.
-  static List<Post> samples() {
-    final now = DateTime.now();
-    return [
-      Post(
-        id: 'p1',
-        authorId: 'u_mock1',
-        authorName: 'Aditi Rao',
-        authorUsername: '@aditi.codes',
-        type: PostType.text,
-        content: 'Finally got my Flutter app to build for Windows after fixing the MSVC toolchain issue. Feels great!',
-        likeCount: 24,
-        commentCount: 5,
-        shareCount: 2,
-        createdAt: now.subtract(const Duration(minutes: 12)),
-      ),
-      Post(
-        id: 'p2',
-        authorId: 'u_mock2',
-        authorName: 'Rohan Mehta',
-        authorUsername: '@rohan.m',
-        type: PostType.question,
-        content: 'How do I scan ESP32 channels for nRF24L01 sniffing without missing packets? Any tips on hop timing?',
-        likeCount: 8,
-        commentCount: 11,
-        shareCount: 0,
-        createdAt: now.subtract(const Duration(hours: 2)),
-      ),
-      Post(
-        id: 'p3',
-        authorId: 'u_mock3',
-        authorName: 'Sneha Kapoor',
-        authorUsername: '@sneha.k',
-        type: PostType.helpRequest,
-        content: 'Need help debugging a PyQt5 + Oracle XE connection issue with PyInstaller builds. Works in dev but fails when packaged.',
-        likeCount: 3,
-        commentCount: 2,
-        shareCount: 1,
-        createdAt: now.subtract(const Duration(hours: 5)),
-        rewardKarma: 20,
-      ),
-      Post(
-        id: 'p4',
-        authorId: 'u_mock4',
-        authorName: 'Vikram Singh',
-        authorUsername: '@vikram.s',
-        type: PostType.achievement,
-        content: 'Just crossed 1000 Karma points on INTERA! Thanks to everyone who upvoted my answers 🎉',
-        likeCount: 56,
-        commentCount: 9,
-        shareCount: 4,
-        createdAt: now.subtract(const Duration(days: 1)),
-      ),
-    ];
   }
 }
