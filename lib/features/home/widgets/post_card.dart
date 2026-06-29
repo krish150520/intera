@@ -1,222 +1,359 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
-import '../../../core/theme/colors.dart';
 import '../../../shared/models/post_model.dart';
-import '../../../shared/widgets/custom_avatar.dart';
-import '../../profile/screens/user_profile_screen.dart'; 
 
-/// Renders a single feed item with dynamic media preview boxes 
-/// and standard social media user action slots.
 class PostCard extends StatelessWidget {
   final Post post;
   final VoidCallback? onTap;
   final VoidCallback? onLike;
+  final VoidCallback? onSave;
   final VoidCallback? onComment;
   final VoidCallback? onShare;
-  final VoidCallback? onSave;
 
   const PostCard({
     super.key,
     required this.post,
     this.onTap,
     this.onLike,
+    this.onSave,
     this.onComment,
     this.onShare,
-    this.onSave,
   });
 
-  String _typeLabel() {
-    switch (post.type) {
-      case PostType.question: return 'Question';
-      case PostType.helpRequest: return 'Help Request';
-      case PostType.achievement: return 'Achievement';
-      case PostType.image: return 'Image Post';
-      case PostType.video: return 'Video Post';
-      case PostType.text: return '';
-    }
-  }
+  bool get _hasMedia =>
+      post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
-  Color _typeColor() {
-    switch (post.type) {
-      case PostType.question: return Colors.blue;
-      case PostType.helpRequest: return AppColors.warning;
-      case PostType.achievement: return AppColors.success;
-      case PostType.image: return AppColors.primary;
-      case PostType.video: return AppColors.primary;
-      case PostType.text: return AppColors.primary;
+  bool get _isMediaType =>
+      post.type == PostType.image || post.type == PostType.video;
+
+  @override
+  Widget build(BuildContext context) {
+    // Image / video posts → full-bleed card (existing style, kept as-is)
+    if (_hasMedia || _isMediaType) {
+      return _MediaPostCard(
+        post: post,
+        onTap: onTap,
+        onLike: onLike,
+        onSave: onSave,
+        onComment: onComment,
+      );
     }
+
+    // All other post types → Option C tinted card
+    return _TextPostCard(
+      post: post,
+      onTap: onTap,
+      onLike: onLike,
+      onSave: onSave,
+      onComment: onComment,
+    );
+  }
+}
+
+// ── Option C: tinted background card (text / question / help / achievement) ──
+
+class _TextPostCard extends StatelessWidget {
+  final Post post;
+  final VoidCallback? onTap;
+  final VoidCallback? onLike;
+  final VoidCallback? onSave;
+  final VoidCallback? onComment;
+
+  const _TextPostCard({
+    required this.post,
+    this.onTap,
+    this.onLike,
+    this.onSave,
+    this.onComment,
+  });
+
+  // Per-type colour config
+  _TypeStyle get _style => switch (post.type) {
+        PostType.question    => const _TypeStyle(
+            bg:         Color(0xFFF0FFF4),
+            border:     Color(0xFFC8E6C9),
+            pillBg:     Color(0xFF388E3C),
+            pillText:   Colors.white,
+            label:      'Question',
+            emoji:      '❓',
+          ),
+        PostType.helpRequest => const _TypeStyle(
+            bg:         Color(0xFFFFFBF0),
+            border:     Color(0xFFF5DCAA),
+            pillBg:     Color(0xFFC9830A),
+            pillText:   Colors.white,
+            label:      'Help',
+            emoji:      '🤝',
+          ),
+        PostType.achievement => const _TypeStyle(
+            bg:         Color(0xFFFFF8F0),
+            border:     Color(0xFFFFCC80),
+            pillBg:     Color(0xFFE65100),
+            pillText:   Colors.white,
+            label:      'Achievement',
+            emoji:      '🏆',
+          ),
+        _ => const _TypeStyle(
+            // text, question fallback
+            bg:         Color(0xFFF5F4FF),
+            border:     Color(0xFFE4E2F8),
+            pillBg:     Color(0xFF6C63D5),
+            pillText:   Colors.white,
+            label:      'Text',
+            emoji:      '💬',
+          ),
+      };
+
+  String _pillLabel() {
+    if (post.type == PostType.helpRequest &&
+        (post.rewardKarma ?? 0) > 0) {
+      return 'Help · ${post.rewardKarma} ⚡';
+    }
+    return _style.label;
   }
 
   @override
   Widget build(BuildContext context) {
-    final String labelText = _typeLabel();
-    final hasMedia = post.imageUrl != null && post.imageUrl!.isNotEmpty;
+    final s = _style;
 
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Interactive Profile Header Row Configuration
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => UserProfileScreen(
-                        userId: post.authorId,
-                        userName: post.authorName,
-                        userAvatar: post.authorAvatarUrl ?? '',
-                      ),
-                    ),
-                  );
-                },
-                child: Row(
-                  children: [
-                    CustomAvatar(
-                      name: post.authorName,
-                      imageUrl: post.authorAvatarUrl, 
-                      radius: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            post.authorName,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          Text(
-                            // FIXED: Dynamic structural check evaluates and reformats invalid fallback states automatically
-                            (post.authorUsername != null && post.authorUsername.isNotEmpty && post.authorUsername != '@user')
-                                ? (post.authorUsername.startsWith('@') ? post.authorUsername : '@${post.authorUsername}')
-                                : '@${post.authorName.toLowerCase().replaceAll(' ', '')}', // ◄── Smart Fallback handle path
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (labelText.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _typeColor().withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          labelText,
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _typeColor()),
-                        ),
-                      ),
-                  ],
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 160),
+        decoration: BoxDecoration(
+          color: s.bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: s.border),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            // Large faded emoji watermark (top-right)
+            Positioned(
+              top: -4,
+              right: -2,
+              child: Text(
+                s.emoji,
+                style: const TextStyle(fontSize: 52),
               ),
-              const SizedBox(height: 12),
-              
-              // Text Content Statement block
-              if (post.content.isNotEmpty) ...[
-                Text(
-                  post.content, 
-                  style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
-                ),
-                const SizedBox(height: 12),
-              ],
+            ),
 
-              // DYNAMIC MEDIA SECTION: Conditional media template render paths
-              if (hasMedia) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: post.type == PostType.video
-                      ? _FeedVideoPlayer(videoUrl: post.imageUrl!)
-                      : Image.network(
-                          post.imageUrl!,
-                          width: double.infinity,
-                          height: 280,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 280,
-                              color: Colors.grey.shade100,
-                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            height: 120,
-                            color: Colors.grey.shade100,
-                            child: const Center(child: Icon(Icons.broken_image_outlined, color: Colors.grey)),
-                          ),
-                        ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              // Task Rewards block structure
-              if (post.type == PostType.helpRequest && post.rewardKarma != null && post.rewardKarma! > 0) ...[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Type pill ───────────────────────────────────────────
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
+                    color: s.pillBg,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.bolt_rounded, size: 16, color: Colors.amber),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Assistance Bounty: ${post.rewardKarma} Karma',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                  child: Text(
+                    _pillLabel(),
+                    style: TextStyle(
+                      color: s.pillText,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ── Title ────────────────────────────────────────────────
+                if (post.title.isNotEmpty)
+                  Text(
+                    post.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2D2A6E),
+                      height: 1.25,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+
+                // ── Body ─────────────────────────────────────────────────
+                if (post.body.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    post.body,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF555555),
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+
+                // ── Footer ────────────────────────────────────────────────
+                Row(children: [
+                  // Avatar
+                  _MiniAvatar(
+                    name: post.authorName,
+                    imageUrl: post.authorAvatarUrl,
+                  ),
+                  const SizedBox(width: 7),
+
+                  // Author + time
+                  Expanded(
+                    child: Text(
+                      '${post.authorUsername} · ${_formatTime(post.createdAt)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF9E9BD0),
                       ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+
+                  // Stats
+                  _FooterStat(
+                    icon: post.isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    iconColor: post.isLiked
+                        ? const Color(0xFFFF6B8A)
+                        : const Color(0xFFB0ADDE),
+                    label: _compact(post.likeCount),
+                    onTap: onLike,
+                  ),
+                  const SizedBox(width: 10),
+                  _FooterStat(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    iconColor: const Color(0xFFB0ADDE),
+                    label: _compact(post.commentCount),
+                    onTap: onComment,
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: onSave,
+                    child: Icon(
+                      post.isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      size: 18,
+                      color: post.isSaved
+                          ? const Color(0xFF6C63D5)
+                          : const Color(0xFFB0ADDE),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Full-bleed media card (image / video posts) ───────────────────────────────
+
+class _MediaPostCard extends StatelessWidget {
+  final Post post;
+  final VoidCallback? onTap;
+  final VoidCallback? onLike;
+  final VoidCallback? onSave;
+  final VoidCallback? onComment;
+
+  const _MediaPostCard({
+    required this.post,
+    this.onTap,
+    this.onLike,
+    this.onSave,
+    this.onComment,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage =
+        post.imageUrl != null && post.imageUrl!.isNotEmpty;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          height: 360,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image / fallback
+              hasImage
+                  ? Image.network(
+                      post.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const _FallbackBg(),
+                    )
+                  : const _FallbackBg(),
+
+              // Gradient overlay
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.0, 0.30, 1.0],
+                    colors: [
+                      Color(0x00000000),
+                      Color(0x44000000),
+                      Color(0xE0000000),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-              ],
+              ),
 
-              // Interaction Row Bar Action buttons
-              Row(
-                children: [
-                  _ActionButton(
-                    icon: post.isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    label: '${post.likeCount}', 
-                    color: post.isLiked ? Colors.red : Colors.grey.shade600,
-                    onTap: onLike,
-                  ),
-                  const SizedBox(width: 12),
-                  _ActionButton(
-                    icon: Icons.mode_comment_outlined,
-                    label: '${post.commentCount}', 
-                    color: Colors.grey.shade600,
-                    onTap: onComment,
-                  ),
-                  const SizedBox(width: 12),
-                  _ActionButton(
-                    icon: Icons.share_outlined,
-                    label: 'Share',
-                    color: Colors.grey.shade600,
-                    onTap: onShare,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: Icon(
-                      post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                      size: 20,
-                      color: post.isSaved ? AppColors.primary : Colors.grey.shade600,
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _AuthorRow(post: post),
+                    const Spacer(),
+                    if (post.title.isNotEmpty)
+                      Text(
+                        post.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    if (post.body.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        post.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.72),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    _MediaStatsRow(
+                      post: post,
+                      onLike: onLike,
+                      onComment: onComment,
+                      onSave: onSave,
                     ),
-                    onPressed: onSave,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -226,129 +363,239 @@ class PostCard extends StatelessWidget {
   }
 }
 
-// --- SELF-CONTAINED MEMORY-SAFE FEED VIDEO CONTAINER ---
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
-class _FeedVideoPlayer extends StatefulWidget {
-  final String videoUrl;
-  const _FeedVideoPlayer({required this.videoUrl});
-
-  @override
-  State<_FeedVideoPlayer> createState() => _FeedVideoPlayerState();
+String _formatTime(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  return '${diff.inDays}d ago';
 }
 
-class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
-  late VideoPlayerController _controller;
-  bool _isInitialized = false;
+String _compact(int n) {
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+  return '$n';
+}
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() => _isInitialized = true);
-          _controller.setLooping(true);
-          _controller.setVolume(0); 
-        }
-      });
-  }
+// ── Sub-widgets ───────────────────────────────────────────────────────────────
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _TypeStyle {
+  final Color bg;
+  final Color border;
+  final Color pillBg;
+  final Color pillText;
+  final String label;
+  final String emoji;
+
+  const _TypeStyle({
+    required this.bg,
+    required this.border,
+    required this.pillBg,
+    required this.pillText,
+    required this.label,
+    required this.emoji,
+  });
+}
+
+class _MiniAvatar extends StatelessWidget {
+  final String name;
+  final String? imageUrl;
+
+  const _MiniAvatar({required this.name, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
-      return Container(
-        height: 200,
-        color: Colors.black87,
-        child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-      );
-    }
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _controller.value.isPlaying ? _controller.pause() : _controller.play();
-        });
-      },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: _controller.value.aspectRatio,
-            child: VideoPlayer(_controller),
-          ),
-          if (!_controller.value.isPlaying)
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: Colors.black.withOpacity(0.5),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
-            ),
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _controller.setVolume(_controller.value.volume == 0 ? 1 : 0);
-                });
-              },
-              child: CircleAvatar(
-                radius: 14,
-                backgroundColor: Colors.black.withOpacity(0.6),
-                child: Icon(
-                  _controller.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+    return CircleAvatar(
+      radius: 11,
+      backgroundColor: const Color(0xFF6C63D5),
+      backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
+      child: !hasImage
+          ? Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: const TextStyle(
                   color: Colors.white,
-                  size: 14,
-                ),
-              ),
-            ),
-          )
-        ],
-      ),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700),
+            )
+          : null,
     );
   }
 }
 
-// --- ICON ACTION BUTTON WIDGET COMPONENT ---
-
-class _ActionButton extends StatelessWidget {
+class _FooterStat extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
   final String label;
-  final Color color;
   final VoidCallback? onTap;
 
-  const _ActionButton({
+  const _FooterStat({
     required this.icon,
+    required this.iconColor,
     required this.label,
-    required this.color,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 15, color: iconColor),
+        const SizedBox(width: 3),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF9E9BD0))),
+      ]),
+    );
+  }
+}
+
+// Media card author row
+class _AuthorRow extends StatelessWidget {
+  final Post post;
+  const _AuthorRow({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAvatar =
+        post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty;
+
+    return Row(children: [
+      CircleAvatar(
+        radius: 16,
+        backgroundColor: const Color(0xFF6C63D5),
+        backgroundImage:
+            hasAvatar ? NetworkImage(post.authorAvatarUrl!) : null,
+        child: !hasAvatar
+            ? Text(
+                post.authorName.isNotEmpty
+                    ? post.authorName[0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700),
+              )
+            : null,
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
+            Text(post.authorName,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
             Text(
-              label,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+              _formatTime(post.createdAt),
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.6), fontSize: 10),
             ),
           ],
+        ),
+      ),
+    ]);
+  }
+}
+
+// Media card stats row
+class _MediaStatsRow extends StatelessWidget {
+  final Post post;
+  final VoidCallback? onLike;
+  final VoidCallback? onComment;
+  final VoidCallback? onSave;
+
+  const _MediaStatsRow({
+    required this.post,
+    this.onLike,
+    this.onComment,
+    this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      _MediaStatBtn(
+        icon: post.isLiked
+            ? Icons.favorite_rounded
+            : Icons.favorite_border_rounded,
+        iconColor:
+            post.isLiked ? const Color(0xFFFF6B8A) : Colors.white,
+        label: _compact(post.likeCount),
+        onTap: onLike,
+      ),
+      const SizedBox(width: 16),
+      _MediaStatBtn(
+        icon: Icons.chat_bubble_outline_rounded,
+        iconColor: Colors.white,
+        label: _compact(post.commentCount),
+        onTap: onComment,
+      ),
+      const Spacer(),
+      GestureDetector(
+        onTap: onSave,
+        child: Icon(
+          post.isSaved
+              ? Icons.bookmark_rounded
+              : Icons.bookmark_border_rounded,
+          color:
+              post.isSaved ? const Color(0xFF6C63D5) : Colors.white,
+          size: 22,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _MediaStatBtn extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _MediaStatBtn({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 4),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
+// Fallback gradient background for media cards
+class _FallbackBg extends StatelessWidget {
+  const _FallbackBg();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2D1B69), Color(0xFF6C63D5)],
         ),
       ),
     );

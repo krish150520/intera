@@ -2,13 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
-// import '../../../core/theme/colors.dart';
 import '../../../shared/models/post_model.dart';
-// import '../../../shared/widgets/custom_button.dart';
-// import '../../../shared/widgets/custom_textfield.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../../../core/karma/karma_service.dart';
+import '../../../core/karma/karma_badge.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String? communityId;
@@ -19,165 +19,173 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
-  PostType _selectedType = PostType.text;
-  final _contentController = TextEditingController();
-  final _titleController = TextEditingController();
+  PostType _selectedType  = PostType.text;
+  final _titleController  = TextEditingController();
+  final _bodyController   = TextEditingController();
   final _rewardController = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
   File? _selectedMediaFile;
   VideoPlayerController? _videoPreviewController;
-
   bool _isLoading = false;
 
-  // ─── Theme colours ────────────────────────────────────────────────────────
-  static const Color _primary     = Color(0xFF6C63D5);
-  static const Color _primaryBg   = Color(0xFFEEF0FB);
-  static const Color _fieldBg     = Color(0xFFF5F4FF);
-  static const Color _fieldBorder = Color(0xFFE4E2F8);
-  static const Color _textDark    = Color(0xFF2D2A6E);
-  static const Color _textMuted   = Color(0xFF9E9BD0);
-  static const Color _chipBorder  = Color(0xFFD8D5F8);
-  static const Color _cardBorder  = Color(0xFFE4E2F8);
+  // ── Palette ────────────────────────────────────────────────────────────────
+  static const Color _primary    = Color(0xFF6C63D5);
+  static const Color _primaryBg  = Color(0xFFEEF0FB);
+  static const Color _fieldBg    = Color(0xFFF5F4FF);
+  static const Color _fieldBorder= Color(0xFFE4E2F8);
+  static const Color _textDark   = Color(0xFF2D2A6E);
+  static const Color _textMuted  = Color(0xFF9E9BD0);
+  static const Color _chipBorder = Color(0xFFD8D5F8);
 
   @override
   void dispose() {
-    _contentController.dispose();
     _titleController.dispose();
+    _bodyController.dispose();
     _rewardController.dispose();
     _videoPreviewController?.dispose();
     super.dispose();
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   Future<void> _pickMedia(XFile? pickedFile, bool isVideo) async {
     if (pickedFile == null) return;
-    if (_videoPreviewController != null) {
-      await _videoPreviewController!.dispose();
-      _videoPreviewController = null;
-    }
+    await _videoPreviewController?.dispose();
+    _videoPreviewController = null;
     setState(() => _selectedMediaFile = File(pickedFile.path));
     if (isVideo) {
-      _videoPreviewController = VideoPlayerController.file(_selectedMediaFile!)
-        ..initialize().then((_) {
-          setState(() {});
-          _videoPreviewController!.setLooping(true);
-          _videoPreviewController!.play();
-        });
+      _videoPreviewController =
+          VideoPlayerController.file(_selectedMediaFile!)
+            ..initialize().then((_) {
+              setState(() {});
+              _videoPreviewController!.setLooping(true);
+              _videoPreviewController!.play();
+            });
     }
   }
 
-  String _labelFor(PostType type) {
-    switch (type) {
-      case PostType.text:        return 'Text';
-      case PostType.question:    return 'Question';
-      case PostType.helpRequest: return 'Help';
-      case PostType.achievement: return 'Achievement';
-      case PostType.image:       return 'Image';
-      case PostType.video:       return 'Video';
-    }
-  }
+  String _labelFor(PostType t) => switch (t) {
+    PostType.text        => 'Text',
+    PostType.question    => 'Question',
+    PostType.helpRequest => 'Help',
+    PostType.achievement => 'Achievement',
+    PostType.image       => 'Image',
+    PostType.video       => 'Video',
+  };
 
-  IconData _iconFor(PostType type) {
-    switch (type) {
-      case PostType.text:        return Icons.chat_bubble_outline_rounded;
-      case PostType.question:    return Icons.help_outline_rounded;
-      case PostType.helpRequest: return Icons.handshake_outlined;
-      case PostType.achievement: return Icons.emoji_events_outlined;
-      case PostType.image:       return Icons.photo_outlined;
-      case PostType.video:       return Icons.videocam_outlined;
-    }
-  }
+  IconData _iconFor(PostType t) => switch (t) {
+    PostType.text        => Icons.chat_bubble_outline_rounded,
+    PostType.question    => Icons.help_outline_rounded,
+    PostType.helpRequest => Icons.handshake_outlined,
+    PostType.achievement => Icons.emoji_events_outlined,
+    PostType.image       => Icons.photo_outlined,
+    PostType.video       => Icons.videocam_outlined,
+  };
 
-  // ─── Submit ───────────────────────────────────────────────────────────────
+  // ── Submit ─────────────────────────────────────────────────────────────────
 
   void _submitPost() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _snack('You must be logged in to share a post.');
+    if (user == null) { _snack('You must be logged in.'); return; }
+
+    final isHelp = _selectedType == PostType.helpRequest;
+    final title  = _titleController.text.trim();
+    final body   = _bodyController.text.trim();
+    final reward = int.tryParse(_rewardController.text.trim()) ?? 0;
+
+    if (isHelp && title.isEmpty) {
+      _snack('Please add a title for your help request.');
       return;
     }
-    if (_contentController.text.trim().isEmpty && _selectedMediaFile == null) {
+    if (!isHelp && body.isEmpty && _selectedMediaFile == null) {
       _snack('Please add some content or media!');
       return;
     }
-    if (_selectedType == PostType.helpRequest && _titleController.text.trim().isEmpty) {
-      _snack('Please add a descriptive title for your help request.');
-      return;
+    if (isHelp && reward > 0) {
+      final balance = await KarmaService.getBalance(user.uid);
+      if (balance < reward) {
+        _snack('You only have $balance karma — reduce the reward.');
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
-
     try {
+      // ── Upload media ───────────────────────────────────────────────────
       String? mediaUrl;
-
       if (_selectedMediaFile != null) {
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final isVideoFile = _selectedMediaFile!.path.toLowerCase().endsWith('.mp4') ||
-            _selectedType == PostType.video;
-        final folder    = isVideoFile ? 'posts/videos' : 'posts/images';
-        final extension = isVideoFile ? 'mp4' : 'jpg';
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('$folder/${user.uid}_$timestamp.$extension');
-        final TaskSnapshot taskSnapshot =
-            await storageRef.putFile(_selectedMediaFile!).whenComplete(() {});
-        if (taskSnapshot.state == TaskState.success) {
-          mediaUrl = await storageRef.getDownloadURL();
-        } else {
-          throw FirebaseException(
-            plugin: 'firebase_storage',
-            code: 'upload-failed',
-            message: 'Upload did not complete.',
-          );
-        }
+        final ts     = DateTime.now().millisecondsSinceEpoch;
+        final isVid  = _selectedType == PostType.video ||
+            _selectedMediaFile!.path.toLowerCase().endsWith('.mp4');
+        final folder = isVid ? 'posts/videos' : 'posts/images';
+        final ext    = isVid ? 'mp4' : 'jpg';
+        final ref    = FirebaseStorage.instance
+            .ref('$folder/${user.uid}_$ts.$ext');
+        final task   = await ref.putFile(_selectedMediaFile!).whenComplete(() {});
+        if (task.state != TaskState.success) throw Exception('Upload failed');
+        mediaUrl = await ref.getDownloadURL();
       }
 
-      final userDoc  = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final userData = userDoc.data();
+      // ── Fetch verified user data ───────────────────────────────────────
+      final userDoc     = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+      final ud          = userDoc.data() ?? {};
+      final displayName = ud['name']     ?? user.displayName ?? 'Anonymous';
+      final rawUsername = ud['username'] ?? user.email?.split('@')[0] ?? 'user';
+      final username    = rawUsername.startsWith('@') ? rawUsername : '@$rawUsername';
+      final avatarUrl   = ud['profileImageUrl'] ?? ud['photoURL'] ?? user.photoURL ?? '';
 
-      final String verifiedUsername    = userData?['username'] != null
-          ? userData!['username']
-          : (user.email != null ? '@${user.email!.split("@")[0]}' : '@user');
-      final String verifiedDisplayName = userData?['name'] ?? user.displayName ?? 'Anonymous User';
-
-      final Map<String, dynamic> postPayload = {
-        'authorId':       user.uid,
-        'authorName':     verifiedDisplayName,
-        'authorAvatar':   user.photoURL ?? '',
-        'authorUsername': verifiedUsername.startsWith('@') ? verifiedUsername : '@$verifiedUsername',
-        'type':           _selectedType.name,
-        'content':        _contentController.text.trim(),
-        'mediaUrl':       mediaUrl,
-        'createdAt':      FieldValue.serverTimestamp(),
-        'likeCount':      0,
-        'commentCount':   0,
-        'likedBy':        [],
-        'savedBy':        [],
-        'communityId':    widget.communityId,
-      };
-
-      if (_selectedType == PostType.helpRequest) {
-        postPayload['title']        = _titleController.text.trim();
-        postPayload['karmaReward']  = int.tryParse(_rewardController.text.trim()) ?? 0;
-        postPayload['isCompleted']  = false;
-        postPayload['assignedTo']   = null;
-      }
-
-      await FirebaseFirestore.instance.collection('posts').add(postPayload);
-
-      if (!mounted) return;
-      _snack(
-        '🎉 ${_labelFor(_selectedType)} post published!',
-        color: const Color(0xFF388E3C),
+      // ── Build payload ──────────────────────────────────────────────────
+      final post = Post(
+        id:              '',
+        authorId:        user.uid,
+        authorName:      displayName,
+        authorUsername:  username,
+        authorAvatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
+        type:            _selectedType,
+        title:           isHelp
+            ? title
+            : title.isNotEmpty
+                ? title
+                : body.split('\n').first,
+        body:            body,
+        content:         isHelp ? '$title\n$body' : body,
+        imageUrl:        mediaUrl,
+        likeCount:       0,
+        commentCount:    0,
+        shareCount:      0,
+        createdAt:       DateTime.now(),
+        rewardKarma:     isHelp ? reward : null,
       );
 
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      final payload = post.toFirestore();
+      if (isHelp) {
+        payload['isCompleted'] = false;
+        payload['assignedTo']  = null;
+        payload['communityId'] = widget.communityId;
+        if (reward > 0) payload['karmaReserved'] = true;
       } else {
-        Navigator.of(context).pushReplacementNamed('/main');
+        payload['communityId'] = widget.communityId;
       }
+
+      // ── Write to Firestore ─────────────────────────────────────────────
+      final docRef = await FirebaseFirestore.instance
+          .collection('posts').add(payload);
+
+      if (isHelp && reward > 0) {
+        await KarmaService.reserveForHelpPost(
+          postId: docRef.id,
+          amount: reward,
+        );
+      }
+
+      if (!mounted) return;
+      _snack('🎉 ${_labelFor(_selectedType)} post published!',
+          color: const Color(0xFF388E3C));
+      Navigator.of(context).canPop()
+          ? Navigator.of(context).pop()
+          : Navigator.of(context).pushReplacementNamed('/main');
     } catch (e) {
       if (!mounted) return;
       _snack('Failed to post: $e', color: Colors.red);
@@ -195,13 +203,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     ));
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final isHelp  = _selectedType == PostType.helpRequest;
     final isImage = _selectedType == PostType.image;
     final isVideo = _selectedType == PostType.video;
+    final uid     = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final user    = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: _primaryBg,
@@ -212,31 +222,41 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           onTap: () => Navigator.of(context).maybePop(),
           child: Container(
             margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _fieldBg,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: _primary),
+            decoration:
+                BoxDecoration(color: _fieldBg, shape: BoxShape.circle),
+            child: const Icon(Icons.arrow_back_ios_new_rounded,
+                size: 16, color: _primary),
           ),
         ),
-        title: const Text(
-          'New post',
-          style: TextStyle(
-            color: _textDark,
-            fontWeight: FontWeight.w600,
-            fontSize: 17,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _submitPost,
-            child: const Text(
-              'Post',
-              style: TextStyle(
-                color: _primary,
+        title: const Text('New post',
+            style: TextStyle(
+                color: _textDark,
                 fontWeight: FontWeight.w600,
-                fontSize: 15,
+                fontSize: 17)),
+        actions: [
+          if (uid.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: KarmaBadge(uid: uid, size: KarmaBadgeSize.small),
               ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton(
+              onPressed: _isLoading ? null : _submitPost,
+              style: TextButton.styleFrom(
+                backgroundColor: _primary,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Post',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
             ),
           ),
         ],
@@ -249,8 +269,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Type chips ──────────────────────────────────────────
-                    _SectionLabel(label: 'Post type'),
+                    // ── Post type chips ────────────────────────────────────
+                    const _SectionLabel(label: 'Post type'),
                     const SizedBox(height: 10),
                     SizedBox(
                       height: 40,
@@ -266,33 +286,39 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 _selectedMediaFile = null;
                               }),
                               child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                duration:
+                                    const Duration(milliseconds: 180),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: selected ? _primary : Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
+                                  color: selected
+                                      ? _primary
+                                      : Colors.white,
+                                  borderRadius:
+                                      BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: selected ? _primary : _chipBorder,
+                                    color: selected
+                                        ? _primary
+                                        : _chipBorder,
                                     width: 1.5,
                                   ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      _iconFor(type),
-                                      size: 15,
-                                      color: selected ? Colors.white : _primary,
-                                    ),
+                                    Icon(_iconFor(type),
+                                        size: 15,
+                                        color: selected
+                                            ? Colors.white
+                                            : _primary),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      _labelFor(type),
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: selected ? Colors.white : _primary,
-                                      ),
-                                    ),
+                                    Text(_labelFor(type),
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: selected
+                                                ? Colors.white
+                                                : _primary)),
                                   ],
                                 ),
                               ),
@@ -302,40 +328,33 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // ── Main card ───────────────────────────────────────────
-                    if (!isHelp) ...[
-                      _PostCard(
-                        children: [
-                          if (!isImage && !isVideo) ...[
-                            _FieldLabel(label: "What's on your mind?"),
-                            const SizedBox(height: 6),
-                            _StyledTextArea(
-                              controller: _contentController,
-                              placeholder: 'Share something with the community...',
-                              maxLines: 5,
-                            ),
-                          ] else ...[
-                            _FieldLabel(label: 'Caption'),
-                            const SizedBox(height: 6),
-                            _StyledTextArea(
-                              controller: _contentController,
-                              placeholder: 'Write a caption for your media...',
-                              maxLines: 2,
-                            ),
-                            const SizedBox(height: 14),
-                            _buildMediaPicker(isVideo: isVideo),
-                          ],
-                        ],
-                      ),
-                    ],
+                    // ── Post card ──────────────────────────────────────────
+                    _PostCard(
+                      children: [
+                        // Author preview row
+                        _AuthorPreviewRow(user: user, uid: uid),
+                        const _PostCardDivider(),
+                        const SizedBox(height: 14),
 
-                    // ── Help request card ───────────────────────────────────
-                    if (isHelp)
-                      _PostCard(
-                        children: [
-                          _FieldLabel(label: 'Task title'),
+                        // ── Media post fields ────────────────────────────
+                        if (isImage || isVideo) ...[
+                          _buildMediaPicker(isVideo: isVideo),
+                          const SizedBox(height: 14),
+                          const _FieldLabel(label: 'Caption'),
+                          const SizedBox(height: 6),
+                          _StyledTextArea(
+                            controller: _bodyController,
+                            placeholder:
+                                'Write a caption for your media...',
+                            maxLines: 2,
+                          ),
+                        ]
+
+                        // ── Help request fields ──────────────────────────
+                        else if (isHelp) ...[
+                          const _FieldLabel(label: 'Task title *'),
                           const SizedBox(height: 6),
                           _StyledInputWithIcon(
                             controller: _titleController,
@@ -343,27 +362,56 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             icon: Icons.title_rounded,
                           ),
                           const SizedBox(height: 14),
-                          _PostCardDivider(),
+                          const _PostCardDivider(),
                           const SizedBox(height: 14),
-                          _FieldLabel(label: 'Details'),
+                          const _FieldLabel(label: 'Details'),
                           const SizedBox(height: 6),
                           _StyledTextArea(
-                            controller: _contentController,
-                            placeholder: 'Explain what needs to be done...',
+                            controller: _bodyController,
+                            placeholder:
+                                'Explain what needs to be done...',
                             maxLines: 4,
                           ),
                           const SizedBox(height: 14),
-                          _PostCardDivider(),
+                          const _PostCardDivider(),
                           const SizedBox(height: 14),
-                          _KarmaRewardRow(controller: _rewardController),
+                          _KarmaRewardRow(
+                            controller: _rewardController,
+                            userUid: uid,
+                          ),
+                        ]
+
+                        // ── Normal text / question / achievement fields ───
+                        else ...[
+                          const _FieldLabel(label: 'Title (optional)'),
+                          const SizedBox(height: 6),
+                          _StyledInputWithIcon(
+                            controller: _titleController,
+                            placeholder: 'Give your post a title...',
+                            icon: Icons.title_rounded,
+                          ),
+                          const SizedBox(height: 14),
+                          const _PostCardDivider(),
+                          const SizedBox(height: 14),
+                          const _FieldLabel(
+                              label: "What's on your mind?"),
+                          const SizedBox(height: 6),
+                          _StyledTextArea(
+                            controller: _bodyController,
+                            placeholder:
+                                'Share something with the community...',
+                            maxLines: 5,
+                          ),
                         ],
-                      ),
+                      ],
+                    ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
 
-                    // ── Submit button ───────────────────────────────────────
                     _PrimaryButton(
-                      label: isHelp ? '🚀  Launch task request' : 'Share post',
+                      label: isHelp
+                          ? '🚀  Launch task request'
+                          : 'Share post',
                       icon: isHelp ? null : Icons.send_rounded,
                       onTap: _submitPost,
                     ),
@@ -372,7 +420,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     Text(
                       'Visible to everyone in the community',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: _textMuted),
+                      style: TextStyle(
+                          fontSize: 12, color: _textMuted),
                     ),
                   ],
                 ),
@@ -381,18 +430,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  Widget _buildLoader() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(color: _primary),
-          SizedBox(height: 16),
-          Text('Publishing your post...', style: TextStyle(color: _textMuted, fontSize: 14)),
-        ],
-      ),
-    );
-  }
+  Widget _buildLoader() => const Center(
+        child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: _primary),
+              SizedBox(height: 16),
+              Text('Publishing your post...',
+                  style: TextStyle(color: _textMuted, fontSize: 14)),
+            ]),
+      );
 
   Widget _buildMediaPicker({required bool isVideo}) {
     if (_selectedMediaFile != null) {
@@ -401,21 +448,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: isVideo && _videoPreviewController != null && _videoPreviewController!.value.isInitialized
+            child: isVideo &&
+                    _videoPreviewController != null &&
+                    _videoPreviewController!.value.isInitialized
                 ? SizedBox(
                     height: 200,
                     width: double.infinity,
                     child: AspectRatio(
-                      aspectRatio: _videoPreviewController!.value.aspectRatio,
+                      aspectRatio:
+                          _videoPreviewController!.value.aspectRatio,
                       child: VideoPlayer(_videoPreviewController!),
                     ),
                   )
-                : Image.file(
-                    _selectedMediaFile!,
+                : Image.file(_selectedMediaFile!,
                     height: 200,
                     width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                    fit: BoxFit.cover),
           ),
           GestureDetector(
             onTap: () {
@@ -425,7 +473,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             child: const CircleAvatar(
               radius: 16,
               backgroundColor: Colors.black54,
-              child: Icon(Icons.close, color: Colors.white, size: 16),
+              child:
+                  Icon(Icons.close, color: Colors.white, size: 16),
             ),
           ),
         ],
@@ -440,61 +489,147 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         _pickMedia(file, isVideo);
       },
       child: Container(
-        height: 150,
+        height: 160,
         decoration: BoxDecoration(
           color: const Color(0xFFF5F4FF),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFC4C1F0), width: 1.5),
+          border: Border.all(
+              color: const Color(0xFFC4C1F0),
+              width: 1.5,
+              style: BorderStyle.solid),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isVideo ? Icons.video_collection_outlined : Icons.add_photo_alternate_outlined,
-              size: 36,
-              color: _primary,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              isVideo ? 'Tap to select video' : 'Tap to select image',
-              style: const TextStyle(fontSize: 13, color: _textMuted),
-            ),
-          ],
-        ),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEEF0FB),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isVideo
+                      ? Icons.video_collection_outlined
+                      : Icons.add_photo_alternate_outlined,
+                  size: 26,
+                  color: _primary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isVideo ? 'Tap to select video' : 'Tap to select image',
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: _textMuted,
+                    fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isVideo ? 'MP4, MOV up to 50MB' : 'JPG, PNG up to 10MB',
+                style: const TextStyle(
+                    fontSize: 11, color: Color(0xFFC4C1F0)),
+              ),
+            ]),
       ),
     );
   }
 }
 
-// ─── Sub-widgets ─────────────────────────────────────────────────────────────
+// ── Author preview row ────────────────────────────────────────────────────────
+
+class _AuthorPreviewRow extends StatelessWidget {
+  final User? user;
+  final String uid;
+  const _AuthorPreviewRow({required this.user, required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    if (user == null) return const SizedBox.shrink();
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
+      builder: (context, snap) {
+        final ud       = snap.data?.data() as Map<String, dynamic>? ?? {};
+        final name     = ud['name'] ?? user!.displayName ?? 'You';
+        final raw      = ud['username'] ?? user!.email?.split('@')[0] ?? 'user';
+        final username = raw.startsWith('@') ? raw : '@$raw';
+        final avatar   = ud['profileImageUrl'] ?? ud['photoURL'] ?? user!.photoURL;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Row(children: [
+            CustomAvatar(
+              name: name,
+              radius: 18,
+              imageUrl: avatar,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2D2A6E))),
+                  Text(username,
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFF9E9BD0))),
+                ],
+              ),
+            ),
+            // Audience indicator
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF0FB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: const Color(0xFFD8D5F8), width: 1),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                Icon(Icons.public_rounded,
+                    size: 12, color: Color(0xFF6C63D5)),
+                SizedBox(width: 4),
+                Text('Everyone',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6C63D5))),
+              ]),
+            ),
+          ]),
+        );
+      },
+    );
+  }
+}
+
+// ─── Sub-widgets ──────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final String label;
   const _SectionLabel({required this.label});
   @override
-  Widget build(BuildContext context) => Text(
-        label.toUpperCase(),
-        style: const TextStyle(
+  Widget build(BuildContext context) => Text(label.toUpperCase(),
+      style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: Color(0xFF8884BB),
-          letterSpacing: 0.8,
-        ),
-      );
+          letterSpacing: 0.8));
 }
 
 class _FieldLabel extends StatelessWidget {
   final String label;
   const _FieldLabel({required this.label});
   @override
-  Widget build(BuildContext context) => Text(
-        label,
-        style: const TextStyle(
+  Widget build(BuildContext context) => Text(label,
+      style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF8884BB),
-        ),
-      );
+          color: Color(0xFF8884BB)));
 }
 
 class _PostCard extends StatelessWidget {
@@ -508,14 +643,17 @@ class _PostCard extends StatelessWidget {
           border: Border.all(color: const Color(0xFFE4E2F8)),
         ),
         padding: const EdgeInsets.all(18),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children),
       );
 }
 
 class _PostCardDivider extends StatelessWidget {
+  const _PostCardDivider();
   @override
-  Widget build(BuildContext context) =>
-      const Divider(color: Color(0xFFEAE8FB), thickness: 0.5, height: 1);
+  Widget build(BuildContext context) => const Divider(
+      color: Color(0xFFEAE8FB), thickness: 0.5, height: 1);
 }
 
 class _StyledTextArea extends StatelessWidget {
@@ -531,25 +669,28 @@ class _StyledTextArea extends StatelessWidget {
   Widget build(BuildContext context) => TextField(
         controller: controller,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF2D2A6E)),
+        style: const TextStyle(
+            fontSize: 14, color: Color(0xFF2D2A6E)),
         decoration: InputDecoration(
           hintText: placeholder,
-          hintStyle: const TextStyle(color: Color(0xFFB0ADDE), fontSize: 14),
+          hintStyle: const TextStyle(
+              color: Color(0xFFB0ADDE), fontSize: 14),
           filled: true,
           fillColor: const Color(0xFFF5F4FF),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 12),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE4E2F8), width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: Color(0xFFE4E2F8), width: 1.5)),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE4E2F8), width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: Color(0xFFE4E2F8), width: 1.5)),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF6C63D5), width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: Color(0xFF6C63D5), width: 1.5)),
         ),
       );
 }
@@ -566,93 +707,117 @@ class _StyledInputWithIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TextField(
         controller: controller,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF2D2A6E)),
+        style: const TextStyle(
+            fontSize: 14, color: Color(0xFF2D2A6E)),
         decoration: InputDecoration(
           hintText: placeholder,
-          hintStyle: const TextStyle(color: Color(0xFFB0ADDE), fontSize: 14),
-          prefixIcon: Icon(icon, color: const Color(0xFF9E9BD0), size: 18),
+          hintStyle: const TextStyle(
+              color: Color(0xFFB0ADDE), fontSize: 14),
+          prefixIcon:
+              Icon(icon, color: const Color(0xFF9E9BD0), size: 18),
           filled: true,
           fillColor: const Color(0xFFF5F4FF),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 12),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE4E2F8), width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: Color(0xFFE4E2F8), width: 1.5)),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE4E2F8), width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: Color(0xFFE4E2F8), width: 1.5)),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF6C63D5), width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: Color(0xFF6C63D5), width: 1.5)),
         ),
       );
 }
 
 class _KarmaRewardRow extends StatelessWidget {
   final TextEditingController controller;
-  const _KarmaRewardRow({required this.controller});
+  final String userUid;
+  const _KarmaRewardRow(
+      {required this.controller, required this.userUid});
+
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF8EC),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFF5DCAA), width: 1.5),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.bolt_rounded, color: Color(0xFFC9830A), size: 22),
-            const SizedBox(width: 10),
-            const Text(
-              'Karma reward',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF7A5010),
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: 64,
-              child: TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.right,
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: KarmaService.balanceStream(userUid),
+      builder: (context, snap) {
+        final balance = snap.data ?? 0;
+        return Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8EC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: const Color(0xFFF5DCAA), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.bolt_rounded,
+                    color: Color(0xFFC9830A), size: 22),
+                const SizedBox(width: 10),
+                const Text('Karma reward',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF7A5010))),
+                const Spacer(),
+                SizedBox(
+                  width: 64,
+                  child: TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7A5010)),
+                    decoration: const InputDecoration(
+                      hintText: '0',
+                      hintStyle:
+                          TextStyle(color: Color(0xFFD4A85C)),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text(
+                'Your balance: $balance ⚡  · Deducted immediately on post',
                 style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF7A5010),
-                ),
-                decoration: const InputDecoration(
-                  hintText: '0',
-                  hintStyle: TextStyle(color: Color(0xFFD4A85C)),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
+                    fontSize: 10, color: Color(0xFFA06820)),
               ),
-            ),
-          ],
-        ),
-      );
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _PrimaryButton extends StatelessWidget {
   final String label;
   final IconData? icon;
   final VoidCallback onTap;
-  const _PrimaryButton({required this.label, this.icon, required this.onTap});
+  const _PrimaryButton(
+      {required this.label, this.icon, required this.onTap});
   @override
   Widget build(BuildContext context) => GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFF6C63D5),
-            borderRadius: BorderRadius.circular(14),
-          ),
+              color: const Color(0xFF6C63D5),
+              borderRadius: BorderRadius.circular(14)),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -660,14 +825,11 @@ class _PrimaryButton extends StatelessWidget {
                 Icon(icon, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600)),
             ],
           ),
         ),

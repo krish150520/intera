@@ -69,59 +69,65 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
     }
   }
 
-  Future<void> _publishStory() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+ Future<void> _publishStory() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
 
-    setState(() => _isUploading = true);
-    String? downloadUrl;
+  setState(() => _isUploading = true);
+  String? downloadUrl;
 
+  try {
+    // Fetch real avatar URL from Firestore — photoURL is empty for email signups
+    String authorAvatar = user.photoURL ?? '';
+    String authorName   = user.displayName ?? 'Anonymous';
     try {
-      if (_selectedMedia != null) {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('stories')
-            .child(
-                '${user.uid}_${DateTime.now().millisecondsSinceEpoch}.${_isVideo ? 'mp4' : 'jpg'}');
-        final uploadTask = await storageRef.putFile(_selectedMedia!);
-        downloadUrl = await uploadTask.ref.getDownloadURL();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+      if (userDoc.exists) {
+        authorAvatar = userDoc.data()?['avatarUrl'] ?? authorAvatar;
+        authorName   = userDoc.data()?['name'] ?? authorName;
       }
+    } catch (_) {}
 
-      final storyPayload = {
-        'authorId': user.uid,
-        'authorName': user.displayName ?? 'Anonymous',
-        'authorAvatar': user.photoURL ?? '',
-        'mediaUrl': downloadUrl,
-        'isVideo': _isVideo,
-        'caption': _captionController.text.trim(),
-        'gradientColors': downloadUrl == null
-            ? [
-                _gradients[_selectedGradientIndex].start.value,
-                _gradients[_selectedGradientIndex].end.value,
-              ]
-            : null,
-        'viewedBy': [],
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(
-            DateTime.now().add(const Duration(hours: 24))),
-      };
+    if (_selectedMedia != null) {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('stories')
+          .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.${_isVideo ? 'mp4' : 'jpg'}');
+      final uploadTask = await storageRef.putFile(_selectedMedia!);
+      downloadUrl = await uploadTask.ref.getDownloadURL();
+    }
 
-      await FirebaseFirestore.instance.collection('stories').add(storyPayload);
+    await FirebaseFirestore.instance.collection('stories').add({
+      'authorId':       user.uid,
+      'authorName':     authorName,    // ← from Firestore
+      'authorAvatar':   authorAvatar,  // ← from Firestore
+      'mediaUrl':       downloadUrl,
+      'isVideo':        _isVideo,
+      'caption':        _captionController.text.trim(),
+      'gradientColors': downloadUrl == null
+          ? [
+              _gradients[_selectedGradientIndex].start.value,
+              _gradients[_selectedGradientIndex].end.value,
+            ]
+          : null,
+      'viewedBy':   [],
+      'createdAt':  FieldValue.serverTimestamp(),
+      'expiresAt':  Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
+    });
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Story posted! 🔥')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isUploading = false);
-        _showSnack('Failed to post story: $e');
-      }
+    if (mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Story posted! 🔥')));
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isUploading = false);
+      _showSnack('Failed to post story: $e');
     }
   }
-
+}
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));

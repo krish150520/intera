@@ -6,13 +6,15 @@ enum PostType { text, question, helpRequest, achievement, image, video }
 /// Represents a single feed item (post, question, help request, etc.)
 class Post {
   final String id;
-  final String authorId; // FIXED: Brought directly into the class core schema
+  final String authorId;
   final String authorName;
   final String authorUsername;
   final String? authorAvatarUrl;
   final PostType type;
-  final String content;
-  final String? imageUrl; // Serves as the storage asset URL for both Images and Videos
+  final String title;   // ← NEW: short headline shown on the card
+  final String body;    // ← NEW: longer description / caption
+  final String content; // kept for backward-compat (= "$title\n$body" on write)
+  final String? imageUrl;
   final int likeCount;
   final int commentCount;
   final int shareCount;
@@ -20,16 +22,17 @@ class Post {
   final bool isSaved;
   final DateTime createdAt;
   static const String typeHelpRequest = 'helpRequest';
-  // Help-request specific
   final int? rewardKarma;
 
   const Post({
     required this.id,
-    required this.authorId, // FIXED: Required initialization field
+    required this.authorId,
     required this.authorName,
     required this.authorUsername,
     this.authorAvatarUrl,
     required this.type,
+    required this.title,
+    required this.body,
     required this.content,
     this.imageUrl,
     this.likeCount = 0,
@@ -41,22 +44,34 @@ class Post {
     this.rewardKarma,
   });
 
-  /// Factory constructor to cleanly deserialize incoming Cloud Firestore documents
   factory Post.fromFirestore(DocumentSnapshot doc, String currentUid) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-    
+
     final List likedBy = data['likedBy'] ?? [];
     final List savedBy = data['savedBy'] ?? [];
-    
-    // Parse Date
+
     DateTime parsedDate = DateTime.now();
     if (data['createdAt'] is Timestamp) {
       parsedDate = (data['createdAt'] as Timestamp).toDate();
     }
 
-    // Robust Type Parsing: Handles both "helpRequest" and "PostType.helpRequest"
     String rawType = (data['type'] ?? 'text').toString();
     if (rawType.contains('.')) rawType = rawType.split('.').last;
+
+    // ── Title / body resolution ──────────────────────────────────────────
+    // New docs store 'title' + 'body' separately.
+    // Old docs only have 'content' — split on first newline as fallback.
+    final String rawContent = data['content'] ?? '';
+    final String resolvedTitle = (data['title'] as String?)?.trim().isNotEmpty == true
+        ? data['title'] as String
+        : rawContent.contains('\n')
+            ? rawContent.split('\n').first.trim()
+            : rawContent.trim();
+    final String resolvedBody = (data['body'] as String?)?.trim().isNotEmpty == true
+        ? data['body'] as String
+        : rawContent.contains('\n')
+            ? rawContent.substring(rawContent.indexOf('\n') + 1).trim()
+            : '';
 
     return Post(
       id: doc.id,
@@ -65,7 +80,9 @@ class Post {
       authorUsername: data['authorUsername'] ?? '@user',
       authorAvatarUrl: data['authorAvatarUrl'] ?? data['authorAvatar'],
       type: PostType.values.asNameMap()[rawType] ?? PostType.text,
-      content: data['content'] ?? '',
+      title: resolvedTitle,
+      body: resolvedBody,
+      content: rawContent,
       imageUrl: data['imageUrl'] ?? data['mediaUrl'],
       likeCount: data['likeCount'] ?? 0,
       commentCount: data['commentCount'] ?? 0,
@@ -75,5 +92,27 @@ class Post {
       createdAt: parsedDate,
       rewardKarma: data['karmaReward'] ?? data['rewardKarma'],
     );
+  }
+
+  /// Call this when writing a new post to Firestore.
+  Map<String, dynamic> toFirestore() {
+    return {
+      'authorId': authorId,
+      'authorName': authorName,
+      'authorUsername': authorUsername,
+      if (authorAvatarUrl != null) 'authorAvatarUrl': authorAvatarUrl,
+      'type': type.name,
+      'title': title,
+      'body': body,
+      'content': '$title\n$body', // legacy fallback field
+      if (imageUrl != null) 'imageUrl': imageUrl,
+      'likeCount': likeCount,
+      'commentCount': commentCount,
+      'shareCount': shareCount,
+      'likedBy': [],
+      'savedBy': [],
+      'createdAt': FieldValue.serverTimestamp(),
+      if (rewardKarma != null) 'rewardKarma': rewardKarma,
+    };
   }
 }

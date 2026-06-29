@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intera/features/home/widgets/post_card.dart';
 import '../../../core/routes/app_routes.dart';
-import '../../../core/theme/colors.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';
@@ -17,15 +16,14 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
-  static const Color _bg       = Color(0xFFF5F3FF);
-  static const Color _surface  = Color(0xFFFFFFFF);
-  static const Color _muted    = Color(0xFFEDE9FF);
-  static const Color _border   = Color(0xFFE9E4FF);
-  static const Color _primary  = Color(0xFF7C3AED);
-  static const Color _textHi   = Color(0xFF2D1B69);
-  static const Color _textDim  = Color(0xFFA89FCC);
-  static const Color _inputBg  = Color(0xFFEDE9FF);
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
+  static const Color _bg      = Color(0xFFEEF0FB);
+  static const Color _primary = Color(0xFF6C63D5);
+  static const Color _textDark = Color(0xFF2D2A6E);
+  static const Color _textMuted = Color(0xFF9E9BD0);
+  static const Color _inputBg = Color(0xFFF5F4FF);
+  static const Color _chipBorder = Color(0xFFD8D5F8);
 
   late final TabController _tabController;
   final _searchController = TextEditingController();
@@ -35,6 +33,11 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    // Search in realtime as user types
+    _searchController.addListener(() {
+      final q = _searchController.text.trim().toLowerCase();
+      if (q != _searchQuery) setState(() => _searchQuery = q);
+    });
   }
 
   @override
@@ -44,23 +47,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  void _onSearchSubmitted(String value) {
-    String cleanQuery = value.trim().toLowerCase();
-    if (cleanQuery.startsWith('@')) cleanQuery = cleanQuery.substring(1);
-    setState(() => _searchQuery = cleanQuery);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 16,
         title: _buildSearchBar(),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(40),
+          preferredSize: const Size.fromHeight(44),
           child: _buildTabBar(),
         ),
       ),
@@ -81,26 +78,29 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       height: 40,
       child: TextField(
         controller: _searchController,
+        autofocus: false,
         textInputAction: TextInputAction.search,
-        onSubmitted: _onSearchSubmitted,
-        style: const TextStyle(color: _textHi, fontSize: 14),
+        style: const TextStyle(color: _textDark, fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Search people, posts, communities…',
-          hintStyle: const TextStyle(color: _textDim, fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _textDim),
+          hintStyle: const TextStyle(color: _textMuted, fontSize: 13),
+          prefixIcon:
+              const Icon(Icons.search_rounded, size: 18, color: _textMuted),
           suffixIcon: _searchController.text.isNotEmpty
               ? GestureDetector(
                   onTap: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
                   },
-                  child: const Icon(Icons.close_rounded, size: 16, color: _textDim),
+                  child: const Icon(Icons.close_rounded,
+                      size: 16, color: _textMuted),
                 )
               : null,
           isDense: true,
           filled: true,
           fillColor: _inputBg,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(24),
             borderSide: BorderSide.none,
@@ -115,15 +115,19 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       controller: _tabController,
       isScrollable: true,
       labelColor: _primary,
-      unselectedLabelColor: _textDim,
-      labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+      unselectedLabelColor: _textMuted,
+      labelStyle:
+          const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      unselectedLabelStyle:
+          const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
       indicator: BoxDecoration(
-        color: _muted,
+        color: const Color(0xFFEEF0FB),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _chipBorder),
       ),
       indicatorSize: TabBarIndicatorSize.tab,
-      indicatorPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+      indicatorPadding:
+          const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
       dividerColor: Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       tabs: const [
@@ -136,50 +140,53 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   }
 }
 
+// ── Shared client-side filter ─────────────────────────────────────────────────
+// Fetches all docs and filters locally — works without any extra Firestore
+// fields or composite indexes. Fine for collections under ~500 docs.
+
 // ── Tab 1: Users ──────────────────────────────────────────────────────────────
+
 class _UserResultsList extends StatelessWidget {
-  static const Color _primary  = Color(0xFF7C3AED);
-  static const Color _border   = Color(0xFFE9E4FF);
-  static const Color _textHi   = Color(0xFF2D1B69);
-  static const Color _textDim  = Color(0xFFA89FCC);
+  static const Color _primary  = Color(0xFF6C63D5);
+  static const Color _border   = Color(0xFFE4E2F8);
+  static const Color _textDark = Color(0xFF2D2A6E);
+  static const Color _textMuted = Color(0xFF9E9BD0);
+  static const Color _fieldBg  = Color(0xFFF5F4FF);
 
   final String searchQuery;
   const _UserResultsList({required this.searchQuery});
 
-  /// Follows/unfollows using the followers/following SUBCOLLECTIONS your
-  /// security rules actually expect — not array fields on the user doc
-  /// (those get rejected by the rules when writing to another user's doc).
-  Future<void> _toggleFollow(BuildContext context, String targetUid, bool isFollowing) async {
+  Future<void> _toggleFollow(
+      BuildContext context, String targetUid, bool isFollowing) async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) return;
 
-    final firestore = FirebaseFirestore.instance;
-    final currentUserDoc = firestore.collection('users').doc(currentUid);
-    final targetUserDoc = firestore.collection('users').doc(targetUid);
-    final followingRef = currentUserDoc.collection('following').doc(targetUid);
-    final followerRef = targetUserDoc.collection('followers').doc(currentUid);
+    final db             = FirebaseFirestore.instance;
+    final currentUserDoc = db.collection('users').doc(currentUid);
+    final targetUserDoc  = db.collection('users').doc(targetUid);
+    final followingRef   = currentUserDoc.collection('following').doc(targetUid);
+    final followerRef    = targetUserDoc.collection('followers').doc(currentUid);
 
-    final batch = firestore.batch();
-
+    final batch = db.batch();
     if (isFollowing) {
       batch.delete(followingRef);
       batch.delete(followerRef);
       batch.update(currentUserDoc, {'followingCount': FieldValue.increment(-1)});
-      batch.update(targetUserDoc, {'followersCount': FieldValue.increment(-1)});
+      batch.update(targetUserDoc,  {'followersCount': FieldValue.increment(-1)});
     } else {
       batch.set(followingRef, {'createdAt': FieldValue.serverTimestamp()});
-      batch.set(followerRef, {'createdAt': FieldValue.serverTimestamp()});
+      batch.set(followerRef,  {'createdAt': FieldValue.serverTimestamp()});
       batch.update(currentUserDoc, {'followingCount': FieldValue.increment(1)});
-      batch.update(targetUserDoc, {'followersCount': FieldValue.increment(1)});
+      batch.update(targetUserDoc,  {'followersCount': FieldValue.increment(1)});
     }
 
     try {
       await batch.commit();
     } catch (e) {
-      debugPrint('Follow toggle failed: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update follow status. Try again.')),
+          const SnackBar(
+              content: Text('Could not update follow status. Try again.')),
         );
       }
     }
@@ -188,104 +195,135 @@ class _UserResultsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (searchQuery.isEmpty) {
-      return const _EmptyResultsPlaceholder(label: 'Type above to explore community members');
+      return const _EmptyPlaceholder(
+          icon: Icons.people_outline_rounded,
+          label: 'Type to search community members');
     }
 
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-    // Pull the current user's "following" list once so we can check
-    // membership locally instead of one query per search result.
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(currentUid)
           .collection('following')
           .snapshots(),
-      builder: (context, followingSnapshot) {
-        final followingIds = followingSnapshot.data?.docs.map((d) => d.id).toSet() ?? <String>{};
+      builder: (context, followingSnap) {
+        final followingIds =
+            followingSnap.data?.docs.map((d) => d.id).toSet() ?? <String>{};
 
-        return StreamBuilder<QuerySnapshot>(
-          // Requires a `usernameLower` field on each user doc — see note below.
-          stream: FirebaseFirestore.instance
+        return FutureBuilder<QuerySnapshot>(
+          // Fetch all users — filter client-side by name OR username
+          future: FirebaseFirestore.instance
               .collection('users')
-              .orderBy('usernameLower')
-              .startAt([searchQuery])
-              .endAt(['$searchQuery\uF8FF'])
-              .limit(30)
-              .snapshots(),
+              .limit(200)
+              .get(),
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Query Index Error: ${snapshot.error}'));
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2));
+              return const Center(
+                  child: CircularProgressIndicator(
+                      color: _primary, strokeWidth: 2));
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
             }
 
-            final docs = snapshot.data?.docs ?? [];
-            final filtered = docs.where((d) => d.id != currentUid).toList();
+            final q = searchQuery.toLowerCase();
+            final docs = (snapshot.data?.docs ?? []).where((doc) {
+              if (doc.id == currentUid) return false;
+              final data = doc.data() as Map<String, dynamic>;
+              final name     = (data['name']     ?? '').toString().toLowerCase();
+              final username = (data['username'] ?? '').toString().toLowerCase();
+              return name.contains(q) || username.contains(q);
+            }).toList();
 
-            if (filtered.isEmpty) return const _EmptyResultsPlaceholder(label: 'No users found matching query');
+            if (docs.isEmpty) {
+              return const _EmptyPlaceholder(
+                  icon: Icons.person_search_rounded,
+                  label: 'No users found');
+            }
 
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-              itemCount: filtered.length,
+              itemCount: docs.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final docId = filtered[index].id;
-                final data  = filtered[index].data() as Map<String, dynamic>;
+              itemBuilder: (context, i) {
+                final docId = docs[i].id;
+                final data  = docs[i].data() as Map<String, dynamic>;
                 final String name      = data['name']      ?? 'User';
                 final String username  = data['username']  ?? 'user';
                 final String avatarUrl = data['avatarUrl'] ?? '';
-
                 final bool isFollowing = followingIds.contains(docId);
 
                 return GestureDetector(
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => UserProfileScreen(userId: docId, userName: name, userAvatar: avatarUrl),
+                    builder: (_) => UserProfileScreen(
+                        userId: docId,
+                        userName: name,
+                        userAvatar: avatarUrl),
                   )),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: _border),
                     ),
-                    child: Row(
-                      children: [
-                        CustomAvatar(name: name, imageUrl: avatarUrl, radius: 22),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(name, style: const TextStyle(color: _textHi, fontWeight: FontWeight.w600, fontSize: 14)),
-                              const SizedBox(height: 2),
-                              Text(
-                                username.startsWith('@') ? username : '@$username',
-                                style: const TextStyle(color: _textDim, fontSize: 12),
-                              ),
-                            ],
+                    child: Row(children: [
+                      CustomAvatar(
+                          name: name,
+                          imageUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
+                          radius: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name,
+                                style: const TextStyle(
+                                    color: _textDark,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14)),
+                            const SizedBox(height: 2),
+                            Text(
+                              username.startsWith('@')
+                                  ? username
+                                  : '@$username',
+                              style: const TextStyle(
+                                  color: _textMuted, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () =>
+                            _toggleFollow(context, docId, isFollowing),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isFollowing
+                                ? Colors.transparent
+                                : _primary,
+                            borderRadius: BorderRadius.circular(20),
+                            border: isFollowing
+                                ? Border.all(color: _border)
+                                : null,
+                          ),
+                          child: Text(
+                            isFollowing ? 'Following' : 'Follow',
+                            style: TextStyle(
+                              color: isFollowing
+                                  ? _textMuted
+                                  : Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => _toggleFollow(context, docId, isFollowing),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: isFollowing ? Colors.transparent : _primary,
-                              borderRadius: BorderRadius.circular(20),
-                              border: isFollowing ? Border.all(color: _border) : null,
-                            ),
-                            child: Text(
-                              isFollowing ? 'Following' : 'Follow',
-                              style: TextStyle(
-                                color: isFollowing ? _textDim : Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ]),
                   ),
                 );
               },
@@ -298,88 +336,114 @@ class _UserResultsList extends StatelessWidget {
 }
 
 // ── Tab 2 & 3: Posts & Videos ─────────────────────────────────────────────────
+
 class _PostResultsList extends StatelessWidget {
-  static const Color _primary = Color(0xFF7C3AED);
+  static const Color _primary = Color(0xFF6C63D5);
 
   final String searchQuery;
   final bool searchVideos;
-  const _PostResultsList({required this.searchQuery, required this.searchVideos});
+  const _PostResultsList(
+      {required this.searchQuery, required this.searchVideos});
 
   @override
   Widget build(BuildContext context) {
     if (searchQuery.isEmpty) {
-      return _EmptyResultsPlaceholder(
-        label: searchVideos ? 'Search for shared community clips' : 'Look up questions and posts',
+      return _EmptyPlaceholder(
+        icon: searchVideos
+            ? Icons.videocam_outlined
+            : Icons.article_outlined,
+        label: searchVideos
+            ? 'Search for video posts'
+            : 'Search questions and posts',
       );
     }
 
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-    return StreamBuilder<QuerySnapshot>(
-      // Requires a `contentLower` field on each post doc — see note below.
-      stream: FirebaseFirestore.instance
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
           .collection('posts')
-          .orderBy('contentLower')
-          .startAt([searchQuery])
-          .endAt(['$searchQuery\uF8FF'])
-          .limit(30)
-          .snapshots(),
+          .orderBy('createdAt', descending: true)
+          .limit(300)
+          .get(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text('Error rendering feeds: ${snapshot.error}', textAlign: TextAlign.center),
-          ));
-        }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2));
+          return const Center(
+              child: CircularProgressIndicator(
+                  color: _primary, strokeWidth: 2));
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
 
+        final q = searchQuery.toLowerCase();
         final docs = snapshot.data?.docs ?? [];
-        final List<Post> parsedPosts = [];
 
-        for (var doc in docs) {
+        final List<Post> posts = [];
+        for (final doc in docs) {
           try {
-            final data = doc.data() as Map<String, dynamic>?;
-            if (data == null) continue;
-            final String postType = data['type'] ?? 'text';
-            if (searchVideos && postType != 'video') continue;
-            if (!searchVideos && postType == 'video') continue;
-            parsedPosts.add(Post.fromFirestore(doc, currentUid));
+            final data = doc.data() as Map<String, dynamic>? ?? {};
+            final type = data['type'] ?? 'text';
+
+            // Filter by tab
+            if (searchVideos && type != 'video') continue;
+            if (!searchVideos && type == 'video') continue;
+
+            // Client-side text match across title, body, content, authorName
+            final title      = (data['title']      ?? '').toString().toLowerCase();
+            final body       = (data['body']        ?? '').toString().toLowerCase();
+            final content    = (data['content']     ?? '').toString().toLowerCase();
+            final authorName = (data['authorName']  ?? '').toString().toLowerCase();
+
+            if (!title.contains(q) &&
+                !body.contains(q) &&
+                !content.contains(q) &&
+                !authorName.contains(q)) continue;
+
+            posts.add(Post.fromFirestore(doc, currentUid));
           } catch (e) {
-            debugPrint('Skipped unparseable post document [${doc.id}]: $e');
+            debugPrint('Skipped post [${doc.id}]: $e');
           }
         }
 
-        if (parsedPosts.isEmpty) {
-          return _EmptyResultsPlaceholder(
-            label: searchVideos ? 'No video posts located' : 'No updates located',
+        if (posts.isEmpty) {
+          return _EmptyPlaceholder(
+            icon: searchVideos
+                ? Icons.videocam_off_outlined
+                : Icons.search_off_rounded,
+            label: searchVideos ? 'No video posts found' : 'No posts found',
           );
         }
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-          itemCount: parsedPosts.length,
-          itemBuilder: (context, index) {
-            final postItem = parsedPosts[index];
+          itemCount: posts.length,
+          itemBuilder: (context, i) {
+            final post = posts[i];
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: PostCard(
-                post: postItem,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => PostDetailScreen(post: postItem)),
-                ),
+                post: post,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => PostDetailScreen(post: post))),
                 onLike: () {
-                  final docRef = FirebaseFirestore.instance.collection('posts').doc(postItem.id);
-                  if (postItem.isLiked) {
-                    docRef.update({'likeCount': FieldValue.increment(-1), 'likedBy': FieldValue.arrayRemove([currentUid])});
+                  final ref = FirebaseFirestore.instance
+                      .collection('posts')
+                      .doc(post.id);
+                  if (post.isLiked) {
+                    ref.update({
+                      'likeCount': FieldValue.increment(-1),
+                      'likedBy': FieldValue.arrayRemove([currentUid]),
+                    });
                   } else {
-                    docRef.update({'likeCount': FieldValue.increment(1), 'likedBy': FieldValue.arrayUnion([currentUid])});
+                    ref.update({
+                      'likeCount': FieldValue.increment(1),
+                      'likedBy': FieldValue.arrayUnion([currentUid]),
+                    });
                   }
                 },
-                onComment: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => PostDetailScreen(post: postItem)),
-                ),
+                onComment: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => PostDetailScreen(post: post))),
               ),
             );
           },
@@ -390,12 +454,13 @@ class _PostResultsList extends StatelessWidget {
 }
 
 // ── Tab 4: Communities ────────────────────────────────────────────────────────
+
 class _CommunityResultsList extends StatelessWidget {
-  static const Color _primary = Color(0xFF7C3AED);
-  static const Color _muted   = Color(0xFFEDE9FF);
-  static const Color _border  = Color(0xFFE9E4FF);
-  static const Color _textHi  = Color(0xFF2D1B69);
-  static const Color _textDim = Color(0xFFA89FCC);
+  static const Color _primary  = Color(0xFF6C63D5);
+  static const Color _fieldBg  = Color(0xFFEEF0FB);
+  static const Color _border   = Color(0xFFE4E2F8);
+  static const Color _textDark = Color(0xFF2D2A6E);
+  static const Color _textMuted = Color(0xFF9E9BD0);
 
   final String searchQuery;
   const _CommunityResultsList({required this.searchQuery});
@@ -403,37 +468,51 @@ class _CommunityResultsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (searchQuery.isEmpty) {
-      return const _EmptyResultsPlaceholder(label: 'Discover sub-hubs and working spaces');
+      return const _EmptyPlaceholder(
+          icon: Icons.groups_outlined,
+          label: 'Discover communities');
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
           .collection('communities')
-          .orderBy('searchName')
-          .startAt([searchQuery])
-          .endAt(['$searchQuery\uF8FF'])
-          .limit(30)
-          .snapshots(),
+          .limit(200)
+          .get(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2));
+          return const Center(
+              child: CircularProgressIndicator(
+                  color: _primary, strokeWidth: 2));
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) return const _EmptyResultsPlaceholder(label: 'No communities match your parameters');
+        final q = searchQuery.toLowerCase();
+        final docs = (snapshot.data?.docs ?? []).where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final name = (data['name'] ?? '').toString().toLowerCase();
+          final desc = (data['description'] ?? '').toString().toLowerCase();
+          return name.contains(q) || desc.contains(q);
+        }).toList();
+
+        if (docs.isEmpty) {
+          return const _EmptyPlaceholder(
+              icon: Icons.group_off_outlined,
+              label: 'No communities found');
+        }
 
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final doc   = docs[index];
+          itemBuilder: (context, i) {
+            final doc   = docs[i];
             final data  = doc.data() as Map<String, dynamic>;
-            final String title     = data['name']        ?? 'Community Hub';
-            final String desc      = data['description'] ?? 'No bio statement provided.';
+            final String title     = data['name']        ?? 'Community';
+            final String desc      = data['description'] ?? '';
             final String avatarUrl = data['avatarUrl']   ?? '';
-            final int    count     = data['memberCount'] ?? 1;
+            final int    count     = (data['memberCount'] as num?)?.toInt() ?? 1;
 
             return GestureDetector(
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -444,51 +523,69 @@ class _CommunityResultsList extends StatelessWidget {
                 ),
               )),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: _border),
                 ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: _muted,
-                      backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                      child: avatarUrl.isEmpty
-                          ? Text(
-                              title.isNotEmpty ? title[0].toUpperCase() : 'C',
-                              style: const TextStyle(color: _primary, fontWeight: FontWeight.w700, fontSize: 15),
-                            )
-                          : null,
+                child: Row(children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: _fieldBg,
+                    backgroundImage: avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl.isEmpty
+                        ? Text(
+                            title.isNotEmpty
+                                ? title[0].toUpperCase()
+                                : 'C',
+                            style: const TextStyle(
+                                color: _primary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: const TextStyle(
+                                color: _textDark,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
+                        const SizedBox(height: 3),
+                        if (desc.isNotEmpty)
+                          Text(desc,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: _textMuted, fontSize: 12)),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: const TextStyle(color: _textHi, fontWeight: FontWeight.w600, fontSize: 14)),
-                          const SizedBox(height: 3),
-                          Text(desc, maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: _textDim, fontSize: 12)),
-                        ],
-                      ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF0FB),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: _muted,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '$count members',
-                        style: const TextStyle(color: _primary, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
+                    child: Text(
+                      '$count members',
+                      style: const TextStyle(
+                          color: _primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
                     ),
-                  ],
-                ),
+                  ),
+                ]),
               ),
             );
           },
@@ -499,13 +596,15 @@ class _CommunityResultsList extends StatelessWidget {
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
-class _EmptyResultsPlaceholder extends StatelessWidget {
-  static const Color _primary = Color(0xFF7C3AED);
-  static const Color _muted   = Color(0xFFEDE9FF);
-  static const Color _textDim = Color(0xFFA89FCC);
 
+class _EmptyPlaceholder extends StatelessWidget {
+  static const Color _primary  = Color(0xFF6C63D5);
+  static const Color _fieldBg  = Color(0xFFEEF0FB);
+  static const Color _textMuted = Color(0xFF9E9BD0);
+
+  final IconData icon;
   final String label;
-  const _EmptyResultsPlaceholder({required this.label});
+  const _EmptyPlaceholder({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -516,14 +615,16 @@ class _EmptyResultsPlaceholder extends StatelessWidget {
           Container(
             width: 56,
             height: 56,
-            decoration: const BoxDecoration(color: _muted, shape: BoxShape.circle),
-            child: const Icon(Icons.search_rounded, color: _primary, size: 26),
+            decoration: const BoxDecoration(
+                color: _fieldBg, shape: BoxShape.circle),
+            child: Icon(icon, color: _primary, size: 26),
           ),
           const SizedBox(height: 14),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _textDim, fontSize: 13, height: 1.5),
+            style: const TextStyle(
+                color: _textMuted, fontSize: 13, height: 1.5),
           ),
         ],
       ),

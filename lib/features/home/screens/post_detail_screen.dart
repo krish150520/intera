@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:video_player/video_player.dart';
 import '../../../core/theme/colors.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../widgets/post_card.dart';
+import '../../../core/karma/karma_service.dart';
+import '../../../core/karma/karma_badge.dart';
 
-/// Screen 6: Post Detail Screen
-/// Shows the full post alongside real-time live comments streaming from Firebase.
 class PostDetailScreen extends StatefulWidget {
   final Post? post;
-
   const PostDetailScreen({super.key, this.post});
 
   @override
@@ -19,7 +20,20 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
-  bool _isSending = false; // Prevents spamming duplicate comments during cloud writes
+  bool _isSending = false;
+
+  static const Color _primary    = Color(0xFF6C63D5);
+  static const Color _fieldBg    = Color(0xFFF5F4FF);
+
+  String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+  bool get _isHelpPost   => widget.post?.type == PostType.helpRequest;
+  bool get _isPostAuthor => widget.post?.authorId == _myUid;
+
+  bool get _hasMedia =>
+      (widget.post?.imageUrl != null && widget.post!.imageUrl!.isNotEmpty) ||
+      widget.post?.type == PostType.video;
+
+  bool get _isVideo => widget.post?.type == PostType.video;
 
   @override
   void dispose() {
@@ -27,275 +41,1203 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     super.dispose();
   }
 
-  /// Commits a comment item into a subcollection space under the post item node
+  // ── Submit comment ─────────────────────────────────────────────────────────
+
   void _submitComment() async {
     final text = _commentController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
     final post = widget.post;
-
-    if (text.isEmpty || post == null) return;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to participate in the discussion.')),
-      );
-      return;
-    }
+    if (text.isEmpty || post == null || user == null) return;
 
     setState(() => _isSending = true);
-
     try {
-      // FIXED: Fetch the active sender's profile document from Firestore to extract the true custom username
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final userData = userDoc.data();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+      final ud = userDoc.data() ?? {};
 
-      final String verifiedUsername = userData != null && userData['username'] != null
-          ? userData['username']
-          : (user.email != null ? '@${user.email!.split("@")[0]}' : '@user');
+      final username = ud['username'] != null
+          ? (ud['username'] as String).startsWith('@')
+              ? ud['username'] as String
+              : '@${ud['username']}'
+          : '@${user.email?.split('@')[0] ?? 'user'}';
+      final displayName = ud['name'] ?? user.displayName ?? 'Anonymous';
 
-      final String verifiedDisplayName = userData != null && userData['name'] != null
-          ? userData['name']
-          : (user.displayName ?? 'Anonymous');
+      final postRef    = FirebaseFirestore.instance.collection('posts').doc(post.id);
+      final commentRef = postRef.collection('comments').doc();
+      final batch      = FirebaseFirestore.instance.batch();
 
-      final postDocRef = FirebaseFirestore.instance.collection('posts').doc(post.id);
-      final commentSubcollectionRef = postDocRef.collection('comments');
-
-      // Use a Firestore Batch write to ensure both operations complete atomically
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Create a reference for a new comment document
-      final newCommentRef = commentSubcollectionRef.doc();
-
-      final Map<String, dynamic> commentPayload = {
-        'authorName': verifiedDisplayName,
-        'authorUsername': verifiedUsername.startsWith('@') ? verifiedUsername : '@$verifiedUsername', // ◄── FIXED: Eliminates raw email slice handles
-        'authorAvatar': user.photoURL ?? '', 
-        'content': text,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-
-      // 1. Stage the new comment entry
-      batch.set(newCommentRef, commentPayload);
-
-      // 2. Stage the comment count increment on the core parent post document
-      batch.update(postDocRef, {
-        'commentCount': FieldValue.increment(1),
+      batch.set(commentRef, {
+        'authorId':       user.uid,
+        'authorName':     displayName,
+        'authorUsername': username,
+        'authorAvatar':   user.photoURL ?? '',
+        'content':        text,
+        'createdAt':      FieldValue.serverTimestamp(),
       });
-
-      // Commit operations simultaneously
+      batch.update(postRef, {'commentCount': FieldValue.increment(1)});
       await batch.commit();
 
       _commentController.clear();
-      FocusScope.of(context).unfocus(); // Automatically drops keyboard layout out of view safely
+      FocusScope.of(context).unfocus();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not publish comment: $e'), backgroundColor: Colors.red),
-      );
+      _showSnack('Could not publish comment: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
 
+  // ── Award best answer ──────────────────────────────────────────────────────
+
+  Future<void> _awardBestAnswer({
+    required String commentId,
+    required String answererUid,
+    required String answererName,
+    required int reward,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Mark as Best Answer?'),
+        content: Text(
+          'This will award $reward ⚡ karma to $answererName and close the help request.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _primary),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Award karma',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+    try {
+      await KarmaService.awardBestAnswer(
+        postId:       widget.post!.id,
+        winnerUid:    answererUid,
+        commentId:    commentId,
+        rewardAmount: reward,
+      );
+      if (!mounted) return;
+      _showSnack('🎉 $reward karma awarded to $answererName!');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Error: $e', isError: true);
+    }
+  }
+
+  // ── Tip dialog ─────────────────────────────────────────────────────────────
+
+  Future<void> _showTipDialog({
+    required String toUid,
+    required String toName,
+    required String postId,
+    String? commentId,
+  }) async {
+    final ctrl       = TextEditingController();
+    final myBalance  = await KarmaService.getBalance(_myUid);
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TipSheet(
+        toName:    toName,
+        myBalance: myBalance,
+        onSend: (amount) async {
+          Navigator.of(context).pop();
+          try {
+            await KarmaService.tipUser(
+              toUid:     toUid,
+              toName:    toName,
+              amount:    amount,
+              postId:    postId,
+              commentId: commentId,
+            );
+            if (!mounted) return;
+            _showSnack('⚡ $amount karma tipped to $toName!');
+          } catch (e) {
+            if (!mounted) return;
+            _showSnack('$e', isError: true);
+          }
+        },
+      ),
+    );
+    ctrl.dispose();
+  }
+
+  // ── Open fullscreen viewer ─────────────────────────────────────────────────
+
+  void _openFullscreen() {
+    final post = widget.post;
+    if (post == null) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, __, ___) => _FullscreenMediaViewer(
+          mediaUrl:    post.imageUrl ?? '',
+          isVideo:     _isVideo,
+          authorName:  post.authorName,
+          authorUsername: post.authorUsername,
+          avatarUrl:   post.authorAvatarUrl,
+          caption:     post.body,
+        ),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
+    );
+  }
+
+  void _showSnack(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? Colors.red : const Color(0xFF388E3C),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
-    final currentUser = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Discussion', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0.5,
-      ),
+      extendBodyBehindAppBar: _hasMedia,
+      appBar: _hasMedia
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: GestureDetector(
+                onTap: () => Navigator.of(context).maybePop(),
+                child: Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.45),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 16, color: Colors.white),
+                ),
+              ),
+              systemOverlayStyle: SystemUiOverlayStyle.light,
+            )
+          : AppBar(
+              title: const Text('Discussion',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              elevation: 0.5,
+              leading: GestureDetector(
+                onTap: () => Navigator.of(context).maybePop(),
+                child: Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: _fieldBg, shape: BoxShape.circle),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 16, color: _primary),
+                ),
+              ),
+            ),
       body: post == null
           ? const Center(child: Text('Post context missing.'))
-          : Column(
-              children: [
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('posts')
-                        .doc(post.id)
-                        .collection('comments')
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text('Failed to load comment streams: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
-                        );
-                      }
+          : Column(children: [
+              Expanded(
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('posts')
+                      .doc(post.id)
+                      .snapshots(),
+                  builder: (context, postSnap) {
+                    final postData =
+                        postSnap.data?.data() as Map<String, dynamic>? ?? {};
+                    final isCompleted = postData['isCompleted'] == true;
+                    final bestCmtId   = postData['bestAnswerCommentId'] as String?;
+                    final reward      = (postData['rewardKarma'] as num?)?.toInt() ?? 0;
 
-                      final commentDocs = snapshot.data?.docs ?? [];
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('posts')
+                          .doc(post.id)
+                          .collection('comments')
+                          .orderBy('createdAt', descending: true)
+                          .snapshots(),
+                      builder: (context, snap) {
+                        final commentDocs = snap.data?.docs ?? [];
 
-                      return CustomScrollView(
-                        slivers: [
-                          // 1. Core Post Card Node
+                        return CustomScrollView(slivers: [
+                          // ── Full-width media hero ────────────────────────
+                          if (_hasMedia)
+                            SliverToBoxAdapter(
+                              child: _MediaHero(
+                                mediaUrl: post.imageUrl ?? '',
+                                isVideo:  _isVideo,
+                                onExpand: _openFullscreen,
+                              ),
+                            ),
+
+                          // ── Post card (no media shown inside it now) ─────
                           SliverToBoxAdapter(
-                            child: PostCard(post: post),
+                            child: _hasMedia
+                                ? _PostBodyCard(post: post)
+                                : PostCard(post: post),
                           ),
-                          
-                          // 2. Header Section Label
+
+                          // ── Help banner ──────────────────────────────────
+                          if (_isHelpPost)
+                            SliverToBoxAdapter(
+                              child: _HelpBanner(
+                                isCompleted: isCompleted,
+                                reward: reward,
+                              ),
+                            ),
+
+                          // ── Comments header ──────────────────────────────
                           SliverToBoxAdapter(
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
                               child: Text(
                                 'Comments (${commentDocs.length})',
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.black87,
-                                ),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.black87),
                               ),
                             ),
                           ),
 
-                          // 3. Fallback View State (If no comments exist yet)
-                          if (snapshot.connectionState == ConnectionState.waiting)
+                          // ── Loading / empty ──────────────────────────────
+                          if (snap.connectionState == ConnectionState.waiting)
                             const SliverToBoxAdapter(
-                              child: Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator())),
+                              child: Center(
+                                  child: Padding(
+                                      padding: EdgeInsets.all(32),
+                                      child: CircularProgressIndicator())),
                             )
                           else if (commentDocs.isEmpty)
                             SliverToBoxAdapter(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 16.0),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 48, horizontal: 16),
                                 child: Center(
                                   child: Text(
-                                    'No responses yet. Start the conversation below!',
+                                    'No responses yet. Start the conversation!',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                                    style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 13),
                                   ),
                                 ),
                               ),
                             )
                           else
-                            // 4. Live Render Comment List Stream Items Builder
                             SliverList(
                               delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final data = commentDocs[index].data() as Map<String, dynamic>;
-                                  
-                                  final commentItem = _Comment(
-                                    authorName: data['authorName'] ?? 'Anonymous',
-                                    authorUsername: data['authorUsername'] ?? '@user',
-                                    content: data['content'] ?? '',
-                                    authorAvatar: data['authorAvatar'] ?? '',
-                                  );
+                                (context, i) {
+                                  final data =
+                                      commentDocs[i].data() as Map<String, dynamic>;
+                                  final cmtId = commentDocs[i].id;
+                                  final isBest = cmtId == bestCmtId;
 
-                                  return Column(
-                                    children: [
-                                      _CommentTile(comment: commentItem),
-                                      if (index < commentDocs.length - 1)
-                                        Divider(color: Colors.grey.shade100, height: 1, indent: 16, endIndent: 16),
-                                    ],
-                                  );
+                                  return Column(children: [
+                                    _CommentTile(
+                                      commentId:    cmtId,
+                                      data:         data,
+                                      isBestAnswer: isBest,
+                                      showAwardBtn: _isHelpPost &&
+                                          !isCompleted &&
+                                          _isPostAuthor &&
+                                          data['authorId'] != _myUid,
+                                      showTipBtn: data['authorId'] != _myUid &&
+                                          _myUid.isNotEmpty,
+                                      onAward: () => _awardBestAnswer(
+                                        commentId:    cmtId,
+                                        answererUid:  data['authorId'] ?? '',
+                                        answererName: data['authorName'] ?? 'User',
+                                        reward:       reward,
+                                      ),
+                                      onTip: () => _showTipDialog(
+                                        toUid:     data['authorId'] ?? '',
+                                        toName:    data['authorName'] ?? 'User',
+                                        postId:    post.id,
+                                        commentId: cmtId,
+                                      ),
+                                    ),
+                                    if (i < commentDocs.length - 1)
+                                      Divider(
+                                          color: Colors.grey.shade100,
+                                          height: 1,
+                                          indent: 16,
+                                          endIndent: 16),
+                                  ]);
                                 },
                                 childCount: commentDocs.length,
                               ),
                             ),
-                        ],
-                      );
-                    },
-                  ),
+
+                          // bottom padding
+                          const SliverToBoxAdapter(
+                              child: SizedBox(height: 16)),
+                        ]);
+                      },
+                    );
+                  },
                 ),
-                
-                // Comment text entry workspace bar container
-                _CommentInput(
-                  controller: _commentController,
-                  isSending: _isSending,
-                  userAvatarUrl: currentUser?.photoURL,
-                  onSend: _submitComment,
-                ),
-              ],
-            ),
+              ),
+
+              // ── Comment input ──────────────────────────────────────────────
+              _CommentInput(
+                controller:    _commentController,
+                isSending:     _isSending,
+                userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
+                onSend:        _submitComment,
+              ),
+            ]),
     );
   }
 }
 
-// --- PRIVATELY SCOPED MODEL ---
+// ── Full-width media hero ─────────────────────────────────────────────────────
 
-class _Comment {
-  final String authorName;
-  final String authorUsername;
-  final String content;
-  final String authorAvatar;
+class _MediaHero extends StatelessWidget {
+  final String mediaUrl;
+  final bool isVideo;
+  final VoidCallback onExpand;
 
-  const _Comment({
-    required this.authorName,
-    required this.authorUsername,
-    required this.content,
-    required this.authorAvatar,
+  const _MediaHero({
+    required this.mediaUrl,
+    required this.isVideo,
+    required this.onExpand,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Media surface
+        SizedBox(
+          width: double.infinity,
+          height: 280,
+          child: isVideo
+              ? _VideoThumbnail(videoUrl: mediaUrl)
+              : (mediaUrl.isNotEmpty
+                  ? Image.network(
+                      mediaUrl,
+                      width: double.infinity,
+                      height: 280,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _PlaceholderMedia(),
+                    )
+                  : _PlaceholderMedia()),
+        ),
+
+        // Gradient overlay (bottom fade into white for text blending)
+        Positioned(
+          bottom: 0, left: 0, right: 0,
+          child: Container(
+            height: 80,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.white],
+              ),
+            ),
+          ),
+        ),
+
+        // Type badge (top-right)
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 56,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(
+                isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
+                color: Colors.white,
+                size: 12,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                isVideo ? 'Video' : 'Image',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500),
+              ),
+            ]),
+          ),
+        ),
+
+        // Expand button (bottom-right)
+        Positioned(
+          bottom: 16,
+          right: 12,
+          child: GestureDetector(
+            onTap: onExpand,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.open_in_full_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// --- COMPONENT UI TILES ---
+class _PlaceholderMedia extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 280,
+      color: const Color(0xFF2D2A6E),
+      child: const Center(
+        child: Icon(Icons.image_outlined, color: Colors.white30, size: 48),
+      ),
+    );
+  }
+}
 
-class _CommentTile extends StatelessWidget {
-  final _Comment comment;
+class _VideoThumbnail extends StatefulWidget {
+  final String videoUrl;
+  const _VideoThumbnail({required this.videoUrl});
 
-  const _CommentTile({required this.comment});
+  @override
+  State<_VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<_VideoThumbnail> {
+  VideoPlayerController? _ctrl;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.videoUrl.isNotEmpty) {
+      _ctrl = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
+        ..initialize().then((_) {
+          if (mounted) setState(() => _initialized = true);
+        });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_initialized && _ctrl != null) {
+      return AspectRatio(
+        aspectRatio: _ctrl!.value.aspectRatio,
+        child: VideoPlayer(_ctrl!),
+      );
+    }
+    return Container(
+      width: double.infinity,
+      height: 280,
+      color: const Color(0xFF1A1230),
+      child: const Center(
+        child: Icon(Icons.play_circle_fill_rounded,
+            color: Colors.white54, size: 56),
+      ),
+    );
+  }
+}
+
+// ── Post body card (used when media hero is shown above PostCard) ─────────────
+
+class _PostBodyCard extends StatelessWidget {
+  final Post post;
+  const _PostBodyCard({required this.post});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Author row
+        Row(children: [
           CustomAvatar(
-            name: comment.authorName, 
-            radius: 16,
-            imageUrl: comment.authorAvatar.isNotEmpty ? comment.authorAvatar : null, 
+            name: post.authorName,
+            radius: 17,
+            imageUrl: post.authorAvatarUrl,
           ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(post.authorName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Color(0xFF2D2A6E))),
+                Text(post.authorUsername,
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF9E9BD0))),
+              ],
+            ),
+          ),
+          KarmaBadge(uid: post.authorId, size: KarmaBadgeSize.small),
+        ]),
+        const SizedBox(height: 12),
+        if (post.title.isNotEmpty) ...[
+          Text(post.title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xFF2D2A6E))),
+          const SizedBox(height: 6),
+        ],
+        if (post.body.isNotEmpty)
+          Text(post.body,
+              style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: Color(0xFF444444))),
+        const SizedBox(height: 12),
+      ]),
+    );
+  }
+}
+
+// ── Fullscreen media viewer ───────────────────────────────────────────────────
+
+class _FullscreenMediaViewer extends StatefulWidget {
+  final String mediaUrl;
+  final bool isVideo;
+  final String authorName;
+  final String authorUsername;
+  final String? avatarUrl;
+  final String caption;
+
+  const _FullscreenMediaViewer({
+    required this.mediaUrl,
+    required this.isVideo,
+    required this.authorName,
+    required this.authorUsername,
+    this.avatarUrl,
+    required this.caption,
+  });
+
+  @override
+  State<_FullscreenMediaViewer> createState() => _FullscreenMediaViewerState();
+}
+
+class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
+  VideoPlayerController? _videoCtrl;
+  bool _videoInitialized = false;
+  bool _playing = false;
+  bool _uiVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    if (widget.isVideo && widget.mediaUrl.isNotEmpty) {
+      _videoCtrl =
+          VideoPlayerController.networkUrl(Uri.parse(widget.mediaUrl))
+            ..initialize().then((_) {
+              if (mounted) {
+                setState(() {
+                  _videoInitialized = true;
+                  _playing = true;
+                });
+                _videoCtrl!.play();
+              }
+            });
+    }
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _videoCtrl?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    if (_videoCtrl == null) return;
+    setState(() {
+      _playing = !_playing;
+      _playing ? _videoCtrl!.play() : _videoCtrl!.pause();
+    });
+  }
+
+  void _toggleUI() => setState(() => _uiVisible = !_uiVisible);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: _toggleUI,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // ── Media content ──────────────────────────────────────────────
+            Center(
+              child: widget.isVideo
+                  ? (_videoInitialized && _videoCtrl != null
+                      ? AspectRatio(
+                          aspectRatio: _videoCtrl!.value.aspectRatio,
+                          child: VideoPlayer(_videoCtrl!),
+                        )
+                      : const CircularProgressIndicator(
+                          color: Colors.white))
+                  : (widget.mediaUrl.isNotEmpty
+                      ? InteractiveViewer(
+                          child: Image.network(
+                            widget.mediaUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.white38,
+                                size: 64),
+                          ),
+                        )
+                      : const Icon(Icons.image_outlined,
+                          color: Colors.white38, size: 64)),
+            ),
+
+            // ── Video play/pause overlay ───────────────────────────────────
+            if (widget.isVideo && _videoInitialized)
+              AnimatedOpacity(
+                opacity: _uiVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: Center(
+                  child: GestureDetector(
+                    onTap: _togglePlay,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.55),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // ── Top bar (close + more) ─────────────────────────────────────
+            AnimatedOpacity(
+              opacity: _uiVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                      12, MediaQuery.of(context).padding.top + 8, 12, 12),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xCC000000), Colors.transparent],
+                    ),
+                  ),
+                  child: Row(children: [
+                    _GlassButton(
+                      icon: Icons.close_rounded,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    const Spacer(),
+                    _GlassButton(
+                      icon: Icons.download_rounded,
+                      onTap: () {},
+                    ),
+                    const SizedBox(width: 8),
+                    _GlassButton(
+                      icon: Icons.share_rounded,
+                      onTap: () {},
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+
+            // ── Bottom caption + author ────────────────────────────────────
+            AnimatedOpacity(
+              opacity: _uiVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                      16, 32, 16,
+                      MediaQuery.of(context).padding.bottom + 20),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Color(0xDD000000), Colors.transparent],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Author
+                      Row(children: [
+                        CustomAvatar(
+                          name: widget.authorName,
+                          radius: 16,
+                          imageUrl: widget.avatarUrl,
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(widget.authorName,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700)),
+                            Text(widget.authorUsername,
+                                style: const TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 11)),
+                          ],
+                        ),
+                      ]),
+                      if (widget.caption.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.caption,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              height: 1.4),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _GlassButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.45),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+      );
+}
+
+// ── Help banner ───────────────────────────────────────────────────────────────
+
+class _HelpBanner extends StatelessWidget {
+  final bool isCompleted;
+  final int reward;
+  const _HelpBanner({required this.isCompleted, required this.reward});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isCompleted
+            ? const Color(0xFFE8F5E9)
+            : const Color(0xFFFFF8EC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isCompleted
+              ? const Color(0xFFA5D6A7)
+              : const Color(0xFFF5DCAA),
+        ),
+      ),
+      child: Row(children: [
+        Icon(
+          isCompleted
+              ? Icons.check_circle_rounded
+              : Icons.handshake_outlined,
+          color: isCompleted
+              ? const Color(0xFF388E3C)
+              : const Color(0xFFC9830A),
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            isCompleted
+                ? 'Resolved — karma has been awarded ✓'
+                : 'Open help request · $reward ⚡ karma reward',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isCompleted
+                  ? const Color(0xFF2E7D32)
+                  : const Color(0xFF7A5010),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Comment tile ──────────────────────────────────────────────────────────────
+
+class _CommentTile extends StatelessWidget {
+  final String commentId;
+  final Map<String, dynamic> data;
+  final bool isBestAnswer;
+  final bool showAwardBtn;
+  final bool showTipBtn;
+  final VoidCallback onAward;
+  final VoidCallback onTip;
+
+  const _CommentTile({
+    required this.commentId,
+    required this.data,
+    required this.isBestAnswer,
+    required this.showAwardBtn,
+    required this.showTipBtn,
+    required this.onAward,
+    required this.onTip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name     = data['authorName']     as String? ?? 'Anonymous';
+    final username = data['authorUsername'] as String? ?? '@user';
+    final content  = data['content']        as String? ?? '';
+    final avatar   = data['authorAvatar']   as String? ?? '';
+    final authorId = data['authorId']       as String? ?? '';
+
+    return Container(
+      color: isBestAnswer
+          ? const Color(0xFFF0FFF4)
+          : Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          CustomAvatar(
+              name: name,
+              radius: 16,
+              imageUrl: avatar.isNotEmpty ? avatar : null),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      comment.authorName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      comment.authorUsername,
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                Row(children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Colors.black87)),
+                  const SizedBox(width: 6),
+                  Text(username,
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey.shade500)),
+                  if (isBestAnswer) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF388E3C),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('Best answer',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700)),
                     ),
                   ],
-                ),
+                ]),
                 const SizedBox(height: 4),
-                Text(
-                  comment.content, 
-                  style: const TextStyle(fontSize: 13, height: 1.35, color: Colors.black87),
-                ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () {
-                    // Handled downstream via comment tags
-                  },
-                  child: const Text(
-                    'Reply',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                Text(content,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        color: Colors.black87)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  if (showAwardBtn)
+                    _ActionChip(
+                      icon:  Icons.emoji_events_rounded,
+                      label: 'Best answer',
+                      color: const Color(0xFF388E3C),
+                      bg:    const Color(0xFFE8F5E9),
+                      onTap: onAward,
                     ),
-                  ),
-                ),
+                  if (showAwardBtn) const SizedBox(width: 8),
+                  if (showTipBtn)
+                    _ActionChip(
+                      icon:  Icons.bolt_rounded,
+                      label: 'Tip',
+                      color: const Color(0xFFC9830A),
+                      bg:    const Color(0xFFFFF8EC),
+                      onTap: onTip,
+                    ),
+                  const Spacer(),
+                  if (authorId.isNotEmpty)
+                    KarmaBadge(uid: authorId, size: KarmaBadgeSize.small),
+                ]),
               ],
             ),
           ),
-        ],
+        ]),
       ),
     );
   }
 }
+
+class _ActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bg;
+  final VoidCallback onTap;
+
+  const _ActionChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bg,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: color)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Tip bottom sheet ──────────────────────────────────────────────────────────
+
+class _TipSheet extends StatefulWidget {
+  final String toName;
+  final int myBalance;
+  final void Function(int amount) onSend;
+
+  const _TipSheet({
+    required this.toName,
+    required this.myBalance,
+    required this.onSend,
+  });
+
+  @override
+  State<_TipSheet> createState() => _TipSheetState();
+}
+
+class _TipSheetState extends State<_TipSheet> {
+  final _ctrl = TextEditingController();
+  int _amount = 0;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isValid = _amount > 0 && _amount <= widget.myBalance;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 36, height: 4,
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2)),
+        ),
+        Text('Tip ${widget.toName}',
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2D2A6E))),
+        const SizedBox(height: 4),
+        Text('Your balance: ${widget.myBalance} ⚡',
+            style: const TextStyle(
+                fontSize: 12, color: Color(0xFF9E9BD0))),
+        const SizedBox(height: 20),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (final amt in [5, 10, 25, 50])
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _amount = amt);
+                  _ctrl.text = '$amt';
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _amount == amt
+                        ? const Color(0xFF6C63D5)
+                        : const Color(0xFFF5F4FF),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _amount == amt
+                          ? const Color(0xFF6C63D5)
+                          : const Color(0xFFD8D5F8),
+                    ),
+                  ),
+                  child: Text('$amt ⚡',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _amount == amt
+                              ? Colors.white
+                              : const Color(0xFF6C63D5))),
+                ),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _ctrl,
+          keyboardType: TextInputType.number,
+          onChanged: (v) => setState(() => _amount = int.tryParse(v) ?? 0),
+          decoration: InputDecoration(
+            hintText: 'Or enter custom amount',
+            hintStyle: const TextStyle(color: Color(0xFFB0ADDE)),
+            filled: true,
+            fillColor: const Color(0xFFF5F4FF),
+            prefixIcon: const Icon(Icons.bolt_rounded,
+                color: Color(0xFFC9830A), size: 18),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                    color: Color(0xFFE4E2F8), width: 1.5)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                    color: Color(0xFFE4E2F8), width: 1.5)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                    color: Color(0xFF6C63D5), width: 1.5)),
+          ),
+        ),
+        if (_amount > widget.myBalance && _amount > 0) ...[
+          const SizedBox(height: 8),
+          const Text('Not enough karma',
+              style: TextStyle(color: Colors.red, fontSize: 12)),
+        ],
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: isValid ? () => widget.onSend(_amount) : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C63D5),
+              disabledBackgroundColor: const Color(0xFFD8D5F8),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+            icon: const Icon(Icons.bolt_rounded,
+                color: Colors.white, size: 18),
+            label: Text(
+              isValid
+                  ? 'Send $_amount karma to ${widget.toName}'
+                  : 'Enter an amount',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Comment input ─────────────────────────────────────────────────────────────
 
 class _CommentInput extends StatelessWidget {
   final TextEditingController controller;
@@ -304,7 +1246,7 @@ class _CommentInput extends StatelessWidget {
   final VoidCallback onSend;
 
   const _CommentInput({
-    required this.controller, 
+    required this.controller,
     required this.isSending,
     this.userAvatarUrl,
     required this.onSend,
@@ -313,55 +1255,57 @@ class _CommentInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
+      padding: EdgeInsets.fromLTRB(
+          12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), offset: const Offset(0, -3), blurRadius: 4),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              offset: const Offset(0, -3),
+              blurRadius: 4),
         ],
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
-      child: Row(
-        children: [
-          CustomAvatar(
-            name: 'You', 
-            radius: 16,
-            imageUrl: userAvatarUrl, 
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: TextField(
-                controller: controller,
-                maxLines: null, 
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Add to the discussion...',
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
-                ),
+      child: Row(children: [
+        CustomAvatar(name: 'You', radius: 16, imageUrl: userAvatarUrl),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: TextField(
+              controller: controller,
+              maxLines: null,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText: 'Add to the discussion...',
+                hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
-          const SizedBox(width: 4),
-          isSending
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12.0),
-                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.send_rounded, color: AppColors.primary),
-                  onPressed: onSend,
-                ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 4),
+        isSending
+            ? const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            : IconButton(
+                icon: const Icon(Icons.send_rounded,
+                    color: AppColors.primary),
+                onPressed: onSend,
+              ),
+      ]),
     );
   }
 }

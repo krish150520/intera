@@ -14,15 +14,12 @@ class AuthService {
   bool get isLoggedIn => _auth.currentUser != null;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// True if the account is a Google account — Google already verified
-  /// ownership of the email, so we don't need our own verification step.
   bool get isGoogleUser {
     final user = _auth.currentUser;
     if (user == null) return false;
     return user.providerData.any((info) => info.providerId == 'google.com');
   }
 
-  /// True if the user is allowed past the "verify your email" gate.
   bool get isVerified {
     final user = _auth.currentUser;
     if (user == null) return false;
@@ -49,10 +46,26 @@ class AuthService {
     }
   }
 
-  /// Re-fetches the user from Firebase so emailVerified reflects reality
-  /// (it's a snapshot value, so it won't update on its own).
+  /// Re-fetches the user from Firebase so emailVerified reflects reality.
+  /// Wrapped in try/catch so offline/network failures don't crash the splash
+  /// screen — callers get the last-known cached state instead.
   Future<void> reloadUser() async {
-    await _auth.currentUser?.reload();
+    try {
+      await _auth.currentUser?.reload();
+    } catch (_) {
+      // Ignore — stale cached state is fine as a fallback.
+    }
+  }
+
+  /// Forces the Firebase ID token to refresh so Firestore security rules
+  /// see the updated email_verified claim immediately after verification.
+  /// Call this once right after reloadUser() confirms isVerified == true.
+  Future<void> refreshIdToken() async {
+    try {
+      await _auth.currentUser?.getIdToken(true);
+    } catch (_) {
+      // Non-fatal — token will refresh naturally on next request anyway.
+    }
   }
 
   // ---------- Google ----------
@@ -60,7 +73,6 @@ class AuthService {
   Future<UserCredential> signInWithGoogle() async {
     final googleUser = await _googleSignIn.signIn();
     if (googleUser == null) {
-      // User backed out of the Google account picker.
       throw FirebaseAuthException(
         code: 'sign-in-cancelled',
         message: 'Google sign-in was cancelled.',
@@ -93,10 +105,17 @@ class AuthService {
     final snapshot = await docRef.get();
 
     if (!snapshot.exists) {
+      // Resolve the username once so both the display field and the
+      // lowercase search index field are always consistent with each other.
+      final resolvedUsername = username ?? '@${(user.email ?? 'user').split('@')[0]}';
+
       await docRef.set({
         'id': user.uid,
         'name': name ?? user.displayName ?? 'New User',
-        'username': username ?? '@${(user.email ?? 'user').split('@')[0]}',
+        'username': resolvedUsername,
+        // Stripped of '@' and lowercased — this is what search_screen.dart
+        // queries against via orderBy('usernameLower').startAt([query]).
+        'usernameLower': resolvedUsername.replaceFirst('@', '').toLowerCase(),
         'bio': 'Welcome to my INTERA workspace profile!',
         'avatarUrl': avatarUrl ?? user.photoURL ?? '',
         'karmaPoints': 100,
