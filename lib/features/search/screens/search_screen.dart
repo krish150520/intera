@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intera/features/home/widgets/post_card.dart';
+import '../../../core/theme/colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
@@ -11,20 +12,12 @@ import '../../videos/screens/community_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
-
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen>
     with SingleTickerProviderStateMixin {
-  static const Color _bg      = Color(0xFFEEF0FB);
-  static const Color _primary = Color(0xFF6C63D5);
-  static const Color _textDark = Color(0xFF2D2A6E);
-  static const Color _textMuted = Color(0xFF9E9BD0);
-  static const Color _inputBg = Color(0xFFF5F4FF);
-  static const Color _chipBorder = Color(0xFFD8D5F8);
-
   late final TabController _tabController;
   final _searchController = TextEditingController();
   String _searchQuery = '';
@@ -33,7 +26,6 @@ class _SearchScreenState extends State<SearchScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    // Search in realtime as user types
     _searchController.addListener(() {
       final q = _searchController.text.trim().toLowerCase();
       if (q != _searchQuery) setState(() => _searchQuery = q);
@@ -49,16 +41,17 @@ class _SearchScreenState extends State<SearchScreen>
 
   @override
   Widget build(BuildContext context) {
+    final c = _ThemeColors(context);
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: c.bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: c.surface,
         elevation: 0,
         titleSpacing: 16,
-        title: _buildSearchBar(),
+        title: _buildSearchBar(c),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(44),
-          child: _buildTabBar(),
+          child: _buildTabBar(c),
         ),
       ),
       body: TabBarView(
@@ -73,34 +66,31 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(_ThemeColors c) {
     return SizedBox(
       height: 40,
       child: TextField(
         controller: _searchController,
         autofocus: false,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(color: _textDark, fontSize: 14),
+        style: TextStyle(color: c.textHi, fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Search people, posts, communities…',
-          hintStyle: const TextStyle(color: _textMuted, fontSize: 13),
-          prefixIcon:
-              const Icon(Icons.search_rounded, size: 18, color: _textMuted),
+          hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
+          prefixIcon: Icon(Icons.search_rounded, size: 18, color: c.textMuted),
           suffixIcon: _searchController.text.isNotEmpty
               ? GestureDetector(
                   onTap: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
                   },
-                  child: const Icon(Icons.close_rounded,
-                      size: 16, color: _textMuted),
+                  child: Icon(Icons.close_rounded, size: 16, color: c.textMuted),
                 )
               : null,
           isDense: true,
           filled: true,
-          fillColor: _inputBg,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          fillColor: c.field,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(24),
             borderSide: BorderSide.none,
@@ -110,24 +100,21 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar(_ThemeColors c) {
     return TabBar(
       controller: _tabController,
       isScrollable: true,
-      labelColor: _primary,
-      unselectedLabelColor: _textMuted,
-      labelStyle:
-          const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      unselectedLabelStyle:
-          const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+      labelColor: c.primary,
+      unselectedLabelColor: c.textMuted,
+      labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
       indicator: BoxDecoration(
-        color: const Color(0xFFEEF0FB),
+        color: c.bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _chipBorder),
+        border: Border.all(color: c.chipBorder),
       ),
       indicatorSize: TabBarIndicatorSize.tab,
-      indicatorPadding:
-          const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+      indicatorPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
       dividerColor: Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       tabs: const [
@@ -140,53 +127,36 @@ class _SearchScreenState extends State<SearchScreen>
   }
 }
 
-// ── Shared client-side filter ─────────────────────────────────────────────────
-// Fetches all docs and filters locally — works without any extra Firestore
-// fields or composite indexes. Fine for collections under ~500 docs.
-
 // ── Tab 1: Users ──────────────────────────────────────────────────────────────
 
 class _UserResultsList extends StatelessWidget {
-  static const Color _primary  = Color(0xFF6C63D5);
-  static const Color _border   = Color(0xFFE4E2F8);
-  static const Color _textDark = Color(0xFF2D2A6E);
-  static const Color _textMuted = Color(0xFF9E9BD0);
-  static const Color _fieldBg  = Color(0xFFF5F4FF);
-
   final String searchQuery;
   const _UserResultsList({required this.searchQuery});
 
-  Future<void> _toggleFollow(
-      BuildContext context, String targetUid, bool isFollowing) async {
+  Future<void> _toggleFollow(BuildContext context, String targetUid, bool isFollowing) async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) return;
-
-    final db             = FirebaseFirestore.instance;
+    final db = FirebaseFirestore.instance;
     final currentUserDoc = db.collection('users').doc(currentUid);
     final targetUserDoc  = db.collection('users').doc(targetUid);
-    final followingRef   = currentUserDoc.collection('following').doc(targetUid);
-    final followerRef    = targetUserDoc.collection('followers').doc(currentUid);
-
     final batch = db.batch();
     if (isFollowing) {
-      batch.delete(followingRef);
-      batch.delete(followerRef);
+      batch.delete(currentUserDoc.collection('following').doc(targetUid));
+      batch.delete(targetUserDoc.collection('followers').doc(currentUid));
       batch.update(currentUserDoc, {'followingCount': FieldValue.increment(-1)});
       batch.update(targetUserDoc,  {'followersCount': FieldValue.increment(-1)});
     } else {
-      batch.set(followingRef, {'createdAt': FieldValue.serverTimestamp()});
-      batch.set(followerRef,  {'createdAt': FieldValue.serverTimestamp()});
+      batch.set(currentUserDoc.collection('following').doc(targetUid), {'createdAt': FieldValue.serverTimestamp()});
+      batch.set(targetUserDoc.collection('followers').doc(currentUid), {'createdAt': FieldValue.serverTimestamp()});
       batch.update(currentUserDoc, {'followingCount': FieldValue.increment(1)});
       batch.update(targetUserDoc,  {'followersCount': FieldValue.increment(1)});
     }
-
     try {
       await batch.commit();
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Could not update follow status. Try again.')),
+          const SnackBar(content: Text('Could not update follow status. Try again.')),
         );
       }
     }
@@ -194,40 +164,22 @@ class _UserResultsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = _ThemeColors(context);
     if (searchQuery.isEmpty) {
-      return const _EmptyPlaceholder(
-          icon: Icons.people_outline_rounded,
-          label: 'Type to search community members');
+      return _EmptyPlaceholder(icon: Icons.people_outline_rounded, label: 'Type to search community members');
     }
-
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUid)
-          .collection('following')
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('users').doc(currentUid).collection('following').snapshots(),
       builder: (context, followingSnap) {
-        final followingIds =
-            followingSnap.data?.docs.map((d) => d.id).toSet() ?? <String>{};
-
+        final followingIds = followingSnap.data?.docs.map((d) => d.id).toSet() ?? <String>{};
         return FutureBuilder<QuerySnapshot>(
-          // Fetch all users — filter client-side by name OR username
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .limit(200)
-              .get(),
+          future: FirebaseFirestore.instance.collection('users').limit(200).get(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: CircularProgressIndicator(
-                      color: _primary, strokeWidth: 2));
+              return Center(child: CircularProgressIndicator(color: c.primary, strokeWidth: 2));
             }
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
-
+            if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
             final q = searchQuery.toLowerCase();
             final docs = (snapshot.data?.docs ?? []).where((doc) {
               if (doc.id == currentUid) return false;
@@ -236,13 +188,7 @@ class _UserResultsList extends StatelessWidget {
               final username = (data['username'] ?? '').toString().toLowerCase();
               return name.contains(q) || username.contains(q);
             }).toList();
-
-            if (docs.isEmpty) {
-              return const _EmptyPlaceholder(
-                  icon: Icons.person_search_rounded,
-                  label: 'No users found');
-            }
-
+            if (docs.isEmpty) return const _EmptyPlaceholder(icon: Icons.person_search_rounded, label: 'No users found');
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               itemCount: docs.length,
@@ -254,69 +200,41 @@ class _UserResultsList extends StatelessWidget {
                 final String username  = data['username']  ?? 'user';
                 final String avatarUrl = data['avatarUrl'] ?? '';
                 final bool isFollowing = followingIds.contains(docId);
-
                 return GestureDetector(
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => UserProfileScreen(
-                        userId: docId,
-                        userName: name,
-                        userAvatar: avatarUrl),
+                    builder: (_) => UserProfileScreen(userId: docId, userName: name, userAvatar: avatarUrl),
                   )),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: c.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _border),
+                      border: Border.all(color: c.border),
                     ),
                     child: Row(children: [
-                      CustomAvatar(
-                          name: name,
-                          imageUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
-                          radius: 22),
+                      CustomAvatar(name: name, imageUrl: avatarUrl.isNotEmpty ? avatarUrl : null, radius: 22),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(name,
-                                style: const TextStyle(
-                                    color: _textDark,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14)),
-                            const SizedBox(height: 2),
-                            Text(
-                              username.startsWith('@')
-                                  ? username
-                                  : '@$username',
-                              style: const TextStyle(
-                                  color: _textMuted, fontSize: 12),
-                            ),
-                          ],
-                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(name, style: TextStyle(color: c.textHi, fontWeight: FontWeight.w600, fontSize: 14)),
+                          const SizedBox(height: 2),
+                          Text(username.startsWith('@') ? username : '@$username',
+                              style: TextStyle(color: c.textMuted, fontSize: 12)),
+                        ]),
                       ),
                       GestureDetector(
-                        onTap: () =>
-                            _toggleFollow(context, docId, isFollowing),
+                        onTap: () => _toggleFollow(context, docId, isFollowing),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                           decoration: BoxDecoration(
-                            color: isFollowing
-                                ? Colors.transparent
-                                : _primary,
+                            color: isFollowing ? Colors.transparent : c.primary,
                             borderRadius: BorderRadius.circular(20),
-                            border: isFollowing
-                                ? Border.all(color: _border)
-                                : null,
+                            border: isFollowing ? Border.all(color: c.border) : null,
                           ),
                           child: Text(
                             isFollowing ? 'Following' : 'Follow',
                             style: TextStyle(
-                              color: isFollowing
-                                  ? _textMuted
-                                  : Colors.white,
+                              color: isFollowing ? c.textMuted : Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -338,83 +256,49 @@ class _UserResultsList extends StatelessWidget {
 // ── Tab 2 & 3: Posts & Videos ─────────────────────────────────────────────────
 
 class _PostResultsList extends StatelessWidget {
-  static const Color _primary = Color(0xFF6C63D5);
-
   final String searchQuery;
   final bool searchVideos;
-  const _PostResultsList(
-      {required this.searchQuery, required this.searchVideos});
+  const _PostResultsList({required this.searchQuery, required this.searchVideos});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ThemeColors(context);
     if (searchQuery.isEmpty) {
       return _EmptyPlaceholder(
-        icon: searchVideos
-            ? Icons.videocam_outlined
-            : Icons.article_outlined,
-        label: searchVideos
-            ? 'Search for video posts'
-            : 'Search questions and posts',
+        icon: searchVideos ? Icons.videocam_outlined : Icons.article_outlined,
+        label: searchVideos ? 'Search for video posts' : 'Search questions and posts',
       );
     }
-
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
     return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('posts')
-          .orderBy('createdAt', descending: true)
-          .limit(300)
-          .get(),
+      future: FirebaseFirestore.instance.collection('posts').orderBy('createdAt', descending: true).limit(300).get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: _primary, strokeWidth: 2));
+          return Center(child: CircularProgressIndicator(color: c.primary, strokeWidth: 2));
         }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
         final q = searchQuery.toLowerCase();
-        final docs = snapshot.data?.docs ?? [];
-
         final List<Post> posts = [];
-        for (final doc in docs) {
+        for (final doc in snapshot.data?.docs ?? []) {
           try {
             final data = doc.data() as Map<String, dynamic>? ?? {};
             final type = data['type'] ?? 'text';
-
-            // Filter by tab
             if (searchVideos && type != 'video') continue;
             if (!searchVideos && type == 'video') continue;
-
-            // Client-side text match across title, body, content, authorName
-            final title      = (data['title']      ?? '').toString().toLowerCase();
-            final body       = (data['body']        ?? '').toString().toLowerCase();
-            final content    = (data['content']     ?? '').toString().toLowerCase();
-            final authorName = (data['authorName']  ?? '').toString().toLowerCase();
-
-            if (!title.contains(q) &&
-                !body.contains(q) &&
-                !content.contains(q) &&
-                !authorName.contains(q)) continue;
-
+            final title      = (data['title']     ?? '').toString().toLowerCase();
+            final body       = (data['body']       ?? '').toString().toLowerCase();
+            final content    = (data['content']    ?? '').toString().toLowerCase();
+            final authorName = (data['authorName'] ?? '').toString().toLowerCase();
+            if (!title.contains(q) && !body.contains(q) && !content.contains(q) && !authorName.contains(q)) continue;
             posts.add(Post.fromFirestore(doc, currentUid));
-          } catch (e) {
-            debugPrint('Skipped post [${doc.id}]: $e');
-          }
+          } catch (e) { debugPrint('Skipped post [${doc.id}]: $e'); }
         }
-
         if (posts.isEmpty) {
           return _EmptyPlaceholder(
-            icon: searchVideos
-                ? Icons.videocam_off_outlined
-                : Icons.search_off_rounded,
+            icon: searchVideos ? Icons.videocam_off_outlined : Icons.search_off_rounded,
             label: searchVideos ? 'No video posts found' : 'No posts found',
           );
         }
-
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: posts.length,
@@ -424,26 +308,16 @@ class _PostResultsList extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: PostCard(
                 post: post,
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PostDetailScreen(post: post))),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post))),
                 onLike: () {
-                  final ref = FirebaseFirestore.instance
-                      .collection('posts')
-                      .doc(post.id);
+                  final ref = FirebaseFirestore.instance.collection('posts').doc(post.id);
                   if (post.isLiked) {
-                    ref.update({
-                      'likeCount': FieldValue.increment(-1),
-                      'likedBy': FieldValue.arrayRemove([currentUid]),
-                    });
+                    ref.update({'likeCount': FieldValue.increment(-1), 'likedBy': FieldValue.arrayRemove([currentUid])});
                   } else {
-                    ref.update({
-                      'likeCount': FieldValue.increment(1),
-                      'likedBy': FieldValue.arrayUnion([currentUid]),
-                    });
+                    ref.update({'likeCount': FieldValue.increment(1),  'likedBy': FieldValue.arrayUnion([currentUid])});
                   }
                 },
-                onComment: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PostDetailScreen(post: post))),
+                onComment: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post))),
               ),
             );
           },
@@ -456,38 +330,22 @@ class _PostResultsList extends StatelessWidget {
 // ── Tab 4: Communities ────────────────────────────────────────────────────────
 
 class _CommunityResultsList extends StatelessWidget {
-  static const Color _primary  = Color(0xFF6C63D5);
-  static const Color _fieldBg  = Color(0xFFEEF0FB);
-  static const Color _border   = Color(0xFFE4E2F8);
-  static const Color _textDark = Color(0xFF2D2A6E);
-  static const Color _textMuted = Color(0xFF9E9BD0);
-
   final String searchQuery;
   const _CommunityResultsList({required this.searchQuery});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ThemeColors(context);
     if (searchQuery.isEmpty) {
-      return const _EmptyPlaceholder(
-          icon: Icons.groups_outlined,
-          label: 'Discover communities');
+      return const _EmptyPlaceholder(icon: Icons.groups_outlined, label: 'Discover communities');
     }
-
     return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('communities')
-          .limit(200)
-          .get(),
+      future: FirebaseFirestore.instance.collection('communities').limit(200).get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: _primary, strokeWidth: 2));
+          return Center(child: CircularProgressIndicator(color: c.primary, strokeWidth: 2));
         }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
+        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
         final q = searchQuery.toLowerCase();
         final docs = (snapshot.data?.docs ?? []).where((doc) {
           final data = doc.data() as Map<String, dynamic>;
@@ -495,13 +353,7 @@ class _CommunityResultsList extends StatelessWidget {
           final desc = (data['description'] ?? '').toString().toLowerCase();
           return name.contains(q) || desc.contains(q);
         }).toList();
-
-        if (docs.isEmpty) {
-          return const _EmptyPlaceholder(
-              icon: Icons.group_off_outlined,
-              label: 'No communities found');
-        }
-
+        if (docs.isEmpty) return const _EmptyPlaceholder(icon: Icons.group_off_outlined, label: 'No communities found');
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: docs.length,
@@ -513,77 +365,43 @@ class _CommunityResultsList extends StatelessWidget {
             final String desc      = data['description'] ?? '';
             final String avatarUrl = data['avatarUrl']   ?? '';
             final int    count     = (data['memberCount'] as num?)?.toInt() ?? 1;
-
             return GestureDetector(
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => CommunityDetailScreen(
-                  communityId: doc.id,
-                  communityName: title,
-                  communityDescription: desc,
-                ),
+                builder: (_) => CommunityDetailScreen(communityId: doc.id, communityName: title, communityDescription: desc),
               )),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: c.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _border),
+                  border: Border.all(color: c.border),
                 ),
                 child: Row(children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor: _fieldBg,
-                    backgroundImage: avatarUrl.isNotEmpty
-                        ? NetworkImage(avatarUrl)
-                        : null,
+                    backgroundColor: c.field,
+                    backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                     child: avatarUrl.isEmpty
-                        ? Text(
-                            title.isNotEmpty
-                                ? title[0].toUpperCase()
-                                : 'C',
-                            style: const TextStyle(
-                                color: _primary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15),
-                          )
+                        ? Text(title.isNotEmpty ? title[0].toUpperCase() : 'C',
+                            style: TextStyle(color: c.primary, fontWeight: FontWeight.w700, fontSize: 15))
                         : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title,
-                            style: const TextStyle(
-                                color: _textDark,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14)),
-                        const SizedBox(height: 3),
-                        if (desc.isNotEmpty)
-                          Text(desc,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: _textMuted, fontSize: 12)),
-                      ],
-                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(title, style: TextStyle(color: c.textHi, fontWeight: FontWeight.w600, fontSize: 14)),
+                      const SizedBox(height: 3),
+                      if (desc.isNotEmpty)
+                        Text(desc, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: c.textMuted, fontSize: 12)),
+                    ]),
                   ),
                   const SizedBox(width: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEEF0FB),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '$count members',
-                      style: const TextStyle(
-                          color: _primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: c.bg, borderRadius: BorderRadius.circular(20)),
+                    child: Text('$count members',
+                        style: TextStyle(color: c.primary, fontSize: 11, fontWeight: FontWeight.w600)),
                   ),
                 ]),
               ),
@@ -598,36 +416,42 @@ class _CommunityResultsList extends StatelessWidget {
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyPlaceholder extends StatelessWidget {
-  static const Color _primary  = Color(0xFF6C63D5);
-  static const Color _fieldBg  = Color(0xFFEEF0FB);
-  static const Color _textMuted = Color(0xFF9E9BD0);
-
   final IconData icon;
   final String label;
   const _EmptyPlaceholder({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
+    final c = _ThemeColors(context);
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-                color: _fieldBg, shape: BoxShape.circle),
-            child: Icon(icon, color: _primary, size: 26),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: _textMuted, fontSize: 13, height: 1.5),
-          ),
-        ],
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 56, height: 56,
+          decoration: BoxDecoration(color: c.field, shape: BoxShape.circle),
+          child: Icon(icon, color: c.primary, size: 26),
+        ),
+        const SizedBox(height: 14),
+        Text(label, textAlign: TextAlign.center,
+            style: TextStyle(color: c.textMuted, fontSize: 13, height: 1.5)),
+      ]),
     );
   }
 }
+
+// ── Theme resolver ────────────────────────────────────────────────────────────
+
+class _ThemeColors {
+  final BuildContext context;
+  _ThemeColors(this.context);
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
+  Color get primary   => _dark ? AppColors.primaryLight   : AppColors.primary;
+  Color get bg        => _dark ? AppColors.darkBg         : AppColors.lightBg;
+  Color get surface   => _dark ? AppColors.darkSurface    : AppColors.lightSurface;
+  Color get field     => _dark ? AppColors.darkField      : AppColors.lightField;
+  Color get border    => _dark ? AppColors.darkBorder     : AppColors.lightBorder;
+  Color get chipBorder=> _dark ? AppColors.darkChipBorder : AppColors.lightChipBorder;
+  Color get textHi    => _dark ? AppColors.darkTextPrimary   : AppColors.lightTextPrimary;
+  Color get textMuted => _dark ? AppColors.darkTextMuted     : AppColors.lightTextMuted;
+  Color get textDim   => _dark ? AppColors.darkTextDim       : AppColors.lightTextDim;
+  }
+    

@@ -5,30 +5,37 @@ publish_to: 'none'
 version: 0.1.0
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  google_sign_in: ^6.2.1
-  # Core System Controls & Utilities
-  permission_handler: ^11.3.1
   cupertino_icons: ^1.0.6
-  
-  # Firebase Backend Stack
+
+  # Authentication
+  google_sign_in: ^6.2.1
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Firebase
   firebase_core: ^4.10.0
   firebase_auth: ^6.5.2
   cloud_firestore: ^6.5.0
-  firebase_storage: ^13.4.2
-  
-  # Media Pipelines
+  firebase_storage: ^13.4.0
+
+  # Local Storage
+  shared_preferences: ^2.2.2
+
+  # Media
   image_picker: ^1.1.2
   video_player: ^2.9.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.14.3
 

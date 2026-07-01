@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/theme/colors.dart';
 import '../../../shared/models/post_model.dart';
 import '../widgets/post_card.dart';
 import '../../notifications/screens/notifications_screen.dart';
@@ -38,16 +39,6 @@ class HomeFeedScreen extends StatefulWidget {
 
 class _HomeFeedScreenState extends State<HomeFeedScreen>
     with SingleTickerProviderStateMixin {
-  // ── Palette ──────────────────────────────────────────────────────────────
-  static const Color _bg          = Color(0xFFEEF0FB);
-  static const Color _surface     = Color(0xFFFFFFFF);
-  static const Color _primary     = Color(0xFF6C63D5);
-  static const Color _primaryLight= Color(0xFFEDE9FF);
-  static const Color _panelBg     = Color(0xFFF5F4FF);
-  static const Color _panelBorder = Color(0xFFE0DCFF);
-  static const Color _textHi      = Color(0xFF2D1B69);
-  static const Color _textDim     = Color(0xFF9E9BD0);
-
   static const double _panelWidth = 64.0;
   static const double _tabWidth   = 10.0;
 
@@ -59,6 +50,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   bool _storiesLoading = true;
 
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  // ── Theme-aware color getters ────────────────────────────────────────────
+  // Pulled from context in build(); cached here per-build via _colors.
+  late _ThemeColors _c;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
@@ -99,136 +94,129 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   void _closeDrawer() { _anim?.reverse().then((_) { if (mounted) setState(() => _drawerOpen = false); }); }
   void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
 
-  // ── Story loading ─────────────────────────────────────────────────────────
+  // ── Story loading — no orderBy, so no composite index needed ──────────────
   Future<void> _loadStories() async {
-  final myUid = _myUid;
-  if (myUid.isEmpty) return;
+    final myUid = _myUid;
+    if (myUid.isEmpty) return;
 
-  if (mounted && _railStories.isEmpty) setState(() => _storiesLoading = true);
-
-  try {
-    final now = DateTime.now();
-    final List<_RailStory> rail  = [];
-    final List<StoryItem>  items = [];
-
-    // ── 1. My display name + avatar ───────────────────────────────────────────
-    String myName    = FirebaseAuth.instance.currentUser?.displayName ?? 'Me';
-    String? myAvatar = FirebaseAuth.instance.currentUser?.photoURL;
+    if (mounted && _railStories.isEmpty) setState(() => _storiesLoading = true);
 
     try {
-      final meDoc = await FirebaseFirestore.instance
-          .collection('users').doc(myUid).get();
-      if (meDoc.exists) {
-        myName   = meDoc.data()?['name'] ?? meDoc.data()?['username'] ?? myName;
-        myAvatar = meDoc.data()?['avatarUrl'] ?? meDoc.data()?['photoURL'] ?? myAvatar;
-      }
-    } catch (_) {}
+      final now = DateTime.now();
+      final List<_RailStory> rail  = [];
+      final List<StoryItem>  items = [];
 
-    // ── 2. My own story ───────────────────────────────────────────────────────
-    // Query by authorId ONLY — no range filter in Firestore → no composite index needed.
-    // Filter expiry and sort in Dart.
-    final mySnap = await FirebaseFirestore.instance
-        .collection('stories')
-        .where('authorId', isEqualTo: myUid)
-        .get();
+      String myName    = FirebaseAuth.instance.currentUser?.displayName ?? 'Me';
+      String? myAvatar = FirebaseAuth.instance.currentUser?.photoURL;
 
-    final myValidDocs = mySnap.docs.where((doc) {
-      final exp = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
-      return exp != null && exp.isAfter(now);
-    }).toList()
-      ..sort((a, b) {
-        final aT = (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
-        final bT = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
-        return bT.compareTo(aT); // latest first
-      });
+      try {
+        final meDoc = await FirebaseFirestore.instance
+            .collection('users').doc(myUid).get();
+        if (meDoc.exists) {
+          myName   = meDoc.data()?['name'] ?? meDoc.data()?['username'] ?? myName;
+          myAvatar = meDoc.data()?['avatarUrl'] ?? meDoc.data()?['photoURL'] ?? myAvatar;
+        }
+      } catch (_) {}
 
-    final myDoc = myValidDocs.isNotEmpty ? myValidDocs.first : null;
+      // ── My own story ──────────────────────────────────────────────────────
+      final mySnap = await FirebaseFirestore.instance
+          .collection('stories')
+          .where('authorId', isEqualTo: myUid)
+          .get();
 
-    rail.add(_RailStory(
-      uid:     myUid,
-      name:    myName,
-      avatar:  myAvatar,
-      storyId: myDoc?.id ?? '',
-      isMe:    true,
-      viewed:  true,
-    ));
-    if (myDoc != null) items.add(StoryItem.fromFirestore(myDoc));
+      final myValidDocs = mySnap.docs.where((doc) {
+        final exp = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
+        return exp != null && exp.isAfter(now);
+      }).toList()
+        ..sort((a, b) {
+          final aT = (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
+          final bT = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
+          return bT.compareTo(aT);
+        });
 
-    // ── 3. Following stories ──────────────────────────────────────────────────
-    final followingSnap = await FirebaseFirestore.instance
-        .collection('users').doc(myUid).collection('following').get();
-    final followingUids = followingSnap.docs.map((d) => d.id).toList();
+      final myDoc = myValidDocs.isNotEmpty ? myValidDocs.first : null;
 
-    if (followingUids.isNotEmpty) {
-      for (var i = 0; i < followingUids.length; i += 30) {
-        final chunk = followingUids.sublist(
-          i,
-          (i + 30) > followingUids.length ? followingUids.length : i + 30,
-        );
+      rail.add(_RailStory(
+        uid:     myUid,
+        name:    myName,
+        avatar:  myAvatar,
+        storyId: myDoc?.id ?? '',
+        isMe:    true,
+        viewed:  true,
+      ));
+      if (myDoc != null) items.add(StoryItem.fromFirestore(myDoc));
 
-        // whereIn on authorId only — filter expiresAt in Dart
-        final snap = await FirebaseFirestore.instance
-            .collection('stories')
-            .where('authorId', whereIn: chunk)
-            .get();
+      // ── Following stories ────────────────────────────────────────────────
+      final followingSnap = await FirebaseFirestore.instance
+          .collection('users').doc(myUid).collection('following').get();
+      final followingUids = followingSnap.docs.map((d) => d.id).toList();
 
-        final validDocs = snap.docs.where((doc) {
-          final exp = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
-          return exp != null && exp.isAfter(now);
-        }).toList()
-          ..sort((a, b) {
-            final aT = (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
-            final bT = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
-            return bT.compareTo(aT);
-          });
+      if (followingUids.isNotEmpty) {
+        for (var i = 0; i < followingUids.length; i += 30) {
+          final chunk = followingUids.sublist(
+            i, (i + 30) > followingUids.length ? followingUids.length : i + 30);
 
-        final seenAuthors = <String>{};
-        for (final doc in validDocs) {
-          final data = doc.data();
-          final aid  = data['authorId'] as String? ?? '';
-          if (aid.isEmpty || seenAuthors.contains(aid)) continue;
-          seenAuthors.add(aid);
+          final snap = await FirebaseFirestore.instance
+              .collection('stories')
+              .where('authorId', whereIn: chunk)
+              .get();
 
-          final viewedBy = List<String>.from(data['viewedBy'] ?? []);
-          rail.add(_RailStory(
-            uid:     aid,
-            name:    data['authorName'] ?? data['name'] ?? 'User',
-            avatar:  data['authorAvatar'] ?? data['avatarUrl'],
-            storyId: doc.id,
-            isMe:    false,
-            viewed:  viewedBy.contains(myUid),
-          ));
-          items.add(StoryItem.fromFirestore(doc));
+          final validDocs = snap.docs.where((doc) {
+            final exp = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
+            return exp != null && exp.isAfter(now);
+          }).toList()
+            ..sort((a, b) {
+              final aT = (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
+              final bT = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
+              return bT.compareTo(aT);
+            });
+
+          final seenAuthors = <String>{};
+          for (final doc in validDocs) {
+            final data = doc.data();
+            final aid  = data['authorId'] as String? ?? '';
+            if (aid.isEmpty || seenAuthors.contains(aid)) continue;
+            seenAuthors.add(aid);
+
+            final viewedBy = List<String>.from(data['viewedBy'] ?? []);
+            rail.add(_RailStory(
+              uid:     aid,
+              name:    data['authorName'] ?? data['name'] ?? 'User',
+              avatar:  data['authorAvatar'] ?? data['avatarUrl'],
+              storyId: doc.id,
+              isMe:    false,
+              viewed:  viewedBy.contains(myUid),
+            ));
+            items.add(StoryItem.fromFirestore(doc));
+          }
         }
       }
-    }
 
-    if (mounted) {
-      setState(() {
-        _railStories    = rail;
-        _storyItems     = items;
-        _storiesLoading = false;
-      });
-    }
-  } catch (e, st) {
-    debugPrint('[HomeFeed] loadStories error: $e\n$st');
-    if (mounted) {
-      setState(() => _storiesLoading = false);
-      // Now errors are visible instead of silent
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not load stories: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      if (mounted) {
+        setState(() {
+          _railStories    = rail;
+          _storyItems     = items;
+          _storiesLoading = false;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('[HomeFeed] loadStories error: $e\n$st');
+      if (mounted) {
+        setState(() => _storiesLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not load stories: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
-}
+
   // ── Story tap ─────────────────────────────────────────────────────────────
   void _onStoryTap(_RailStory rail) {
     _closeDrawer();
 
-    // No active story → go to create
     if (!rail.hasActiveStory) {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) Navigator.of(context).pushNamed(AppRoutes.createStory);
@@ -236,10 +224,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       return;
     }
 
-    // Has a story → open viewer (works for both own and others)
     final idx = _storyItems.indexWhere((s) => s.storyId == rail.storyId);
     if (idx < 0) {
-      // Story exists in rail but not loaded into items yet — refresh
       _loadStories();
       return;
     }
@@ -286,15 +272,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    _c = _ThemeColors(context);
     final unread = _railStories.where((s) => !s.viewed && !s.isMe).length;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _c.bg,
       appBar: _buildAppBar(),
       body: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Feed
           Positioned.fill(
             child: Padding(
               padding: const EdgeInsets.only(right: _tabWidth),
@@ -302,7 +288,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
             ),
           ),
 
-          // Scrim
           if (_drawerOpen)
             Positioned.fill(
               child: GestureDetector(
@@ -317,7 +302,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
               ),
             ),
 
-          // Panel + tab
           AnimatedBuilder(
             animation: _anim ?? const AlwaysStoppedAnimation(0.0),
             builder: (context, _) {
@@ -329,14 +313,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
               return Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Story panel
                   Positioned(
                     top: 0, bottom: 0,
                     right: -_panelWidth + (slide * _panelWidth),
                     width: _panelWidth,
                     child: _buildDrawerPanel(),
                   ),
-                  // Pull tab
                   Positioned(
                     top: 0, bottom: 0,
                     right: slide * _panelWidth,
@@ -344,9 +326,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                     child: GestureDetector(
                       onTap: _toggleDrawer,
                       child: Container(
-                        decoration: const BoxDecoration(
-                          color: _primary,
-                          borderRadius: BorderRadius.horizontal(
+                        decoration: BoxDecoration(
+                          color: _c.primary,
+                          borderRadius: const BorderRadius.horizontal(
                               left: Radius.circular(6)),
                         ),
                         child: Column(
@@ -363,8 +345,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                                 child: Center(
                                   child: Text(
                                     unread > 9 ? '9+' : '$unread',
-                                    style: const TextStyle(
-                                        color: _primary,
+                                    style: TextStyle(
+                                        color: _c.primary,
                                         fontSize: 5,
                                         fontWeight: FontWeight.w800),
                                   ),
@@ -405,13 +387,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       builder: (context, snapshot) {
         if (snapshot.hasError) return _buildError(snapshot.error.toString());
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: _primary, strokeWidth: 2));
+          return Center(
+              child: CircularProgressIndicator(color: _c.primary, strokeWidth: 2));
         }
         final docs = snapshot.data?.docs ?? [];
         return RefreshIndicator(
-          color: _primary,
-          backgroundColor: _surface,
+          color: _c.primary,
+          backgroundColor: _c.surface,
           onRefresh: () async {
             await _loadStories();
             await Future.delayed(const Duration(milliseconds: 200));
@@ -448,14 +430,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   // ── AppBar ────────────────────────────────────────────────────────────────
   AppBar _buildAppBar() {
     return AppBar(
-      backgroundColor: _bg,
+      backgroundColor: _c.bg,
       elevation: 0,
       titleSpacing: 20,
       centerTitle: false,
-      title: const Text(
+      title: Text(
         AppStrings.homeFeed,
         style: TextStyle(
-            color: _textHi,
+            color: _c.textHi,
             fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5),
@@ -479,15 +461,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
 
   Widget _appBarBtn({required IconData icon, required VoidCallback onTap}) {
     return Material(
-      color: _primaryLight,
+      color: _c.primaryTint,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        splashColor: _primary.withOpacity(0.15),
+        splashColor: _c.primary.withOpacity(0.15),
         child: SizedBox(
           width: 36, height: 36,
-          child: Icon(icon, color: _primary, size: 20),
+          child: Icon(icon, color: _c.primary, size: 20),
         ),
       ),
     );
@@ -497,12 +479,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   Widget _buildDrawerPanel() {
     return Container(
       decoration: BoxDecoration(
-        color: _panelBg,
-        border: const Border(left: BorderSide(color: _panelBorder, width: 1)),
+        color: _c.panelBg,
+        border: Border(left: BorderSide(color: _c.panelBorder, width: 1)),
         borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
         boxShadow: [
           BoxShadow(
-            color: _primary.withOpacity(0.12),
+            color: _c.primary.withOpacity(0.12),
             blurRadius: 16,
             offset: const Offset(-4, 0),
           ),
@@ -512,13 +494,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
         child: Column(
           children: [
             const SizedBox(height: 10),
-            // ── "MOMENTS" label ───────────────────────────────────────────
             RotatedBox(
               quarterTurns: 1,
               child: Text(
                 'MOMENTS',
                 style: TextStyle(
-                    color: _textDim.withOpacity(0.6),
+                    color: _c.textDim.withOpacity(0.6),
                     fontSize: 7,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 2),
@@ -527,17 +508,17 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
             const SizedBox(height: 10),
             Expanded(
               child: _storiesLoading
-                  ? const Center(
+                  ? Center(
                       child: SizedBox(
                         width: 16, height: 16,
                         child: CircularProgressIndicator(
-                            color: _primary, strokeWidth: 2),
+                            color: _c.primary, strokeWidth: 2),
                       ),
                     )
                   : _railStories.isEmpty
                       ? Center(
                           child: Icon(Icons.auto_stories_outlined,
-                              color: _textDim.withOpacity(0.4), size: 20))
+                              color: _c.textDim.withOpacity(0.4), size: 20))
                       : ListView.separated(
                           padding: const EdgeInsets.symmetric(
                               vertical: 4, horizontal: 8),
@@ -557,10 +538,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
 
   // ── Story avatar tile ─────────────────────────────────────────────────────
   Widget _buildAvatar(_RailStory story) {
-    final hasUnread  = !story.viewed && !story.isMe;
-    // "Add story" state: my slot AND no active story
-    final isAddStory = story.isMe && !story.hasActiveStory;
-    // "View my story" state: my slot AND has an active story
+    final hasUnread     = !story.viewed && !story.isMe;
+    final isAddStory    = story.isMe && !story.hasActiveStory;
     final isViewMyStory = story.isMe && story.hasActiveStory;
 
     return GestureDetector(
@@ -571,50 +550,39 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
           Stack(
             alignment: Alignment.center,
             children: [
-              // Outer ring — purple for unread others, gradient for my posted story
               if (hasUnread || isViewMyStory)
                 Container(
                   width: 46, height: 46,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: isViewMyStory
-                        ? const LinearGradient(
-                            colors: [Color(0xFF6C63D5), Color(0xFFB39DDB)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : null,
-                    color: hasUnread && !isViewMyStory ? _primary : null,
+                    gradient: isViewMyStory ? AppColors.storyRingGradient : null,
+                    color: hasUnread && !isViewMyStory ? _c.primary : null,
                   ),
                 ),
-              // Dashed border for "add story"
               if (isAddStory)
                 Container(
                   width: 46, height: 46,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: _primary,
+                      color: _c.primary,
                       width: 1.5,
                       strokeAlign: BorderSide.strokeAlignOutside,
                     ),
                   ),
                 ),
-              // No ring for viewed others
               if (!hasUnread && !isAddStory && !isViewMyStory)
                 Container(
                   width: 46, height: 46,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: _panelBorder, width: 1.5,
+                    border: Border.all(color: _c.panelBorder, width: 1.5,
                         strokeAlign: BorderSide.strokeAlignOutside),
                   ),
                 ),
-
-              // Avatar
               CircleAvatar(
                 radius: 19,
-                backgroundColor: _primaryLight,
+                backgroundColor: _c.primaryTint,
                 backgroundImage:
                     (story.avatar != null && story.avatar!.isNotEmpty)
                         ? NetworkImage(story.avatar!)
@@ -624,29 +592,25 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                         story.name.isNotEmpty
                             ? story.name[0].toUpperCase()
                             : '?',
-                        style: const TextStyle(
-                            color: _primary,
+                        style: TextStyle(
+                            color: _c.primary,
                             fontWeight: FontWeight.w700,
                             fontSize: 13),
                       )
                     : null,
               ),
-
-              // "+" badge for add story
               if (isAddStory)
                 Positioned(
                   bottom: 0, right: 0,
                   child: Container(
                     width: 16, height: 16,
                     decoration: BoxDecoration(
-                        color: _primary,
+                        color: _c.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _panelBg, width: 1.5)),
+                        border: Border.all(color: _c.panelBg, width: 1.5)),
                     child: const Icon(Icons.add, size: 10, color: Colors.white),
                   ),
                 ),
-
-              // Play icon overlay for my posted story
               if (isViewMyStory)
                 Positioned(
                   bottom: 0, right: 0,
@@ -655,13 +619,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                     decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _panelBg, width: 1.5)),
-                    child: const Icon(Icons.play_arrow_rounded,
-                        size: 10, color: _primary),
+                        border: Border.all(color: _c.panelBg, width: 1.5)),
+                    child: Icon(Icons.play_arrow_rounded,
+                        size: 10, color: _c.primary),
                   ),
                 ),
-
-              // Unread dot for others
               if (hasUnread)
                 Positioned(
                   top: 1, right: 1,
@@ -670,7 +632,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                     decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _panelBg, width: 1.5)),
+                        border: Border.all(color: _c.panelBg, width: 1.5)),
                   ),
                 ),
             ],
@@ -686,8 +648,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: (hasUnread || isAddStory || isViewMyStory)
-                  ? _primary
-                  : _textDim,
+                  ? _c.primary
+                  : _c.textDim,
               fontSize: 8,
               fontWeight: (hasUnread || isAddStory || isViewMyStory)
                   ? FontWeight.w600
@@ -703,15 +665,34 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   Widget _buildError(String msg) {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.wifi_off_rounded, color: _textDim, size: 36),
+        Icon(Icons.wifi_off_rounded, color: _c.textDim, size: 36),
         const SizedBox(height: 10),
-        const Text('Could not load feed',
-            style: TextStyle(color: _textHi, fontWeight: FontWeight.w600)),
+        Text('Could not load feed',
+            style: TextStyle(color: _c.textHi, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text(msg,
-            style: const TextStyle(color: _textDim, fontSize: 12),
+            style: TextStyle(color: _c.textDim, fontSize: 12),
             textAlign: TextAlign.center),
       ]),
     );
   }
+}
+
+// ── Theme color resolver ──────────────────────────────────────────────────────
+// Centralizes the light/dark lookups so the rest of the file just reads
+// `_c.primary`, `_c.bg`, etc. — backed entirely by AppColors / Theme.
+class _ThemeColors {
+  final BuildContext context;
+  _ThemeColors(this.context);
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get primary     => _isDark ? AppColors.primaryLight : AppColors.primary;
+  Color get bg          => _isDark ? AppColors.darkBg : AppColors.lightBg;
+  Color get surface     => _isDark ? AppColors.darkSurface : AppColors.lightSurface;
+  Color get primaryTint => _isDark ? AppColors.darkField : AppColors.lightField;
+  Color get panelBg     => _isDark ? AppColors.darkField : AppColors.lightField;
+  Color get panelBorder => _isDark ? AppColors.darkBorder : AppColors.lightBorder;
+  Color get textHi      => _isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+  Color get textDim     => _isDark ? AppColors.darkTextDim : AppColors.lightTextDim;
 }
