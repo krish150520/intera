@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../shared/models/post_model.dart';
-import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
 
 class PostCard extends StatelessWidget {
@@ -64,7 +63,7 @@ class _TextPostCard extends StatelessWidget {
   });
 
   String _pillLabel(BuildContext context) {
-    final style = _ThemeResolver.typeStyle(context, post.type);
+    final style = _typeStyle(context, post.type);
     if (post.type == PostType.helpRequest && (post.rewardKarma ?? 0) > 0) {
       return 'Help · ${post.rewardKarma} ⚡';
     }
@@ -73,7 +72,7 @@ class _TextPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = _ThemeResolver.typeStyle(context, post.type);
+    final style = _typeStyle(context, post.type);
 
     return GestureDetector(
       onTap: onTap,
@@ -122,7 +121,7 @@ class _TextPostCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: _ThemeResolver.textHi(context),
+                      color: context.appColors.textHi,
                       height: 1.25,
                       letterSpacing: -0.2,
                     ),
@@ -135,7 +134,7 @@ class _TextPostCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 12,
-                      color: _ThemeResolver.textBody(context),
+                      color: context.appColors.textSecondary,
                       height: 1.45,
                     ),
                   ),
@@ -153,7 +152,7 @@ class _TextPostCard extends StatelessWidget {
                         '${post.authorUsername} · ${_formatTime(post.createdAt)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontSize: 11,
-                          color: _ThemeResolver.textDim(context),
+                          color: context.appColors.textDim,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -163,15 +162,15 @@ class _TextPostCard extends StatelessWidget {
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
                       iconColor: post.isLiked
-                          ? _ThemeResolver.like(context)
-                          : _ThemeResolver.iconMuted(context),
+                          ? context.appColors.error
+                          : context.appColors.textMuted,
                       label: _compact(post.likeCount),
                       onTap: onLike,
                     ),
                     const SizedBox(width: 10),
                     _FooterStat(
                       icon: Icons.chat_bubble_outline_rounded,
-                      iconColor: _ThemeResolver.iconMuted(context),
+                      iconColor: context.appColors.textMuted,
                       label: _compact(post.commentCount),
                       onTap: onComment,
                     ),
@@ -185,7 +184,7 @@ class _TextPostCard extends StatelessWidget {
                         size: 18,
                         color: post.isSaved
                             ? context.colors.primary
-                            : _ThemeResolver.iconMuted(context),
+                            : context.appColors.textMuted,
                       ),
                     ),
                   ],
@@ -384,7 +383,7 @@ class _FooterStat extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: _ThemeResolver.textDim(context),
+              color: context.appColors.textDim,
             ),
           ),
         ],
@@ -474,7 +473,7 @@ class _MediaStatsRow extends StatelessWidget {
           icon: post.isLiked
               ? Icons.favorite_rounded
               : Icons.favorite_border_rounded,
-          iconColor: post.isLiked ? _ThemeResolver.like(context) : Colors.white,
+          iconColor: post.isLiked ? context.appColors.error : Colors.white,
           label: _compact(post.likeCount),
           onTap: onLike,
         ),
@@ -542,76 +541,45 @@ class _FallbackBg extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      decoration: BoxDecoration(gradient: context.appColors.primaryGradient),
     );
   }
 }
 
-class _ThemeResolver {
-  const _ThemeResolver._();
-
-  static Color textHi(BuildContext context) => context.isDarkMode
-      ? AppColors.darkTextPrimary
-      : AppColors.lightTextPrimary;
-
-  static Color textBody(BuildContext context) => context.isDarkMode
-      ? AppColors.darkTextSecondary
-      : AppColors.lightTextSecondary;
-
-  static Color textDim(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
-
-  static Color iconMuted(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkTextMuted : AppColors.lightTextDim;
-
-  static Color like(BuildContext context) => AppColors.error;
-
-  static _TypeStyle typeStyle(BuildContext context, PostType type) {
-    return switch (type) {
-      PostType.question => _TypeStyle(
-        bg: context.isDarkMode
-            ? AppColors.success.withOpacity(0.16)
-            : AppColors.successBg,
-        border: context.isDarkMode
-            ? AppColors.success.withOpacity(0.34)
-            : AppColors.successBorder,
-        pillBg: AppColors.success,
-        pillText: Colors.white,
-        label: 'Question',
-        emoji: '?',
-      ),
-      PostType.helpRequest => _TypeStyle(
-        bg: context.isDarkMode
-            ? AppColors.warningKarma.withOpacity(0.14)
-            : AppColors.warningKarmaBg,
-        border: context.isDarkMode
-            ? AppColors.warningKarma.withOpacity(0.34)
-            : AppColors.warningKarmaBorder,
-        pillBg: AppColors.warningKarma,
-        pillText: Colors.white,
-        label: 'Help',
-        emoji: '🤝',
-      ),
-      PostType.achievement => _TypeStyle(
-        bg: context.isDarkMode
-            ? AppColors.accent.withOpacity(0.15)
-            : AppColors.primaryLight.withOpacity(0.12),
-        border: context.isDarkMode
-            ? AppColors.accent.withOpacity(0.34)
-            : AppColors.primaryLight.withOpacity(0.32),
-        pillBg: AppColors.accent,
-        pillText: Colors.white,
-        label: 'Achievement',
-        emoji: '🏆',
-      ),
-      _ => _TypeStyle(
-        bg: context.colors.surfaceContainerHighest,
-        border: context.colors.outline,
-        pillBg: context.colors.primary,
-        pillText: Colors.white,
-        label: 'Text',
-        emoji: '💬',
-      ),
-    };
-  }
+_TypeStyle _typeStyle(BuildContext context, PostType type) {
+  final c = context.appColors;
+  return switch (type) {
+    PostType.question => _TypeStyle(
+      bg: c.successBg,
+      border: c.successBorder,
+      pillBg: c.success,
+      pillText: Colors.white,
+      label: 'Question',
+      emoji: '?',
+    ),
+    PostType.helpRequest => _TypeStyle(
+      bg: c.warningKarmaBg,
+      border: c.warningKarmaBorder,
+      pillBg: c.warningKarma,
+      pillText: Colors.white,
+      label: 'Help',
+      emoji: '🤝',
+    ),
+    PostType.achievement => _TypeStyle(
+      bg: c.accent.withValues(alpha: 0.15),
+      border: c.accent.withValues(alpha: 0.34),
+      pillBg: c.accent,
+      pillText: Colors.white,
+      label: 'Achievement',
+      emoji: '🏆',
+    ),
+    _ => _TypeStyle(
+      bg: context.colors.surfaceContainerHighest,
+      border: context.colors.outline,
+      pillBg: context.colors.primary,
+      pillText: Colors.white,
+      label: 'Text',
+      emoji: '💬',
+    ),
+  };
 }

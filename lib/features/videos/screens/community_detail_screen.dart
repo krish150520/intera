@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../create/screens/create_post_screen.dart';
 import 'edit_community_screen.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/routes/app_routes.dart';
 
 class CommunityDetailScreen extends StatelessWidget {
   final String communityId;
@@ -18,15 +20,6 @@ class CommunityDetailScreen extends StatelessWidget {
     required this.communityName,
     required this.communityDescription,
   });
-
-  // ─── Theme ────────────────────────────────────────────────────────────────
-  static const Color _primary    = Color(0xFF6C63D5);
-  static const Color _pageBg     = Color(0xFFEEF0FB);
-  static const Color _fieldBg    = Color(0xFFF0EEFF);
-  static const Color _chipBorder = Color(0xFFD8D5F8);
-  static const Color _textDark   = Color(0xFF2D2A6E);
-  static const Color _textMuted  = Color(0xFF8884BB);
-  static const Color _cardBorder = Color(0xFFE4E2F8);
 
   @override
   Widget build(BuildContext context) {
@@ -50,28 +43,28 @@ class CommunityDetailScreen extends StatelessWidget {
             admins.contains(currentUid) || communityData['creatorId'] == currentUid;
 
         return Scaffold(
-          backgroundColor: _pageBg,
+          backgroundColor: context.appColors.bg,
           appBar: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: context.appColors.surface,
             elevation: 0,
             leading: GestureDetector(
               onTap: () => Navigator.of(context).maybePop(),
               child: Container(
                 margin: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF5F4FF),
+                decoration: BoxDecoration(
+                  color: context.appColors.field,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.arrow_back_ios_new_rounded,
-                    size: 16, color: _primary),
+                child: Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 16, color: context.appColors.primary),
               ),
             ),
             title: Text(
               name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
-                color: _textDark,
+                color: context.appColors.textPrimary,
               ),
             ),
             centerTitle: true,
@@ -81,13 +74,13 @@ class CommunityDetailScreen extends StatelessWidget {
                   margin: const EdgeInsets.only(right: 10),
                   width: 36,
                   height: 36,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF5F4FF),
+                  decoration: BoxDecoration(
+                    color: context.appColors.field,
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.edit_rounded, size: 17, color: _primary),
+                    icon: Icon(Icons.edit_rounded, size: 17, color: context.appColors.primary),
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => EditCommunityScreen(
                         communityId: communityId,
@@ -125,8 +118,8 @@ class CommunityDetailScreen extends StatelessWidget {
                               style: const TextStyle(fontSize: 12)));
                     }
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                          child: CircularProgressIndicator(color: _primary));
+                      return Center(
+                          child: CircularProgressIndicator(color: context.appColors.primary));
                     }
 
                     final docs = snapshot.data?.docs ?? [];
@@ -136,14 +129,14 @@ class CommunityDetailScreen extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.forum_outlined,
-                                size: 44, color: Color(0xFFD8D5F8)),
+                            Icon(Icons.forum_outlined,
+                                size: 44, color: context.appColors.chipBorder),
                             const SizedBox(height: 12),
-                            const Text(
+                            Text(
                               'No posts here yet.\nBe the first to share!',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                  color: Color(0xFF9E9BD0),
+                                  color: context.appColors.textDim,
                                   fontSize: 13,
                                   height: 1.5),
                             ),
@@ -164,24 +157,21 @@ class CommunityDetailScreen extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: PostCard(
                             post: postItem,
-                            onTap: () {},
-                            onLike: () {
-                              final ref = FirebaseFirestore.instance
-                                  .collection('posts')
-                                  .doc(doc.id);
-                              if (postItem.isLiked) {
-                                ref.update({
-                                  'likeCount': FieldValue.increment(-1),
-                                  'likedBy': FieldValue.arrayRemove([currentUid]),
-                                });
-                              } else {
-                                ref.update({
-                                  'likeCount': FieldValue.increment(1),
-                                  'likedBy': FieldValue.arrayUnion([currentUid]),
-                                });
-                              }
-                            },
-                            onComment: () {},
+                             onTap: () => Navigator.of(context)
+                                 .pushNamed(AppRoutes.postDetail, arguments: postItem),
+                             onLike: () {
+                               final dataMap = doc.data() as Map<String, dynamic>?;
+                               final List likedBy = dataMap?['likedBy'] ?? [];
+                               NotificationService.toggleLike(
+                                 postId: doc.id,
+                                 postAuthorId: postItem.authorId,
+                                 postTitle: postItem.title,
+                                 currentUid: currentUid,
+                                 likedBy: likedBy,
+                               );
+                             },
+                             onComment: () => Navigator.of(context)
+                                 .pushNamed(AppRoutes.postDetail, arguments: postItem),
                           ),
                         );
                       },
@@ -194,7 +184,7 @@ class CommunityDetailScreen extends StatelessWidget {
 
           // ── FAB ────────────────────────────────────────────────────────────
           floatingActionButton: FloatingActionButton.extended(
-            backgroundColor: _primary,
+            backgroundColor: context.appColors.primary,
             foregroundColor: Colors.white,
             elevation: 4,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -221,13 +211,6 @@ class _CommunityHeader extends StatelessWidget {
   final bool isAdmin;
   final String communityId;
 
-  static const Color _primary    = Color(0xFF6C63D5);
-  static const Color _fieldBg    = Color(0xFFF0EEFF);
-  static const Color _chipBorder = Color(0xFFD8D5F8);
-  static const Color _textDark   = Color(0xFF2D2A6E);
-  static const Color _textMuted  = Color(0xFF8884BB);
-  static const Color _cardBorder = Color(0xFFE4E2F8);
-
   const _CommunityHeader({
     required this.name,
     required this.description,
@@ -240,7 +223,7 @@ class _CommunityHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: context.appColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -275,8 +258,8 @@ class _CommunityHeader extends StatelessWidget {
                     height: 56,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _fieldBg,
-                      border: Border.all(color: Colors.white, width: 3),
+                      color: context.appColors.field,
+                      border: Border.all(color: context.appColors.surface, width: 3),
                       image: avatarUrl.isNotEmpty
                           ? DecorationImage(
                               image: NetworkImage(avatarUrl),
@@ -288,10 +271,10 @@ class _CommunityHeader extends StatelessWidget {
                         ? Center(
                             child: Text(
                               name.isNotEmpty ? name[0].toUpperCase() : 'C',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
-                                color: _primary,
+                                color: context.appColors.primary,
                               ),
                             ),
                           )
@@ -308,17 +291,17 @@ class _CommunityHeader extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(name,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
-                                color: _textDark)),
+                                color: context.appColors.textPrimary)),
                         if (description.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
                             description,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF5A587A),
+                                color: context.appColors.textSecondary,
                                 height: 1.4),
                           ),
                         ],
@@ -355,7 +338,7 @@ class _CommunityHeader extends StatelessWidget {
             ),
           ),
 
-          const Divider(height: 1, thickness: 0.5, color: Color(0xFFE4E2F8)),
+          Divider(height: 1, thickness: 0.5, color: context.appColors.divider),
         ],
       ),
     );
@@ -368,11 +351,17 @@ class _FallbackBanner extends StatelessWidget {
   final String name;
   const _FallbackBanner({required this.name});
 
-  Color get _color {
-    const colors = [
-      Color(0xFFEEF0FB), Color(0xFFE1FBF4), Color(0xFFFFF8EC),
-      Color(0xFFFFECF0), Color(0xFFE6F4FB),
-    ];
+  Color _color(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = isDark
+        ? const [
+            Color(0xFF1E1B3A), Color(0xFF143029), Color(0xFF332610),
+            Color(0xFF33151A), Color(0xFF132530),
+          ]
+        : const [
+            Color(0xFFEEF0FB), Color(0xFFE1FBF4), Color(0xFFFFF8EC),
+            Color(0xFFFFECF0), Color(0xFFE6F4FB),
+          ];
     final code = name.isNotEmpty ? name.codeUnitAt(0) : 65;
     return colors[code % colors.length];
   }
@@ -381,9 +370,9 @@ class _FallbackBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         height: 100,
         width: double.infinity,
-        color: _color,
+        color: _color(context),
         child: Center(
-          child: Icon(Icons.groups_rounded, size: 36, color: const Color(0xFFD8D5F8)),
+          child: Icon(Icons.groups_rounded, size: 36, color: context.appColors.chipBorder),
         ),
       );
 }
@@ -399,13 +388,13 @@ class _StatPill extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF8884BB)),
+          Icon(icon, size: 14, color: context.appColors.textMuted),
           const SizedBox(width: 4),
           Text(label,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF8884BB))),
+                  color: context.appColors.textMuted)),
         ],
       );
 }
@@ -417,21 +406,21 @@ class _AdminBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0EEFF),
+          color: context.appColors.field,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFD8D5F8)),
+          border: Border.all(color: context.appColors.chipBorder),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.shield_outlined, size: 11, color: Color(0xFF6C63D5)),
-            SizedBox(width: 4),
+          children: [
+            Icon(Icons.shield_outlined, size: 11, color: context.appColors.primary),
+            const SizedBox(width: 4),
             Text(
               'You\'re an admin',
               style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF6C63D5)),
+                  color: context.appColors.primary),
             ),
           ],
         ),

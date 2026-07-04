@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import 'create_community_screen.dart';
 import 'community_detail_screen.dart';
+import '../../search/screens/search_screen.dart';
 
 class CommunitiesScreen extends StatelessWidget {
   const CommunitiesScreen({super.key});
@@ -22,7 +23,7 @@ class CommunitiesScreen extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Action failed: $e'),
-          backgroundColor: AppColors.error,
+          backgroundColor: context.appColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ));
@@ -32,7 +33,7 @@ class CommunitiesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
@@ -50,7 +51,9 @@ class CommunitiesScreen extends StatelessWidget {
             child: IconButton(
               padding: EdgeInsets.zero,
               icon: Icon(Icons.search_rounded, size: 18, color: c.primary),
-              onPressed: () {},
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
+              ),
             ),
           ),
         ],
@@ -104,7 +107,7 @@ class CommunitiesScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
+        backgroundColor: c.primary,
         foregroundColor: Colors.white,
         elevation: 4,
         shape: const CircleBorder(),
@@ -132,7 +135,7 @@ class _CommunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return Material(
       color: c.surface,
       borderRadius: BorderRadius.circular(18),
@@ -219,7 +222,7 @@ class _BannerAccent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     // Cycle through a few tints from the palette based on first letter
     final tints = [c.field, c.bg, c.surface];
     final tint  = tints[(name.isNotEmpty ? name.codeUnitAt(0) : 0) % tints.length];
@@ -232,7 +235,7 @@ class _BannerAccent extends StatelessWidget {
 class _JoinedBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
@@ -258,7 +261,7 @@ class _JoinButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return SizedBox(
       height: 30,
       child: OutlinedButton(
@@ -277,23 +280,4 @@ class _JoinButton extends StatelessWidget {
       ),
     );
   }
-}
-
-// ── Theme resolver ────────────────────────────────────────────────────────────
-
-class _ThemeColors {
-  final BuildContext context;
-  _ThemeColors(this.context);
-
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
-
-  Color get primary       => _dark ? AppColors.primaryLight      : AppColors.primary;
-  Color get bg            => _dark ? AppColors.darkBg            : AppColors.lightBg;
-  Color get surface       => _dark ? AppColors.darkSurface       : AppColors.lightSurface;
-  Color get field         => _dark ? AppColors.darkField         : AppColors.lightField;
-  Color get border        => _dark ? AppColors.darkBorder        : AppColors.lightBorder;
-  Color get chipBorder    => _dark ? AppColors.darkChipBorder    : AppColors.lightChipBorder;
-  Color get textHi        => _dark ? AppColors.darkTextPrimary   : AppColors.lightTextPrimary;
-  Color get textSecondary => _dark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
-  Color get textMuted     => _dark ? AppColors.darkTextMuted     : AppColors.lightTextMuted;
 }

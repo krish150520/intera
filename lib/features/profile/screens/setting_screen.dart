@@ -8,6 +8,7 @@ import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'feedback_screen.dart';
+import '../../../core/services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -648,7 +649,17 @@ class SavedPostsScreen extends StatelessWidget {
                   post: post,
                   onTap: () => Navigator.of(context)
                       .pushNamed(AppRoutes.postDetail, arguments: post),
-                  onLike: () {},
+                  onLike: () {
+                    final dataMap = docs[i].data() as Map<String, dynamic>?;
+                    final List likedBy = dataMap?['likedBy'] ?? [];
+                    NotificationService.toggleLike(
+                      postId: docs[i].id,
+                      postAuthorId: post.authorId,
+                      postTitle: post.title,
+                      currentUid: uid,
+                      likedBy: likedBy,
+                    );
+                  },
                   onSave: () => FirebaseFirestore.instance
                       .collection('posts')
                       .doc(docs[i].id)

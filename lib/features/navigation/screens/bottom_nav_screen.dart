@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/strings.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../home/screens/home_feed_screen.dart';
 import '../../search/screens/search_screen.dart';
 import '../../create/screens/create_post_screen.dart';
@@ -48,7 +48,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
 
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _screens),
@@ -172,21 +172,4 @@ class _NavItem {
   final IconData activeIcon;
   final String label;
   const _NavItem({required this.icon, required this.activeIcon, required this.label});
-}
-
-// ── Theme resolver ────────────────────────────────────────────────────────────
-
-class _ThemeColors {
-  final BuildContext context;
-  _ThemeColors(this.context);
-
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
-
-  Color get primary  => _dark ? AppColors.primaryLight      : AppColors.primary;
-  Color get surface  => _dark ? AppColors.darkSurface       : AppColors.lightSurface;
-  Color get border   => _dark ? AppColors.darkBorder        : AppColors.lightBorder;
-  // Pill background behind the active icon
-  Color get pill     => _dark ? AppColors.darkField         : AppColors.lightField;
-  // Inactive icon/label colour
-  Color get inactive => _dark ? AppColors.darkTextDim       : AppColors.lightTextDim;
 }

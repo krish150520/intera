@@ -8,6 +8,7 @@ import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/notification_service.dart';
 
 class HelpRequestScreen extends StatefulWidget {
   const HelpRequestScreen({super.key});
@@ -71,7 +72,7 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.pin,
         background: Container(
-          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+          decoration: BoxDecoration(gradient: context.appColors.primaryGradient),
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -95,7 +96,7 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
                         Text(
                           'Ask the community · Earn karma',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.72),
+                            color: Colors.white.withValues(alpha: 0.72),
                             fontSize: 12,
                           ),
                         ),
@@ -130,7 +131,7 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
             labelColor: tabBarTheme.labelColor ?? colors.primary,
             unselectedLabelColor:
                 tabBarTheme.unselectedLabelColor ??
-                _ThemeResolver.textDim(context),
+                context.appColors.textDim,
             labelStyle:
                 tabBarTheme.labelStyle ??
                 const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
@@ -247,6 +248,7 @@ class _RequestsTab extends StatelessWidget {
                       post: post,
                       isCompleted: isCompleted,
                       reward: reward,
+                      myUid: myUid,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => PostDetailScreen(post: post),
@@ -268,12 +270,14 @@ class _HelpCard extends StatelessWidget {
   final Post post;
   final bool isCompleted;
   final int reward;
+  final String myUid;
   final VoidCallback onTap;
 
   const _HelpCard({
     required this.post,
     required this.isCompleted,
     required this.reward,
+    required this.myUid,
     required this.onTap,
   });
 
@@ -284,8 +288,23 @@ class _HelpCard extends StatelessWidget {
         PostCard(
           post: post,
           onTap: onTap,
-          onLike: () {},
-          onSave: () {},
+          onLike: () {
+            NotificationService.toggleLike(
+              postId: post.id,
+              postAuthorId: post.authorId,
+              postTitle: post.title,
+              currentUid: myUid,
+              likedBy: post.isLiked ? [myUid] : [],
+            );
+          },
+          onSave: () {
+            final ref = FirebaseFirestore.instance.collection('posts').doc(post.id);
+            if (post.isSaved) {
+              ref.update({'savedBy': FieldValue.arrayRemove([myUid])});
+            } else {
+              ref.update({'savedBy': FieldValue.arrayUnion([myUid])});
+            }
+          },
           onComment: onTap,
         ),
         Positioned(
@@ -314,23 +333,23 @@ class _RewardBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.warningKarmaBg,
+        color: context.appColors.warningKarmaBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.warningKarmaBorder),
+        border: Border.all(color: context.appColors.warningKarmaBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
+          Icon(
             Icons.bolt_rounded,
-            color: AppColors.warningKarma,
+            color: context.appColors.warningKarma,
             size: 12,
           ),
           const SizedBox(width: 2),
           Text(
             '$reward',
-            style: const TextStyle(
-              color: AppColors.warningKarma,
+            style: TextStyle(
+              color: context.appColors.warningKarma,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -352,21 +371,21 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: isCompleted
-            ? AppColors.successBg
-            : _ThemeResolver.openStatusBg(context),
+            ? context.appColors.successBg
+            : context.appColors.field,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isCompleted
-              ? AppColors.successBorder
-              : _ThemeResolver.openStatusBorder(context),
+              ? context.appColors.successBorder
+              : context.appColors.chipBorder,
         ),
       ),
       child: Text(
         isCompleted ? '✓ Resolved' : '● Open',
         style: TextStyle(
           color: isCompleted
-              ? AppColors.success
-              : _ThemeResolver.openStatusText(context),
+              ? context.appColors.success
+              : context.appColors.primary,
           fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
@@ -483,7 +502,7 @@ class _Podium extends StatelessWidget {
           Text(
             '🏆  Top Karma Earners',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: _ThemeResolver.textHi(context),
+              color: context.appColors.textHi,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -543,7 +562,7 @@ class _Podium extends StatelessWidget {
                     Text(
                       name,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: _ThemeResolver.textHi(context),
+                        color: context.appColors.textHi,
                         fontSize: slot == 1 ? 13 : 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -572,11 +591,11 @@ class _Podium extends StatelessWidget {
                       width: slot == 1 ? 80 : 64,
                       height: heights[slot],
                       decoration: BoxDecoration(
-                        color: medalColor.withOpacity(0.15),
+                        color: medalColor.withValues(alpha: 0.15),
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(8),
                         ),
-                        border: Border.all(color: medalColor.withOpacity(0.4)),
+                        border: Border.all(color: medalColor.withValues(alpha: 0.4)),
                       ),
                       child: Center(
                         child: Text(
@@ -629,12 +648,12 @@ class _LeaderRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: isMe
-            ? _ThemeResolver.selectedSurface(context)
+            ? context.appColors.field
             : context.colors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isMe
-              ? context.colors.primary.withOpacity(0.4)
+              ? context.colors.primary.withValues(alpha: 0.4)
               : Colors.transparent,
         ),
       ),
@@ -647,7 +666,7 @@ class _LeaderRow extends StatelessWidget {
               style: TextStyle(
                 color: isMe
                     ? context.colors.primary
-                    : _ThemeResolver.textDim(context),
+                    : context.appColors.textDim,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -682,7 +701,7 @@ class _LeaderRow extends StatelessWidget {
                         name,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _ThemeResolver.textHi(context),
+                          color: context.appColors.textHi,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -715,7 +734,7 @@ class _LeaderRow extends StatelessWidget {
                   Text(
                     username.startsWith('@') ? username : '@$username',
                     style: TextStyle(
-                      color: _ThemeResolver.textDim(context),
+                      color: context.appColors.textDim,
                       fontSize: 11,
                     ),
                   ),
@@ -724,16 +743,16 @@ class _LeaderRow extends StatelessWidget {
           ),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.bolt_rounded,
-                color: AppColors.warningKarma,
+                color: context.appColors.warningKarma,
                 size: 14,
               ),
               const SizedBox(width: 2),
               Text(
                 _compact(karma),
-                style: const TextStyle(
-                  color: AppColors.warningKarma,
+                style: TextStyle(
+                  color: context.appColors.warningKarma,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -777,7 +796,7 @@ class _FilterChip extends StatelessWidget {
           border: Border.all(
             color: selected
                 ? context.colors.primary
-                : _ThemeResolver.chipBorder(context),
+                : context.appColors.chipBorder,
           ),
         ),
         child: Text(
@@ -810,12 +829,12 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: _ThemeResolver.textDim(context), size: 44),
+          Icon(icon, color: context.appColors.textDim, size: 44),
           const SizedBox(height: 12),
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: _ThemeResolver.textHi(context),
+              color: context.appColors.textHi,
               fontSize: 15,
               fontWeight: FontWeight.w600,
             ),
@@ -825,7 +844,7 @@ class _EmptyState extends StatelessWidget {
             subtitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: _ThemeResolver.textDim(context),
+              color: context.appColors.textDim,
               fontSize: 12,
             ),
           ),
@@ -833,29 +852,4 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ThemeResolver {
-  const _ThemeResolver._();
-
-  static Color textHi(BuildContext context) => context.isDarkMode
-      ? AppColors.darkTextPrimary
-      : AppColors.lightTextPrimary;
-
-  static Color textDim(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
-
-  static Color chipBorder(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkChipBorder : AppColors.lightChipBorder;
-
-  static Color selectedSurface(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkField : AppColors.lightField;
-
-  static Color openStatusBg(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkField : AppColors.lightField;
-
-  static Color openStatusBorder(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkChipBorder : AppColors.lightChipBorder;
-
-  static Color openStatusText(BuildContext context) => context.colors.primary;
 }

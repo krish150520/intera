@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/screens/post_detail_screen.dart';
@@ -23,13 +23,15 @@ class NotificationsScreen extends StatelessWidget {
     }
   }
 
-  Color _colorFor(String type) {
+  Color _colorFor(String type, BuildContext context) {
+    final c = context.appColors;
     switch (type) {
-      case 'like': return Colors.redAccent;
-      case 'comment': return Colors.blue;
-      case 'follow': return AppColors.primary;
+      case 'like': return c.error;
+      case 'comment': return c.info;
+      case 'follow': return c.primary;
       case 'community': return Colors.teal;
-      default: return Colors.grey;
+      case 'karma': return c.warningKarma;
+      default: return c.textMuted;
     }
   }
 
@@ -54,6 +56,7 @@ class NotificationsScreen extends StatelessWidget {
     switch (type) {
       case 'like':
       case 'comment':
+      case 'karma':
         final doc = await FirebaseFirestore.instance.collection('posts').doc(relatedId).get();
         if (doc.exists && context.mounted) {
           final post = Post.fromFirestore(doc, currentUid);
@@ -92,17 +95,18 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final c = context.appColors;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: c.bg,
       appBar: AppBar(
-        title: const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        title: Text('Notifications', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: c.textHi)),
+        backgroundColor: c.surface,
+        foregroundColor: c.textHi,
         elevation: 0,
       ),
       body: currentUid.isEmpty
-          ? const Center(child: Text('Please log in to view notifications.'))
+          ? Center(child: Text('Please log in to view notifications.', style: TextStyle(color: c.textSecondary)))
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('notifications')
@@ -110,9 +114,20 @@ class NotificationsScreen extends StatelessWidget {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.notifications_none_rounded, size: 48, color: c.textMuted),
+                        const SizedBox(height: 12),
+                        Text('No notifications yet', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  );
+                }
                 
-                final docs = snapshot.data!.docs;
+                final docs = snapshot.data?.docs ?? [];
 
                 // Single, consolidated empty state
                 if (docs.isEmpty) {
@@ -120,9 +135,9 @@ class NotificationsScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_none_rounded, size: 48, color: Colors.grey.shade300),
+                        Icon(Icons.notifications_none_rounded, size: 48, color: c.textMuted),
                         const SizedBox(height: 12),
-                        const Text('No recent notifications', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                        Text('No notifications yet', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   );
@@ -130,21 +145,23 @@ class NotificationsScreen extends StatelessWidget {
 
                 return ListView.separated(
                   itemCount: docs.length,
-                  separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
+                  separatorBuilder: (_, __) => Divider(height: 1, color: c.divider),
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final bool isRead = data['isRead'] ?? false;
+                    final type = data['type'] ?? '';
+                    final iconColor = _colorFor(type, context);
 
                     return Container(
-                      color: isRead ? Colors.white : AppColors.primary.withOpacity(0.04),
+                      color: isRead ? Colors.transparent : c.primary.withValues(alpha: 0.05),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: _colorFor(data['type']).withOpacity(0.12),
-                          child: Icon(_iconFor(data['type']), color: _colorFor(data['type']), size: 18),
+                          backgroundColor: iconColor.withValues(alpha: 0.12),
+                          child: Icon(_iconFor(type), color: iconColor, size: 18),
                         ),
-                        title: Text(data['title'] ?? '', style: TextStyle(fontSize: 14, fontWeight: isRead ? FontWeight.w400 : FontWeight.w600)),
-                        subtitle: Text(data['subtitle'] ?? '', style: const TextStyle(fontSize: 12)),
-                        trailing: Text(_formatTime(data['createdAt']), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        title: Text(data['title'] ?? '', style: TextStyle(fontSize: 14, color: c.textHi, fontWeight: isRead ? FontWeight.w400 : FontWeight.w600)),
+                        subtitle: Text(data['subtitle'] ?? '', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                        trailing: Text(_formatTime(data['createdAt']), style: TextStyle(fontSize: 11, color: c.textDim)),
                         onTap: () => _handleTap(context, data, docs[index].id, currentUid),
                       ),
                     );

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/colors.dart';
+import '../../core/theme/app_theme.dart';
 
 enum CustomButtonType { primary, outline, text }
 
@@ -49,7 +49,7 @@ class CustomButton extends StatelessWidget {
           // ← was missing entirely — caused the shrink-to-content bug
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(50),
-            backgroundColor: AppColors.primary,
+            backgroundColor: context.colors.primary,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -62,11 +62,11 @@ class CustomButton extends StatelessWidget {
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(50),
-            side: const BorderSide(color: AppColors.primary),
+            side: BorderSide(color: context.colors.primary),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            foregroundColor: AppColors.primary,
+            foregroundColor: context.colors.primary,
           ),
           child: child,
         );
@@ -74,7 +74,7 @@ class CustomButton extends StatelessWidget {
         return TextButton(
           onPressed: isLoading ? null : onPressed,
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.primary,
+            foregroundColor: context.colors.primary,
           ),
           child: child,
         );

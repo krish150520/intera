@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_textfield.dart';
 
@@ -101,11 +101,11 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
       });
 
       if (!mounted) return;
-      _snack('Community updated!', color: AppColors.success);
+      _snack('Community updated!', color: context.appColors.success);
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      _snack('Update failed: $e', color: AppColors.error);
+      _snack('Update failed: $e', color: context.appColors.error);
     } finally {
       if (mounted) setState(() => _isUpdating = false);
     }
@@ -122,7 +122,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     final networkBanner = widget.currentData['bannerUrl'] as String?;
     final networkAvatar = widget.currentData['avatarUrl'] as String?;
 
@@ -180,7 +180,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                       child: Stack(alignment: Alignment.bottomRight, children: [
                         CircleAvatar(
                           radius: 40,
-                          backgroundColor: c.primary.withOpacity(0.08),
+                          backgroundColor: c.primary.withValues(alpha: 0.08),
                           backgroundImage: _avatarFile != null
                               ? FileImage(_avatarFile!) as ImageProvider
                               : (networkAvatar != null && networkAvatar.isNotEmpty)
@@ -232,19 +232,4 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
             ),
     );
   }
-}
-
-// ── Theme resolver ────────────────────────────────────────────────────────────
-
-class _ThemeColors {
-  final BuildContext context;
-  _ThemeColors(this.context);
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get primary  => _dark ? AppColors.primaryLight  : AppColors.primary;
-  Color get bg       => _dark ? AppColors.darkBg        : AppColors.lightBg;
-  Color get surface  => _dark ? AppColors.darkSurface   : AppColors.lightSurface;
-  Color get field    => _dark ? AppColors.darkField     : AppColors.lightField;
-  Color get border   => _dark ? AppColors.darkBorder    : AppColors.lightBorder;
-  Color get textHi   => _dark ? AppColors.darkTextPrimary   : AppColors.lightTextPrimary;
-  Color get textMuted=> _dark ? AppColors.darkTextMuted     : AppColors.lightTextMuted;
 }

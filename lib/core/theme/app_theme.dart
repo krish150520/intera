@@ -209,6 +209,36 @@ class AppTheme {
           side: const BorderSide(color: AppColors.lightChipBorder),
         ),
       ),
+      extensions: [
+        AppColorsExtension(
+          primary: AppColors.primary,
+          primaryDark: AppColors.primaryDark,
+          primaryLight: AppColors.primaryLight,
+          accent: AppColors.accent,
+          bg: AppColors.lightBg,
+          surface: AppColors.lightSurface,
+          field: AppColors.lightField,
+          border: AppColors.lightBorder,
+          chipBorder: AppColors.lightChipBorder,
+          divider: AppColors.lightDivider,
+          textPrimary: AppColors.lightTextPrimary,
+          textSecondary: AppColors.lightTextSecondary,
+          textMuted: AppColors.lightTextMuted,
+          textDim: AppColors.lightTextDim,
+          success: AppColors.success,
+          successBg: AppColors.successBg,
+          successBorder: AppColors.successBorder,
+          error: AppColors.error,
+          errorBg: AppColors.errorBg,
+          warningKarma: AppColors.warningKarma,
+          warningKarmaBg: AppColors.warningKarmaBg,
+          warningKarmaBorder: AppColors.warningKarmaBorder,
+          info: AppColors.info,
+          primaryGradient: AppColors.primaryGradient,
+          storyRingGradient: AppColors.storyRingGradient,
+          karmaGoldGradient: AppColors.karmaGoldGradient,
+        ),
+      ],
     );
   }
 
@@ -394,6 +424,36 @@ class AppTheme {
           side: const BorderSide(color: AppColors.darkChipBorder),
         ),
       ),
+      extensions: [
+        AppColorsExtension(
+          primary: AppColors.primaryLight,
+          primaryDark: AppColors.primary,
+          primaryLight: AppColors.primaryLight,
+          accent: AppColors.accent,
+          bg: AppColors.darkBg,
+          surface: AppColors.darkSurface,
+          field: AppColors.darkField,
+          border: AppColors.darkBorder,
+          chipBorder: AppColors.darkChipBorder,
+          divider: AppColors.darkDivider,
+          textPrimary: AppColors.darkTextPrimary,
+          textSecondary: AppColors.darkTextSecondary,
+          textMuted: AppColors.darkTextMuted,
+          textDim: AppColors.darkTextDim,
+          success: AppColors.success,
+          successBg: AppColors.successBg.withValues(alpha: 0.1),
+          successBorder: AppColors.successBorder.withValues(alpha: 0.2),
+          error: AppColors.error,
+          errorBg: AppColors.errorBg.withValues(alpha: 0.1),
+          warningKarma: AppColors.warningKarma,
+          warningKarmaBg: AppColors.warningKarmaBg.withValues(alpha: 0.1),
+          warningKarmaBorder: AppColors.warningKarmaBorder.withValues(alpha: 0.2),
+          info: AppColors.info,
+          primaryGradient: AppColors.primaryGradient,
+          storyRingGradient: AppColors.storyRingGradient,
+          karmaGoldGradient: AppColors.karmaGoldGradient,
+        ),
+      ],
     );
   }
 }
@@ -405,4 +465,174 @@ extension AppThemeContext on BuildContext {
   ColorScheme get colors => Theme.of(this).colorScheme;
   TextTheme get textStyles => Theme.of(this).textTheme;
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+  AppColorsExtension get appColors => Theme.of(this).extension<AppColorsExtension>()!;
+}
+
+class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
+  final Color primary;
+  final Color primaryDark;
+  final Color primaryLight;
+  final Color accent;
+  
+  final Color bg;
+  final Color surface;
+  final Color field;
+  final Color border;
+  final Color chipBorder;
+  final Color divider;
+  
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color textDim;
+  
+  final Color success;
+  final Color successBg;
+  final Color successBorder;
+  
+  final Color error;
+  final Color errorBg;
+  
+  final Color warningKarma;
+  final Color warningKarmaBg;
+  final Color warningKarmaBorder;
+  
+  final Color info;
+  
+  final LinearGradient primaryGradient;
+  final LinearGradient storyRingGradient;
+  final LinearGradient karmaGoldGradient;
+
+  Color get textHi => textPrimary;
+  Color get pill => field;
+  Color get inactive => textDim;
+  Color get primaryTint => field;
+  Color get panelBg => field;
+  Color get panelBorder => border;
+
+  AppColorsExtension({
+    required this.primary,
+    required this.primaryDark,
+    required this.primaryLight,
+    required this.accent,
+    required this.bg,
+    required this.surface,
+    required this.field,
+    required this.border,
+    required this.chipBorder,
+    required this.divider,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.textDim,
+    required this.success,
+    required this.successBg,
+    required this.successBorder,
+    required this.error,
+    required this.errorBg,
+    required this.warningKarma,
+    required this.warningKarmaBg,
+    required this.warningKarmaBorder,
+    required this.info,
+    required this.primaryGradient,
+    required this.storyRingGradient,
+    required this.karmaGoldGradient,
+  });
+
+  @override
+  ThemeExtension<AppColorsExtension> copyWith({
+    Color? primary,
+    Color? primaryDark,
+    Color? primaryLight,
+    Color? accent,
+    Color? bg,
+    Color? surface,
+    Color? field,
+    Color? border,
+    Color? chipBorder,
+    Color? divider,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? textMuted,
+    Color? textDim,
+    Color? success,
+    Color? successBg,
+    Color? successBorder,
+    Color? error,
+    Color? errorBg,
+    Color? warningKarma,
+    Color? warningKarmaBg,
+    Color? warningKarmaBorder,
+    Color? info,
+    LinearGradient? primaryGradient,
+    LinearGradient? storyRingGradient,
+    LinearGradient? karmaGoldGradient,
+  }) {
+    return AppColorsExtension(
+      primary: primary ?? this.primary,
+      primaryDark: primaryDark ?? this.primaryDark,
+      primaryLight: primaryLight ?? this.primaryLight,
+      accent: accent ?? this.accent,
+      bg: bg ?? this.bg,
+      surface: surface ?? this.surface,
+      field: field ?? this.field,
+      border: border ?? this.border,
+      chipBorder: chipBorder ?? this.chipBorder,
+      divider: divider ?? this.divider,
+      textPrimary: textPrimary ?? this.textPrimary,
+      textSecondary: textSecondary ?? this.textSecondary,
+      textMuted: textMuted ?? this.textMuted,
+      textDim: textDim ?? this.textDim,
+      success: success ?? this.success,
+      successBg: successBg ?? this.successBg,
+      successBorder: successBorder ?? this.successBorder,
+      error: error ?? this.error,
+      errorBg: errorBg ?? this.errorBg,
+      warningKarma: warningKarma ?? this.warningKarma,
+      warningKarmaBg: warningKarmaBg ?? this.warningKarmaBg,
+      warningKarmaBorder: warningKarmaBorder ?? this.warningKarmaBorder,
+      info: info ?? this.info,
+      primaryGradient: primaryGradient ?? this.primaryGradient,
+      storyRingGradient: storyRingGradient ?? this.storyRingGradient,
+      karmaGoldGradient: karmaGoldGradient ?? this.karmaGoldGradient,
+    );
+  }
+
+  @override
+  ThemeExtension<AppColorsExtension> lerp(
+    covariant ThemeExtension<AppColorsExtension>? other,
+    double t,
+  ) {
+    if (other is! AppColorsExtension) {
+      return this;
+    }
+    return AppColorsExtension(
+      primary: Color.lerp(primary, other.primary, t)!,
+      primaryDark: Color.lerp(primaryDark, other.primaryDark, t)!,
+      primaryLight: Color.lerp(primaryLight, other.primaryLight, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      bg: Color.lerp(bg, other.bg, t)!,
+      surface: Color.lerp(surface, other.surface, t)!,
+      field: Color.lerp(field, other.field, t)!,
+      border: Color.lerp(border, other.border, t)!,
+      chipBorder: Color.lerp(chipBorder, other.chipBorder, t)!,
+      divider: Color.lerp(divider, other.divider, t)!,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
+      textMuted: Color.lerp(textMuted, other.textMuted, t)!,
+      textDim: Color.lerp(textDim, other.textDim, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      successBg: Color.lerp(successBg, other.successBg, t)!,
+      successBorder: Color.lerp(successBorder, other.successBorder, t)!,
+      error: Color.lerp(error, other.error, t)!,
+      errorBg: Color.lerp(errorBg, other.errorBg, t)!,
+      warningKarma: Color.lerp(warningKarma, other.warningKarma, t)!,
+      warningKarmaBg: Color.lerp(warningKarmaBg, other.warningKarmaBg, t)!,
+      warningKarmaBorder: Color.lerp(warningKarmaBorder, other.warningKarmaBorder, t)!,
+      info: Color.lerp(info, other.info, t)!,
+      primaryGradient: LinearGradient.lerp(primaryGradient, other.primaryGradient, t)!,
+      storyRingGradient: LinearGradient.lerp(storyRingGradient, other.storyRingGradient, t)!,
+      karmaGoldGradient: LinearGradient.lerp(karmaGoldGradient, other.karmaGoldGradient, t)!,
+    );
+  }
 }

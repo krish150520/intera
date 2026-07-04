@@ -1,10 +1,18 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/services/nsfw_detection_service.dart';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CREATE STORY SCREEN — Instagram-style
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum _StoryMode { text, photo, video }
 
 class CreateStoryScreen extends StatefulWidget {
   const CreateStoryScreen({super.key});
@@ -13,30 +21,74 @@ class CreateStoryScreen extends StatefulWidget {
   State<CreateStoryScreen> createState() => _CreateStoryScreenState();
 }
 
-class _CreateStoryScreenState extends State<CreateStoryScreen> {
+class _CreateStoryScreenState extends State<CreateStoryScreen>
+    with TickerProviderStateMixin {
   final _captionController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
+
+  _StoryMode _mode = _StoryMode.text;
   File? _selectedMedia;
   bool _isVideo = false;
   bool _isUploading = false;
   int _selectedGradientIndex = 0;
+  int _fontSizeIndex = 1; // 0=small, 1=medium, 2=large
 
-  // Muted, editorial duotones — replaces the previous bright primary-color set
-  final List<_GradientPreset> _gradients = const [
-    _GradientPreset('noir', Color(0xFF2C2C2E), Color(0xFF050505)),
-    _GradientPreset('plum', Color(0xFF4A2545), Color(0xFF1F0F1D)),
-    _GradientPreset('ink',  Color(0xFF1B2845), Color(0xFF0A0F1F)),
-    _GradientPreset('clay', Color(0xFF8B5A3C), Color(0xFF3D2417)),
-    _GradientPreset('sage', Color(0xFF3D4F3D), Color(0xFF1A2419)),
-    _GradientPreset('dune', Color(0xFF6B5D4F), Color(0xFF2B2419)),
+  late AnimationController _modeAnimCtrl;
+  late Animation<double> _modeFade;
+
+  // ── Instagram-inspired gradient presets ────────────────────────────────────
+  static const List<_GradientPreset> _gradients = [
+    _GradientPreset('rainbow',  Color(0xFFFF6B6B), Color(0xFF794AEF)),
+    _GradientPreset('sunset',   Color(0xFFFF9A56), Color(0xFFFF355E)),
+    _GradientPreset('midnight', Color(0xFF0F2027), Color(0xFF2C5364)),
+    _GradientPreset('forest',   Color(0xFF134E5E), Color(0xFF71B280)),
+    _GradientPreset('ocean',    Color(0xFF2E3192), Color(0xFF1BFFFF)),
+    _GradientPreset('blush',    Color(0xFFDA4453), Color(0xFF89216B)),
+    _GradientPreset('neon',     Color(0xFF00F260), Color(0xFF0575E6)),
+    _GradientPreset('slate',    Color(0xFF2C2C2E), Color(0xFF050505)),
   ];
+
+  static const List<double> _fontSizes = [16, 22, 32];
+
+  @override
+  void initState() {
+    super.initState();
+    _modeAnimCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 250));
+    _modeFade = CurvedAnimation(parent: _modeAnimCtrl, curve: Curves.easeOut);
+    _modeAnimCtrl.forward();
+  }
 
   @override
   void dispose() {
     _captionController.dispose();
+    _modeAnimCtrl.dispose();
     super.dispose();
   }
 
+  // ── Mode switching ────────────────────────────────────────────────────────
+  void _switchMode(_StoryMode mode) {
+    if (mode == _mode) return;
+    _modeAnimCtrl.reverse().then((_) {
+      setState(() {
+        _mode = mode;
+        if (mode == _StoryMode.text) {
+          _selectedMedia = null;
+          _isVideo = false;
+        }
+      });
+      _modeAnimCtrl.forward();
+    });
+
+    // Auto-open picker for photo/video modes
+    if (mode == _StoryMode.photo) {
+      _pickMedia(false);
+    } else if (mode == _StoryMode.video) {
+      _pickMedia(true);
+    }
+  }
+
+  // ── Media picker ──────────────────────────────────────────────────────────
   Future<void> _pickMedia(bool pickVideo) async {
     try {
       final XFile? file = pickVideo
@@ -49,6 +101,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
         setState(() {
           _selectedMedia = File(file.path);
           _isVideo = pickVideo;
+          _mode = pickVideo ? _StoryMode.video : _StoryMode.photo;
         });
       }
     } catch (e) {
@@ -56,56 +109,82 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
     }
   }
 
+  // ── Publish ───────────────────────────────────────────────────────────────
   Future<void> _publishStory() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    final caption = _captionController.text.trim();
+    if (_mode == _StoryMode.text && caption.isEmpty) {
+      _showSnack('Please write something for your story!');
+      return;
+    }
+
     setState(() => _isUploading = true);
+
+    // ── NSFW Check ────────────────────────────────────────────────────────
+    final hasNsfwText = await NsfwDetectionService.isTextNsfw(caption);
+    final hasNsfwMedia = _selectedMedia != null &&
+        await NsfwDetectionService.isMediaNsfw(_selectedMedia);
+
+    if (hasNsfwText || hasNsfwMedia) {
+      setState(() => _isUploading = false);
+      _showNsfwWarningDialog();
+      return;
+    }
+
     String? downloadUrl;
 
     try {
       String authorAvatar = user.photoURL ?? '';
-      String authorName   = user.displayName ?? 'Anonymous';
+      String authorName = user.displayName ?? 'Anonymous';
       try {
         final userDoc = await FirebaseFirestore.instance
-            .collection('users').doc(user.uid).get();
+            .collection('users')
+            .doc(user.uid)
+            .get();
         if (userDoc.exists) {
           authorAvatar = userDoc.data()?['avatarUrl'] ?? authorAvatar;
-          authorName   = userDoc.data()?['name'] ?? authorName;
+          authorName = userDoc.data()?['name'] ?? authorName;
         }
       } catch (_) {}
 
       if (_selectedMedia != null) {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('stories')
-            .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.${_isVideo ? 'mp4' : 'jpg'}');
+        final storageRef = FirebaseStorage.instance.ref().child('stories').child(
+            '${user.uid}_${DateTime.now().millisecondsSinceEpoch}.${_isVideo ? 'mp4' : 'jpg'}');
         final uploadTask = await storageRef.putFile(_selectedMedia!);
         downloadUrl = await uploadTask.ref.getDownloadURL();
       }
 
       await FirebaseFirestore.instance.collection('stories').add({
-        'authorId':       user.uid,
-        'authorName':     authorName,
-        'authorAvatar':   authorAvatar,
-        'mediaUrl':       downloadUrl,
-        'isVideo':        _isVideo,
-        'caption':        _captionController.text.trim(),
+        'authorId': user.uid,
+        'authorName': authorName,
+        'authorAvatar': authorAvatar,
+        'mediaUrl': downloadUrl,
+        'isVideo': _isVideo,
+        'caption': caption,
         'gradientColors': downloadUrl == null
             ? [
                 _gradients[_selectedGradientIndex].start.value,
                 _gradients[_selectedGradientIndex].end.value,
               ]
             : null,
-        'viewedBy':   [],
-        'createdAt':  FieldValue.serverTimestamp(),
-        'expiresAt':  Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
+        'viewedBy': [],
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiresAt':
+            Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
       });
 
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Story posted')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Story posted! ✨'),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -116,8 +195,46 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
   }
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
   }
+
+  void _showNsfwWarningDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1B2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: Colors.redAccent, size: 28),
+            SizedBox(width: 10),
+            Text('Content Flagged',
+                style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: const Text(
+          'Our safety systems detected potentially sensitive or NSFW content. '
+          'Posting of this content is restricted.',
+          style: TextStyle(height: 1.4, color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  BUILD
+  // ═══════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -125,66 +242,88 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
+          // ── Background ──────────────────────────────────────────────────
           Positioned.fill(child: _buildBackground(preset)),
 
+          // ── Bottom scrim ────────────────────────────────────────────────
           Positioned(
-            left: 0, right: 0, bottom: 0,
-            height: 280,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 320,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.85),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
 
+          // ── Main content ────────────────────────────────────────────────
           SafeArea(
             child: Column(
               children: [
                 _buildTopBar(),
-                Expanded(child: _buildCaptionArea()),
+                Expanded(
+                  child: FadeTransition(
+                    opacity: _modeFade,
+                    child: _buildCaptionArea(),
+                  ),
+                ),
                 _buildBottomControls(),
               ],
             ),
           ),
 
+          // ── Upload overlay ──────────────────────────────────────────────
           if (_isUploading) _buildUploadOverlay(),
         ],
       ),
     );
   }
 
+  // ── Background ──────────────────────────────────────────────────────────────
   Widget _buildBackground(_GradientPreset preset) {
     if (_selectedMedia != null && !_isVideo) {
       return Image.file(_selectedMedia!, fit: BoxFit.cover);
     }
     if (_selectedMedia != null && _isVideo) {
       return Container(
-        color: Colors.black,
+        color: const Color(0xFF0A0A0A),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 64, height: 64,
+                width: 80,
+                height: 80,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.25)),
+                  color: Colors.white.withValues(alpha: 0.06),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15), width: 2),
                 ),
                 child: const Icon(Icons.play_arrow_rounded,
-                    size: 28, color: Colors.white70),
+                    size: 40, color: Colors.white54),
               ),
-              const SizedBox(height: 14),
-              Text('Video selected',
+              const SizedBox(height: 16),
+              Text('Video ready',
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 13,
-                      letterSpacing: 0.2)),
+                      color: Colors.white.withValues(alpha: 0.4),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.3)),
             ],
           ),
         ),
@@ -192,6 +331,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
     }
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [preset.start, preset.end],
@@ -202,43 +342,86 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
     );
   }
 
+  // ── Top bar ─────────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Row(
         children: [
-          _CircleIconBtn(
-            icon: Icons.close_rounded,
+          // Close
+          _GlassCircle(
+            child: const Icon(Icons.close_rounded,
+                color: Colors.white, size: 20),
             onTap: () => Navigator.of(context).pop(),
           ),
           const Spacer(),
-          Row(
-            children: [
-              Icon(Icons.access_time_rounded,
-                  size: 13, color: Colors.white.withOpacity(0.5)),
-              const SizedBox(width: 4),
-              Text('Visible for 24h',
-                  style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 12,
-                      letterSpacing: 0.1)),
-            ],
+
+          // 24h badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.access_time_rounded,
+                    size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                const SizedBox(width: 4),
+                Text('24h',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
-          const SizedBox(width: 16),
+
+          const SizedBox(width: 10),
+
+          // Share button
           GestureDetector(
             onTap: _isUploading ? null : _publishStory,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  colors: _isUploading
+                      ? [Colors.grey.shade700, Colors.grey.shade800]
+                      : [
+                          context.appColors.primary,
+                          context.appColors.primaryDark,
+                        ],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: _isUploading
+                    ? []
+                    : [
+                        BoxShadow(
+                          color:
+                              context.appColors.primary.withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
               ),
-              child: const Text(
-                'Share',
-                style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Share',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded,
+                      color: Colors.white.withValues(alpha: 0.9), size: 16),
+                ],
               ),
             ),
           ),
@@ -247,204 +430,280 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
     );
   }
 
- Widget _buildCaptionArea() {
-  return GestureDetector(
-    behavior: HitTestBehavior.translucent,
-    onTap: () => FocusScope.of(context).unfocus(),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        // SingleChildScrollView + minHeight constraint: centers normally,
-        // but scrolls instead of overflowing once keyboard + long caption
-        // exceed the available space.
-        return SingleChildScrollView(
-          reverse: true,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width - 64,
-                ),
-                child: IntrinsicWidth(
-                  // Makes the black pill hug the text width instead of
-                  // stretching edge to edge — this is the actual Insta look.
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: TextField(
-                      controller: _captionController,
-                      maxLines: null,
-                      textAlign: TextAlign.center,
-                      maxLength: 120,
-                      cursorColor: Colors.white,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        height: 1.35,
+  // ── Caption area ────────────────────────────────────────────────────────────
+  Widget _buildCaptionArea() {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            reverse: true,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: IntrinsicWidth(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.06)),
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'Add a caption',
-                        hintStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.65),
-                          fontSize: 17,
-                          fontWeight: FontWeight.w500,
+                      child: TextField(
+                        controller: _captionController,
+                        maxLines: null,
+                        textAlign: TextAlign.center,
+                        maxLength: 150,
+                        cursorColor: Colors.white,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: _fontSizes[_fontSizeIndex],
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
                         ),
-                        border: InputBorder.none,
-                        isDense: true,
-                        counterText: '',
+                        decoration: InputDecoration(
+                          hintText: _mode == _StoryMode.text
+                              ? 'Type something...'
+                              : 'Add a caption',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: _fontSizes[_fontSizeIndex],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          counterText: '',
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    ),
-  );
-}
-  
+          );
+        },
+      ),
+    );
+  }
 
+  // ── Bottom controls ─────────────────────────────────────────────────────────
   Widget _buildBottomControls() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_selectedMedia == null) ...[
+          // ── Font size selector (text mode only) ───────────────────────
+          if (_mode == _StoryMode.text) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(3, (i) {
+                final labels = ['Aa', 'Aa', 'Aa'];
+                final sizes = [12.0, 16.0, 22.0];
+                final selected = _fontSizeIndex == i;
+                return GestureDetector(
+                  onTap: () => setState(() => _fontSizeIndex = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : Colors.white.withValues(alpha: 0.06),
+                      border: selected
+                          ? Border.all(color: Colors.white54, width: 1.5)
+                          : null,
+                    ),
+                    child: Center(
+                      child: Text(labels[i],
+                          style: TextStyle(
+                              color: selected
+                                  ? Colors.white
+                                  : Colors.white54,
+                              fontSize: sizes[i],
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ── Gradient palette (text mode or no media) ─────────────────
+          if (_mode == _StoryMode.text || _selectedMedia == null) ...[
             SizedBox(
-              height: 56,
+              height: 48,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: _gradients.length,
-                padding: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 itemBuilder: (context, idx) {
                   final g = _gradients[idx];
                   final selected = idx == _selectedGradientIndex;
                   return GestureDetector(
-                    onTap: () => setState(() => _selectedGradientIndex = idx),
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 30, height: 30,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              gradient: LinearGradient(
-                                colors: [g.start, g.end],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              border: selected
-                                  ? Border.all(color: AppColors.primary, width: 2)
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            g.name,
-                            style: TextStyle(
-                              color: selected
-                                  ? Colors.white.withOpacity(0.9)
-                                  : Colors.white.withOpacity(0.35),
-                              fontSize: 9,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
+                    onTap: () =>
+                        setState(() => _selectedGradientIndex = idx),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 10),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [g.start, g.end],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: selected
+                            ? Border.all(color: Colors.white, width: 2.5)
+                            : Border.all(
+                                color: Colors.white.withValues(alpha: 0.15)),
+                        boxShadow: selected
+                            ? [
+                                BoxShadow(
+                                  color: g.start.withValues(alpha: 0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : [],
                       ),
                     ),
                   );
                 },
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
           ],
 
-          Row(
-            children: [
-              _MediaBtn(
-                icon: Icons.image_outlined,
-                label: 'Photo',
-                onTap: () => _pickMedia(false),
-              ),
-              const SizedBox(width: 8),
-              _MediaBtn(
-                icon: Icons.videocam_outlined,
-                label: 'Video',
-                onTap: () => _pickMedia(true),
-              ),
-              const Spacer(),
-              if (_selectedMedia != null)
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _selectedMedia = null;
-                    _isVideo = false;
-                  }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.close_rounded,
-                            size: 14, color: Colors.white.withOpacity(0.7)),
-                        const SizedBox(width: 5),
-                        Text('Remove',
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500)),
-                      ],
-                    ),
+          // ── Media action row ─────────────────────────────────────────
+          if (_selectedMedia != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  _selectedMedia = null;
+                  _isVideo = false;
+                  _mode = _StoryMode.text;
+                }),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withValues(alpha: 0.1),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.close_rounded,
+                          size: 14,
+                          color: Colors.white.withValues(alpha: 0.7)),
+                      const SizedBox(width: 6),
+                      Text('Remove media',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500)),
+                    ],
                   ),
                 ),
-            ],
+              ),
+            ),
+
+          // ── Mode switcher ────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Row(
+              children: [
+                _ModeTab(
+                  icon: Icons.text_fields_rounded,
+                  label: 'TEXT',
+                  active: _mode == _StoryMode.text,
+                  onTap: () => _switchMode(_StoryMode.text),
+                ),
+                _ModeTab(
+                  icon: Icons.image_rounded,
+                  label: 'PHOTO',
+                  active: _mode == _StoryMode.photo,
+                  onTap: () => _switchMode(_StoryMode.photo),
+                ),
+                _ModeTab(
+                  icon: Icons.videocam_rounded,
+                  label: 'VIDEO',
+                  active: _mode == _StoryMode.video,
+                  onTap: () => _switchMode(_StoryMode.video),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ── Upload overlay ──────────────────────────────────────────────────────────
   Widget _buildUploadOverlay() {
     return Positioned.fill(
-      child: Container(
-        color: Colors.black.withOpacity(0.7),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 28, height: 28,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.5),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: CircularProgressIndicator(
+                      color: context.appColors.primary,
+                      strokeWidth: 3,
+                      strokeCap: StrokeCap.round,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Sharing your story...',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Text('This may take a moment',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          fontSize: 12)),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Posting your story',
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  HELPER WIDGETS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _GradientPreset {
   final String name;
@@ -453,54 +712,74 @@ class _GradientPreset {
   const _GradientPreset(this.name, this.start, this.end);
 }
 
-class _CircleIconBtn extends StatelessWidget {
-  final IconData icon;
+class _GlassCircle extends StatelessWidget {
+  final Widget child;
   final VoidCallback onTap;
-  const _CircleIconBtn({required this.icon, required this.onTap});
+  const _GlassCircle({required this.child, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36, height: 36,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.3)),
+          color: Colors.white.withValues(alpha: 0.1),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         ),
-        child: Icon(icon, color: Colors.white, size: 18),
+        child: Center(child: child),
       ),
     );
   }
 }
 
-class _MediaBtn extends StatelessWidget {
+class _ModeTab extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool active;
   final VoidCallback onTap;
-  const _MediaBtn({required this.icon, required this.label, required this.onTap});
+  const _ModeTab(
+      {required this.icon,
+      required this.label,
+      required this.active,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: Colors.white.withOpacity(0.85)),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500)),
-          ],
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: active
+                ? Colors.white.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: active
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.4)),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                      color: active
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.4),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8)),
+            ],
+          ),
         ),
       ),
     );

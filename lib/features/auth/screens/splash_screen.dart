@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/services/auth_service.dart';
@@ -11,27 +12,55 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+
   @override
   void initState() {
     super.initState();
+    
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    
+    _scale = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.0, 0.8, curve: Curves.easeOutBack),
+    );
+    
+    _fade = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.2, 1.0, curve: Curves.easeIn),
+    );
+
+    _ctrl.forward();
     _navigateNext();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
   }
 
   Future<void> _navigateNext() async {
     String route = AppRoutes.welcome;
 
     try {
-      await Future.delayed(const Duration(seconds: 2));
+      // Allow the animation to play beautifully
+      await Future.delayed(const Duration(milliseconds: 2500));
 
       final auth = AuthService.instance;
       if (auth.isLoggedIn) {
-        await auth.reloadUser(); // best-effort refresh; safe even if it fails internally
+        await auth.reloadUser();
         route = auth.isVerified ? AppRoutes.main : AppRoutes.verifyEmail;
       }
     } catch (e, st) {
       debugPrint('Splash navigation error: $e\n$st');
-      // route stays AppRoutes.welcome — safe fallback
     }
 
     if (!mounted) return;
@@ -45,58 +74,163 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Elegant dark themed splash for maximum visual impact on launch
+    final c = context.appColors;
+
     return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF131127), // Deep slate dark blue
+              Color(0xFF1C1A3A), // Dark purple slate
+              Color(0xFF100E20), // Midnight black
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // ── Center Branding ───────────────────────────────────────────
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Glowing logo squircle with scale animation
+                    ScaleTransition(
+                      scale: _scale,
+                      child: FadeTransition(
+                        opacity: _fade,
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF8B7DFC), // Light vibrant indigo
+                                Color(0xFF6352E9), // Accent purple
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF6352E9).withValues(alpha: 0.4),
+                                blurRadius: 28,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Decorative background circles
+                              Positioned(
+                                top: -10,
+                                left: -10,
+                                child: CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor: Colors.white.withValues(alpha: 0.06),
+                                ),
+                              ),
+                              // Logo letter mark
+                              const Center(
+                                child: Text(
+                                  'IN',
+                                  style: TextStyle(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Brand title with fade-in animation
+                    FadeTransition(
+                      opacity: _fade,
+                      child: Column(
+                        children: [
+                          Text(
+                            AppStrings.appName.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 6,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            AppStrings.tagline,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: const Center(
-                child: Text(
-                  'IN',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
+
+              // ── Loading indicator at the bottom ───────────────────────────
+              Positioned(
+                bottom: 40,
+                left: 0,
+                right: 0,
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 40,
+                          child: LinearProgressIndicator(
+                            minHeight: 2.5,
+                            backgroundColor: Colors.white.withValues(alpha: 0.1),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF8B7DFC),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'INTERACTION DESIGNED',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.35),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              AppStrings.appName,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              AppStrings.tagline,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.85),
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 40),
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

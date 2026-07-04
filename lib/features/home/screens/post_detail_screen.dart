@@ -3,12 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../widgets/post_card.dart';
 import '../../../core/karma/karma_service.dart';
 import '../../../core/karma/karma_badge.dart';
+import '../../../core/services/notification_service.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post? post;
@@ -21,9 +22,6 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
   bool _isSending = false;
-
-  static const Color _primary    = Color(0xFF6C63D5);
-  static const Color _fieldBg    = Color(0xFFF5F4FF);
 
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
   bool get _isHelpPost   => widget.post?.type == PostType.helpRequest;
@@ -77,6 +75,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       batch.update(postRef, {'commentCount': FieldValue.increment(1)});
       await batch.commit();
 
+      // Trigger comment notification
+      try {
+        await NotificationService.sendNotification(
+          recipientId: post.authorId,
+          type: 'comment',
+          title: '$displayName commented on your post',
+          subtitle: text,
+          relatedId: post.id,
+        );
+      } catch (e) {
+        print('Error sending comment notification: $e');
+      }
+
       _commentController.clear();
       FocusScope.of(context).unfocus();
     } catch (e) {
@@ -108,7 +119,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _primary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.appColors.primary),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Award karma',
                 style: TextStyle(color: Colors.white)),
@@ -125,6 +136,28 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         commentId:    commentId,
         rewardAmount: reward,
       );
+      
+      // Trigger best answer notification
+      try {
+        String senderName = 'Someone';
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_myUid)
+            .get();
+        if (userDoc.exists) {
+          senderName = userDoc.data()?['name'] ?? 'Someone';
+        }
+        await NotificationService.sendNotification(
+          recipientId: answererUid,
+          type: 'karma',
+          title: 'Best answer awarded! ⚡',
+          subtitle: 'You received $reward karma from $senderName',
+          relatedId: widget.post!.id,
+        );
+      } catch (e) {
+        print('Error sending best answer notification: $e');
+      }
+
       if (!mounted) return;
       _showSnack('🎉 $reward karma awarded to $answererName!');
     } catch (e) {
@@ -162,6 +195,28 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               postId:    postId,
               commentId: commentId,
             );
+            
+            // Trigger tip notification
+            try {
+              String senderName = 'Someone';
+              final userDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(_myUid)
+                  .get();
+              if (userDoc.exists) {
+                senderName = userDoc.data()?['name'] ?? 'Someone';
+              }
+              await NotificationService.sendNotification(
+                recipientId: toUid,
+                type: 'karma',
+                title: 'Received a tip! ⚡',
+                subtitle: 'You received $amount karma from $senderName',
+                relatedId: postId,
+              );
+            } catch (e) {
+              print('Error sending tip notification: $e');
+            }
+
             if (!mounted) return;
             _showSnack('⚡ $amount karma tipped to $toName!');
           } catch (e) {
@@ -211,9 +266,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
+    final c = context.appColors;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: c.bg,
       extendBodyBehindAppBar: _hasMedia,
       appBar: _hasMedia
           ? AppBar(
@@ -224,7 +280,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 child: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
+                    color: Colors.black.withValues(alpha: 0.45),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.arrow_back_ios_new_rounded,
@@ -234,19 +290,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               systemOverlayStyle: SystemUiOverlayStyle.light,
             )
           : AppBar(
-              title: const Text('Discussion',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              title: Text('Discussion',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: c.textHi)),
+              backgroundColor: c.surface,
+              foregroundColor: c.textHi,
               elevation: 0.5,
               leading: GestureDetector(
                 onTap: () => Navigator.of(context).maybePop(),
                 child: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: _fieldBg, shape: BoxShape.circle),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 16, color: _primary),
+                      color: c.field, shape: BoxShape.circle),
+                  child: Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 16, color: c.primary),
                 ),
               ),
             ),
@@ -309,38 +365,38 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
                               child: Text(
                                 'Comments (${commentDocs.length})',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: Colors.black87),
+                                    color: c.textHi),
                               ),
                             ),
                           ),
 
                           // ── Loading / empty ──────────────────────────────
                           if (snap.connectionState == ConnectionState.waiting)
-                            const SliverToBoxAdapter(
+                            SliverToBoxAdapter(
                               child: Center(
                                   child: Padding(
-                                      padding: EdgeInsets.all(32),
-                                      child: CircularProgressIndicator())),
+                                      padding: const EdgeInsets.all(32),
+                                      child: CircularProgressIndicator(color: c.primary))),
                             )
                           else if (commentDocs.isEmpty)
                             SliverToBoxAdapter(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 48, horizontal: 16),
-                                child: Center(
-                                  child: Text(
-                                    'No responses yet. Start the conversation!',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: Colors.grey.shade500,
-                                        fontSize: 13),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 48, horizontal: 16),
+                                  child: Center(
+                                    child: Text(
+                                      'No responses yet. Start the conversation!',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color: c.textMuted,
+                                          fontSize: 13),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            )
+                              )
                           else
                             SliverList(
                               delegate: SliverChildBuilderDelegate(
@@ -376,7 +432,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                     ),
                                     if (i < commentDocs.length - 1)
                                       Divider(
-                                          color: Colors.grey.shade100,
+                                          color: c.border,
                                           height: 1,
                                           indent: 16,
                                           endIndent: 16),
@@ -423,6 +479,7 @@ class _MediaHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Stack(
       children: [
         // Media surface
@@ -447,11 +504,11 @@ class _MediaHero extends StatelessWidget {
           bottom: 0, left: 0, right: 0,
           child: Container(
             height: 80,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.white],
+                colors: [Colors.transparent, c.bg],
               ),
             ),
           ),
@@ -464,7 +521,7 @@ class _MediaHero extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -495,7 +552,7 @@ class _MediaHero extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -517,7 +574,7 @@ class _PlaceholderMedia extends StatelessWidget {
     return Container(
       width: double.infinity,
       height: 280,
-      color: const Color(0xFF2D2A6E),
+      color: context.appColors.primary,
       child: const Center(
         child: Icon(Icons.image_outlined, color: Colors.white30, size: 48),
       ),
@@ -565,7 +622,7 @@ class _VideoThumbnailState extends State<_VideoThumbnail> {
     return Container(
       width: double.infinity,
       height: 280,
-      color: const Color(0xFF1A1230),
+      color: context.appColors.bg,
       child: const Center(
         child: Icon(Icons.play_circle_fill_rounded,
             color: Colors.white54, size: 56),
@@ -582,6 +639,7 @@ class _PostBodyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -598,13 +656,13 @@ class _PostBodyCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(post.authorName,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
-                        color: Color(0xFF2D2A6E))),
+                        color: c.textHi)),
                 Text(post.authorUsername,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF9E9BD0))),
+                    style: TextStyle(
+                        fontSize: 11, color: c.textMuted)),
               ],
             ),
           ),
@@ -613,18 +671,18 @@ class _PostBodyCard extends StatelessWidget {
         const SizedBox(height: 12),
         if (post.title.isNotEmpty) ...[
           Text(post.title,
-              style: const TextStyle(
+              style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: Color(0xFF2D2A6E))),
+                  color: c.textHi)),
           const SizedBox(height: 6),
         ],
         if (post.body.isNotEmpty)
           Text(post.body,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 13,
                   height: 1.5,
-                  color: Color(0xFF444444))),
+                  color: c.textSecondary)),
         const SizedBox(height: 12),
       ]),
     );
@@ -742,7 +800,7 @@ class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
                       width: 56,
                       height: 56,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.55),
+                        color: Colors.black.withValues(alpha: 0.55),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -758,11 +816,11 @@ class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
               ),
 
             // ── Top bar (close + more) ─────────────────────────────────────
-            AnimatedOpacity(
-              opacity: _uiVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: Positioned(
-                top: 0, left: 0, right: 0,
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: AnimatedOpacity(
+                opacity: _uiVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
                 child: Container(
                   padding: EdgeInsets.fromLTRB(
                       12, MediaQuery.of(context).padding.top + 8, 12, 12),
@@ -781,12 +839,33 @@ class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
                     const Spacer(),
                     _GlassButton(
                       icon: Icons.download_rounded,
-                      onTap: () {},
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: widget.mediaUrl));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Media link saved to clipboard!'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(width: 8),
                     _GlassButton(
                       icon: Icons.share_rounded,
-                      onTap: () {},
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(
+                            text: 'Check out this media on INTERA: ${widget.mediaUrl}'));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Media share link copied!'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      },
                     ),
                   ]),
                 ),
@@ -794,11 +873,11 @@ class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
             ),
 
             // ── Bottom caption + author ────────────────────────────────────
-            AnimatedOpacity(
-              opacity: _uiVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: Positioned(
-                bottom: 0, left: 0, right: 0,
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: AnimatedOpacity(
+                opacity: _uiVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
                 child: Container(
                   padding: EdgeInsets.fromLTRB(
                       16, 32, 16,
@@ -873,7 +952,7 @@ class _GlassButton extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.45),
+            color: Colors.black.withValues(alpha: 0.45),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: Colors.white, size: 18),
@@ -890,18 +969,19 @@ class _HelpBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: isCompleted
-            ? const Color(0xFFE8F5E9)
-            : const Color(0xFFFFF8EC),
+            ? c.successBg
+            : c.warningKarmaBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCompleted
-              ? const Color(0xFFA5D6A7)
-              : const Color(0xFFF5DCAA),
+              ? c.successBorder
+              : c.warningKarmaBorder,
         ),
       ),
       child: Row(children: [
@@ -910,8 +990,8 @@ class _HelpBanner extends StatelessWidget {
               ? Icons.check_circle_rounded
               : Icons.handshake_outlined,
           color: isCompleted
-              ? const Color(0xFF388E3C)
-              : const Color(0xFFC9830A),
+              ? c.success
+              : c.warningKarma,
           size: 20,
         ),
         const SizedBox(width: 10),
@@ -924,8 +1004,8 @@ class _HelpBanner extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: isCompleted
-                  ? const Color(0xFF2E7D32)
-                  : const Color(0xFF7A5010),
+                  ? c.success
+                  : c.warningKarma,
             ),
           ),
         ),
@@ -957,6 +1037,7 @@ class _CommentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final name     = data['authorName']     as String? ?? 'Anonymous';
     final username = data['authorUsername'] as String? ?? '@user';
     final content  = data['content']        as String? ?? '';
@@ -965,7 +1046,7 @@ class _CommentTile extends StatelessWidget {
 
     return Container(
       color: isBestAnswer
-          ? const Color(0xFFF0FFF4)
+          ? c.successBg
           : Colors.transparent,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -981,21 +1062,21 @@ class _CommentTile extends StatelessWidget {
               children: [
                 Row(children: [
                   Text(name,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-                          color: Colors.black87)),
+                          color: c.textHi)),
                   const SizedBox(width: 6),
                   Text(username,
                       style: TextStyle(
-                          fontSize: 11, color: Colors.grey.shade500)),
+                          fontSize: 11, color: c.textMuted)),
                   if (isBestAnswer) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF388E3C),
+                        color: c.success,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text('Best answer',
@@ -1008,18 +1089,18 @@ class _CommentTile extends StatelessWidget {
                 ]),
                 const SizedBox(height: 4),
                 Text(content,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
                         height: 1.35,
-                        color: Colors.black87)),
+                        color: c.textPrimary)),
                 const SizedBox(height: 8),
                 Row(children: [
                   if (showAwardBtn)
                     _ActionChip(
                       icon:  Icons.emoji_events_rounded,
                       label: 'Best answer',
-                      color: const Color(0xFF388E3C),
-                      bg:    const Color(0xFFE8F5E9),
+                      color: c.success,
+                      bg:    c.successBg,
                       onTap: onAward,
                     ),
                   if (showAwardBtn) const SizedBox(width: 8),
@@ -1027,8 +1108,8 @@ class _CommentTile extends StatelessWidget {
                     _ActionChip(
                       icon:  Icons.bolt_rounded,
                       label: 'Tip',
-                      color: const Color(0xFFC9830A),
-                      bg:    const Color(0xFFFFF8EC),
+                      color: c.warningKarma,
+                      bg:    c.warningKarmaBg,
                       onTap: onTip,
                     ),
                   const Spacer(),
@@ -1068,7 +1149,7 @@ class _ActionChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 12, color: color),
@@ -1114,31 +1195,32 @@ class _TipSheetState extends State<_TipSheet> {
   @override
   Widget build(BuildContext context) {
     final isValid = _amount > 0 && _amount <= widget.myBalance;
+    final c = context.appColors;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
           20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 36, height: 4,
           margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: c.border,
               borderRadius: BorderRadius.circular(2)),
         ),
         Text('Tip ${widget.toName}',
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF2D2A6E))),
+                color: c.textHi)),
         const SizedBox(height: 4),
         Text('Your balance: ${widget.myBalance} ⚡',
-            style: const TextStyle(
-                fontSize: 12, color: Color(0xFF9E9BD0))),
+            style: TextStyle(
+                fontSize: 12, color: c.textMuted)),
         const SizedBox(height: 20),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           for (final amt in [5, 10, 25, 50])
@@ -1154,13 +1236,13 @@ class _TipSheetState extends State<_TipSheet> {
                       horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: _amount == amt
-                        ? const Color(0xFF6C63D5)
-                        : const Color(0xFFF5F4FF),
+                        ? c.primary
+                        : c.field,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _amount == amt
-                          ? const Color(0xFF6C63D5)
-                          : const Color(0xFFD8D5F8),
+                          ? c.primary
+                          : c.chipBorder,
                     ),
                   ),
                   child: Text('$amt ⚡',
@@ -1169,7 +1251,7 @@ class _TipSheetState extends State<_TipSheet> {
                           fontWeight: FontWeight.w600,
                           color: _amount == amt
                               ? Colors.white
-                              : const Color(0xFF6C63D5))),
+                              : c.primary)),
                 ),
               ),
             ),
@@ -1179,27 +1261,28 @@ class _TipSheetState extends State<_TipSheet> {
           controller: _ctrl,
           keyboardType: TextInputType.number,
           onChanged: (v) => setState(() => _amount = int.tryParse(v) ?? 0),
+          style: TextStyle(color: c.textHi),
           decoration: InputDecoration(
             hintText: 'Or enter custom amount',
-            hintStyle: const TextStyle(color: Color(0xFFB0ADDE)),
+            hintStyle: TextStyle(color: c.textMuted),
             filled: true,
-            fillColor: const Color(0xFFF5F4FF),
-            prefixIcon: const Icon(Icons.bolt_rounded,
-                color: Color(0xFFC9830A), size: 18),
+            fillColor: c.field,
+            prefixIcon: Icon(Icons.bolt_rounded,
+                color: c.warningKarma, size: 18),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                    color: Color(0xFFE4E2F8), width: 1.5)),
+                borderSide: BorderSide(
+                    color: c.border, width: 1.5)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                    color: Color(0xFFE4E2F8), width: 1.5)),
+                borderSide: BorderSide(
+                    color: c.border, width: 1.5)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                    color: Color(0xFF6C63D5), width: 1.5)),
+                borderSide: BorderSide(
+                    color: c.primary, width: 1.5)),
           ),
         ),
         if (_amount > widget.myBalance && _amount > 0) ...[
@@ -1213,8 +1296,8 @@ class _TipSheetState extends State<_TipSheet> {
           child: ElevatedButton.icon(
             onPressed: isValid ? () => widget.onSend(_amount) : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63D5),
-              disabledBackgroundColor: const Color(0xFFD8D5F8),
+              backgroundColor: c.primary,
+              disabledBackgroundColor: c.border,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
@@ -1254,18 +1337,19 @@ class _CommentInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
       padding: EdgeInsets.fromLTRB(
           12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: c.surface,
         boxShadow: [
           BoxShadow(
               color: Colors.black.withOpacity(0.04),
               offset: const Offset(0, -3),
               blurRadius: 4),
         ],
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        border: Border(top: BorderSide(color: c.border)),
       ),
       child: Row(children: [
         CustomAvatar(name: 'You', radius: 16, imageUrl: userAvatarUrl),
@@ -1274,35 +1358,36 @@ class _CommentInput extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: c.field,
               borderRadius: BorderRadius.circular(24),
             ),
             child: TextField(
               controller: controller,
               maxLines: null,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
+              style: TextStyle(color: c.textHi),
+              decoration: InputDecoration(
                 hintText: 'Add to the discussion...',
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                hintStyle: TextStyle(fontSize: 13, color: c.textMuted),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
           ),
         ),
         const SizedBox(width: 4),
         isSending
-            ? const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
+            ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: CircularProgressIndicator(color: c.primary, strokeWidth: 2)),
               )
             : IconButton(
-                icon: const Icon(Icons.send_rounded,
-                    color: AppColors.primary),
+                icon: Icon(Icons.send_rounded,
+                    color: c.primary),
                 onPressed: onSend,
               ),
       ]),

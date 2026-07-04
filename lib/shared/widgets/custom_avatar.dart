@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/colors.dart';
+import '../../core/theme/app_theme.dart';
 
 /// A circular user avatar with image fallback to initials.
 ///
@@ -32,16 +32,16 @@ class CustomAvatar extends StatelessWidget {
       return CircleAvatar(
         radius: radius,
         backgroundImage: NetworkImage(imageUrl!),
-        backgroundColor: AppColors.primaryLight,
+        backgroundColor: context.appColors.primaryLight,
       );
     }
     return CircleAvatar(
       radius: radius,
-      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+      backgroundColor: context.colors.primary.withValues(alpha: 0.15),
       child: Text(
         _initials,
         style: TextStyle(
-          color: AppColors.primary,
+          color: context.colors.primary,
           fontWeight: FontWeight.bold,
           fontSize: radius * 0.7,
         ),

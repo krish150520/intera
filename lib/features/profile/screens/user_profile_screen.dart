@@ -4,11 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/follow_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../messaging/services/messaging_service.dart';
 import '../../messaging/screens/chat_screen.dart';
 import 'connections_list_screen.dart';
+import '../../../core/routes/app_routes.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -369,7 +371,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             side: BorderSide(color: context.colors.outline),
                           ),
-                          onPressed: () {},
+                          onPressed: () => Navigator.of(context).pushNamed(AppRoutes.editProfile),
                           child: Text(
                             'Edit Profile',
                             style: TextStyle(
@@ -444,24 +446,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                         return PostCard(
                           post: postItem,
-                          onTap: () {},
+                          onTap: () => Navigator.of(context)
+                              .pushNamed(AppRoutes.postDetail, arguments: postItem),
                           onLike: () {
-                            final docRef = FirebaseFirestore.instance
-                                .collection('posts')
-                                .doc(doc.id);
-                            if (postItem.isLiked) {
-                              docRef.update({
-                                'likeCount': FieldValue.increment(-1),
-                                'likedBy': FieldValue.arrayRemove([currentUid]),
-                              });
-                            } else {
-                              docRef.update({
-                                'likeCount': FieldValue.increment(1),
-                                'likedBy': FieldValue.arrayUnion([currentUid]),
-                              });
-                            }
+                            final dataMap = doc.data() as Map<String, dynamic>?;
+                            final List likedBy = dataMap?['likedBy'] ?? [];
+                            NotificationService.toggleLike(
+                              postId: doc.id,
+                              postAuthorId: postItem.authorId,
+                              postTitle: postItem.title,
+                              currentUid: currentUid,
+                              likedBy: likedBy,
+                            );
                           },
-                          onComment: () {},
+                          onComment: () => Navigator.of(context)
+                              .pushNamed(AppRoutes.postDetail, arguments: postItem),
                         );
                       },
                     );

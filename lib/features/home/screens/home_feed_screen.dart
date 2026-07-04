@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../widgets/post_card.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../messaging/screens/messages_list_screen.dart';
 import 'story_viewver_screen.dart';
+import '../../../core/services/notification_service.dart';
 
 class _RailStory {
   final String uid;
@@ -37,32 +39,26 @@ class HomeFeedScreen extends StatefulWidget {
   State<HomeFeedScreen> createState() => _HomeFeedScreenState();
 }
 
-class _HomeFeedScreenState extends State<HomeFeedScreen>
-    with SingleTickerProviderStateMixin {
-  static const double _panelWidth = 64.0;
-  static const double _tabWidth   = 10.0;
-
-  bool _drawerOpen = false;
-  AnimationController? _anim;
-
+class _HomeFeedScreenState extends State<HomeFeedScreen> {
   List<_RailStory> _railStories = [];
   List<StoryItem>  _storyItems  = [];
   bool _storiesLoading = true;
 
+  late final Stream<QuerySnapshot> _postsStream;
+
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   // ── Theme-aware color getters ────────────────────────────────────────────
-  // Pulled from context in build(); cached here per-build via _colors.
-  late _ThemeColors _c;
+  late AppColorsExtension _c;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
-    )..value = 0.0;
+    _postsStream = FirebaseFirestore.instance
+        .collection('posts')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
     _preloadMeSlot();
     _loadStories();
   }
@@ -85,14 +81,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
 
   @override
   void dispose() {
-    _anim?.dispose();
     super.dispose();
   }
-
-  // ── Drawer helpers ────────────────────────────────────────────────────────
-  void _openDrawer()  { setState(() => _drawerOpen = true); _anim?.forward(); }
-  void _closeDrawer() { _anim?.reverse().then((_) { if (mounted) setState(() => _drawerOpen = false); }); }
-  void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
 
   // ── Story loading — no orderBy, so no composite index needed ──────────────
   Future<void> _loadStories() async {
@@ -206,7 +196,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not load stories: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.appColors.error,
           ),
         );
       }
@@ -215,12 +205,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
 
   // ── Story tap ─────────────────────────────────────────────────────────────
   void _onStoryTap(_RailStory rail) {
-    _closeDrawer();
-
     if (!rail.hasActiveStory) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) Navigator.of(context).pushNamed(AppRoutes.createStory);
-      });
+      Navigator.of(context).pushNamed(AppRoutes.createStory);
       return;
     }
 
@@ -230,32 +216,40 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       return;
     }
 
-    if (!rail.isMe) setState(() => rail.viewed = true);
+    if (!rail.isMe) {
+      setState(() {
+        rail.viewed = true;
+      });
+      FirebaseFirestore.instance
+          .collection('stories')
+          .doc(rail.storyId)
+          .update({
+        'viewedBy': FieldValue.arrayUnion([_myUid])
+      });
+    }
 
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      Navigator.of(context).push(PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.transparent,
-        pageBuilder: (_, __, ___) => StoryViewerScreen(
-          args: StoryViewerArgs(stories: _storyItems, initialIndex: idx),
-        ),
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-      ));
-    });
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.transparent,
+      pageBuilder: (_, __, ___) => StoryViewerScreen(
+        args: StoryViewerArgs(stories: _storyItems, initialIndex: idx),
+      ),
+      transitionsBuilder: (_, anim, __, child) =>
+          FadeTransition(opacity: anim, child: child),
+    ));
   }
 
   // ── Like / save ───────────────────────────────────────────────────────────
-  Future<void> _handleLike(String postId, List likedBy) async {
+  Future<void> _handleLike(String postId, String authorId, String title, List likedBy) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final ref = FirebaseFirestore.instance.collection('posts').doc(postId);
-    if (likedBy.contains(uid)) {
-      await ref.update({'likeCount': FieldValue.increment(-1), 'likedBy': FieldValue.arrayRemove([uid])});
-    } else {
-      await ref.update({'likeCount': FieldValue.increment(1),  'likedBy': FieldValue.arrayUnion([uid])});
-    }
+    await NotificationService.toggleLike(
+      postId: postId,
+      postAuthorId: authorId,
+      postTitle: title,
+      currentUid: uid,
+      likedBy: likedBy,
+    );
   }
 
   Future<void> _handleSave(String postId, List savedBy) async {
@@ -272,118 +266,20 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    _c = _ThemeColors(context);
-    final unread = _railStories.where((s) => !s.viewed && !s.isMe).length;
+    _c = context.appColors;
 
     return Scaffold(
       backgroundColor: _c.bg,
       appBar: _buildAppBar(),
-      body: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.only(right: _tabWidth),
-              child: _buildFeed(),
-            ),
-          ),
-
-          if (_drawerOpen)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _closeDrawer,
-                child: AnimatedBuilder(
-                  animation: _anim ?? const AlwaysStoppedAnimation(0.0),
-                  builder: (_, __) => ColoredBox(
-                    color: Colors.black
-                        .withOpacity(0.18 * (_anim?.value ?? 0.0)),
-                  ),
-                ),
-              ),
-            ),
-
-          AnimatedBuilder(
-            animation: _anim ?? const AlwaysStoppedAnimation(0.0),
-            builder: (context, _) {
-              final slide = CurvedAnimation(
-                parent: _anim ?? const AlwaysStoppedAnimation(0.0),
-                curve: Curves.easeOutCubic,
-              ).value;
-
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned(
-                    top: 0, bottom: 0,
-                    right: -_panelWidth + (slide * _panelWidth),
-                    width: _panelWidth,
-                    child: _buildDrawerPanel(),
-                  ),
-                  Positioned(
-                    top: 0, bottom: 0,
-                    right: slide * _panelWidth,
-                    width: _tabWidth,
-                    child: GestureDetector(
-                      onTap: _toggleDrawer,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _c.primary,
-                          borderRadius: const BorderRadius.horizontal(
-                              left: Radius.circular(6)),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _tabLine(),
-                            const SizedBox(height: 4),
-                            if (unread > 0 && !_drawerOpen)
-                              Container(
-                                width: 8, height: 8,
-                                decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle),
-                                child: Center(
-                                  child: Text(
-                                    unread > 9 ? '9+' : '$unread',
-                                    style: TextStyle(
-                                        color: _c.primary,
-                                        fontSize: 5,
-                                        fontWeight: FontWeight.w800),
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 4),
-                            _tabLine(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+      body: _buildFeed(),
     );
   }
 
-  Widget _tabLine() => Container(
-        width: 3, height: 16,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(2),
-        ),
-      );
-
-  // ── Feed ──────────────────────────────────────────────────────────────────
+  // ── Feed & Story Tray ─────────────────────────────────────────────────────
   Widget _buildFeed() {
     final currentUid = _myUid;
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('posts')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _postsStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) return _buildError(snapshot.error.toString());
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -400,9 +296,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
           },
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-            itemCount: docs.length,
+            itemCount: docs.length + 1,
             itemBuilder: (context, index) {
-              final doc    = docs[index];
+              if (index == 0) {
+                return _buildStoryTray();
+              }
+              final doc    = docs[index - 1];
               final data   = doc.data() as Map<String, dynamic>? ?? {};
               final List likedBy = data['likedBy'] ?? [];
               final List savedBy = data['savedBy'] ?? [];
@@ -413,11 +312,22 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                   post: post,
                   onTap:     () => Navigator.of(context)
                       .pushNamed(AppRoutes.postDetail, arguments: post),
-                  onLike:    () => _handleLike(doc.id, likedBy),
+                  onLike:    () => _handleLike(doc.id, post.authorId, post.title, likedBy),
                   onSave:    () => _handleSave(doc.id, savedBy),
                   onComment: () => Navigator.of(context)
                       .pushNamed(AppRoutes.postDetail, arguments: post),
-                  onShare:   () {},
+                  onShare: () {
+                    Clipboard.setData(ClipboardData(
+                        text: 'Check out this post on INTERA by ${post.authorUsername}:\n\n${post.title}\n${post.body}'));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Post copied to clipboard!'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  },
                 ),
               );
             },
@@ -427,117 +337,68 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  // ── AppBar ────────────────────────────────────────────────────────────────
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: _c.bg,
-      elevation: 0,
-      titleSpacing: 20,
-      centerTitle: false,
-      title: Text(
-        AppStrings.homeFeed,
-        style: TextStyle(
-            color: _c.textHi,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5),
+  Widget _buildStoryTray() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      height: 106,
+      decoration: BoxDecoration(
+        color: _c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _c.border.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      actions: [
-        _appBarBtn(
-          icon: Icons.send_outlined,
-          onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const MessagesListScreen())),
+      child: _storiesLoading
+          ? ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: 5,
+              separatorBuilder: (_, __) => const SizedBox(width: 16),
+              itemBuilder: (_, __) => _buildShimmerAvatar(),
+            )
+          : ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: _railStories.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 16),
+              itemBuilder: (context, index) {
+                return _buildStoryAvatar(_railStories[index]);
+              },
+            ),
+    );
+  }
+
+  Widget _buildShimmerAvatar() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: _c.field,
+            shape: BoxShape.circle,
+          ),
         ),
-        const SizedBox(width: 8),
-        _appBarBtn(
-          icon: Icons.notifications_outlined,
-          onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+        const SizedBox(height: 6),
+        Container(
+          width: 40,
+          height: 8,
+          decoration: BoxDecoration(
+            color: _c.field,
+            borderRadius: BorderRadius.circular(4),
+          ),
         ),
-        const SizedBox(width: 16),
       ],
     );
   }
 
-  Widget _appBarBtn({required IconData icon, required VoidCallback onTap}) {
-    return Material(
-      color: _c.primaryTint,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        splashColor: _c.primary.withOpacity(0.15),
-        child: SizedBox(
-          width: 36, height: 36,
-          child: Icon(icon, color: _c.primary, size: 20),
-        ),
-      ),
-    );
-  }
-
-  // ── Story drawer panel ────────────────────────────────────────────────────
-  Widget _buildDrawerPanel() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _c.panelBg,
-        border: Border(left: BorderSide(color: _c.panelBorder, width: 1)),
-        borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-        boxShadow: [
-          BoxShadow(
-            color: _c.primary.withOpacity(0.12),
-            blurRadius: 16,
-            offset: const Offset(-4, 0),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            RotatedBox(
-              quarterTurns: 1,
-              child: Text(
-                'MOMENTS',
-                style: TextStyle(
-                    color: _c.textDim.withOpacity(0.6),
-                    fontSize: 7,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: _storiesLoading
-                  ? Center(
-                      child: SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(
-                            color: _c.primary, strokeWidth: 2),
-                      ),
-                    )
-                  : _railStories.isEmpty
-                      ? Center(
-                          child: Icon(Icons.auto_stories_outlined,
-                              color: _c.textDim.withOpacity(0.4), size: 20))
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 4, horizontal: 8),
-                          itemCount: _railStories.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (_, i) =>
-                              _buildAvatar(_railStories[i]),
-                        ),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Story avatar tile ─────────────────────────────────────────────────────
-  Widget _buildAvatar(_RailStory story) {
+  Widget _buildStoryAvatar(_RailStory story) {
     final hasUnread     = !story.viewed && !story.isMe;
     final isAddStory    = story.isMe && !story.hasActiveStory;
     final isViewMyStory = story.isMe && story.hasActiveStory;
@@ -552,36 +413,47 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
             children: [
               if (hasUnread || isViewMyStory)
                 Container(
-                  width: 46, height: 46,
+                  width: 58,
+                  height: 58,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: isViewMyStory ? AppColors.storyRingGradient : null,
-                    color: hasUnread && !isViewMyStory ? _c.primary : null,
+                    gradient: isViewMyStory ? _c.storyRingGradient : _c.primaryGradient,
                   ),
                 ),
               if (isAddStory)
                 Container(
-                  width: 46, height: 46,
+                  width: 58,
+                  height: 58,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: _c.primary,
+                      color: _c.primary.withOpacity(0.5),
                       width: 1.5,
-                      strokeAlign: BorderSide.strokeAlignOutside,
                     ),
                   ),
                 ),
               if (!hasUnread && !isAddStory && !isViewMyStory)
                 Container(
-                  width: 46, height: 46,
+                  width: 58,
+                  height: 58,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: _c.panelBorder, width: 1.5,
-                        strokeAlign: BorderSide.strokeAlignOutside),
+                    border: Border.all(
+                      color: _c.border,
+                      width: 1.5,
+                    ),
                   ),
                 ),
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _c.surface,
+                ),
+              ),
               CircleAvatar(
-                radius: 19,
+                radius: 24,
                 backgroundColor: _c.primaryTint,
                 backgroundImage:
                     (story.avatar != null && story.avatar!.isNotEmpty)
@@ -594,8 +466,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                             : '?',
                         style: TextStyle(
                             color: _c.primary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16),
                       )
                     : null,
               ),
@@ -603,60 +475,162 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                 Positioned(
                   bottom: 0, right: 0,
                   child: Container(
-                    width: 16, height: 16,
+                    width: 18, height: 18,
                     decoration: BoxDecoration(
                         color: _c.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _c.panelBg, width: 1.5)),
-                    child: const Icon(Icons.add, size: 10, color: Colors.white),
+                        border: Border.all(color: _c.surface, width: 1.5)),
+                    child: const Icon(Icons.add, size: 12, color: Colors.white),
                   ),
                 ),
               if (isViewMyStory)
                 Positioned(
                   bottom: 0, right: 0,
                   child: Container(
-                    width: 16, height: 16,
+                    width: 18, height: 18,
                     decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _c.panelBg, width: 1.5)),
+                        border: Border.all(color: _c.surface, width: 1.5),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 4,
+                          )
+                        ]),
                     child: Icon(Icons.play_arrow_rounded,
-                        size: 10, color: _c.primary),
-                  ),
-                ),
-              if (hasUnread)
-                Positioned(
-                  top: 1, right: 1,
-                  child: Container(
-                    width: 9, height: 9,
-                    decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: _c.panelBg, width: 1.5)),
+                        size: 12, color: _c.primary),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            isAddStory
-                ? 'Add'
-                : isViewMyStory
-                    ? 'My story'
-                    : story.name.split(' ').first,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: (hasUnread || isAddStory || isViewMyStory)
-                  ? _c.primary
-                  : _c.textDim,
-              fontSize: 8,
-              fontWeight: (hasUnread || isAddStory || isViewMyStory)
-                  ? FontWeight.w600
-                  : FontWeight.w400,
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 64,
+            child: Text(
+              isAddStory
+                  ? 'Your story'
+                  : isViewMyStory
+                      ? 'My story'
+                      : story.name.split(' ').first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: (hasUnread || isAddStory || isViewMyStory)
+                    ? _c.textPrimary
+                    : _c.textDim,
+                fontSize: 10,
+                fontWeight: (hasUnread || isAddStory || isViewMyStory)
+                    ? FontWeight.w600
+                    : FontWeight.w400,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── AppBar ────────────────────────────────────────────────────────────────
+  AppBar _buildAppBar() {
+    return AppBar(
+      backgroundColor: _c.bg,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 20,
+      centerTitle: false,
+      title: ShaderMask(
+        shaderCallback: (bounds) => LinearGradient(
+          colors: [_c.primary, _c.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(bounds),
+        child: Text(
+          AppStrings.homeFeed,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.8),
+        ),
+      ),
+      actions: [
+        StreamBuilder<int>(
+          stream: NotificationService.unreadCountStream(_myUid),
+          builder: (context, snap) {
+            final unreadCount = snap.data ?? 0;
+            return Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                _appBarBtn(
+                  icon: Icons.notifications_none_rounded,
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.redAccent,
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(width: 10),
+        _appBarBtn(
+          icon: Icons.chat_bubble_outline_rounded,
+          onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MessagesListScreen())),
+        ),
+        const SizedBox(width: 18),
+      ],
+    );
+  }
+
+  Widget _appBarBtn({required IconData icon, required VoidCallback onTap}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _c.surface,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(color: _c.border.withOpacity(0.6)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          splashColor: _c.primary.withOpacity(0.1),
+          highlightColor: Colors.transparent,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, color: _c.textPrimary, size: 20),
+          ),
+        ),
       ),
     );
   }
@@ -678,21 +652,3 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   }
 }
 
-// ── Theme color resolver ──────────────────────────────────────────────────────
-// Centralizes the light/dark lookups so the rest of the file just reads
-// `_c.primary`, `_c.bg`, etc. — backed entirely by AppColors / Theme.
-class _ThemeColors {
-  final BuildContext context;
-  _ThemeColors(this.context);
-
-  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
-
-  Color get primary     => _isDark ? AppColors.primaryLight : AppColors.primary;
-  Color get bg          => _isDark ? AppColors.darkBg : AppColors.lightBg;
-  Color get surface     => _isDark ? AppColors.darkSurface : AppColors.lightSurface;
-  Color get primaryTint => _isDark ? AppColors.darkField : AppColors.lightField;
-  Color get panelBg     => _isDark ? AppColors.darkField : AppColors.lightField;
-  Color get panelBorder => _isDark ? AppColors.darkBorder : AppColors.lightBorder;
-  Color get textHi      => _isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
-  Color get textDim     => _isDark ? AppColors.darkTextDim : AppColors.lightTextDim;
-}

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'notification_service.dart';
 
 class FollowService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -44,6 +45,27 @@ class FollowService {
 
     // Atomically commit both sub-collection updates and count changes together
     await batch.commit();
+
+    if (!isCurrentlyFollowing) {
+      // Trigger follow notification
+      try {
+        String senderName = 'Someone';
+        final userDoc = await _firestore.collection('users').doc(currentUserId).get();
+        if (userDoc.exists) {
+          senderName = userDoc.data()?['name'] ?? 'Someone';
+        }
+        await NotificationService.sendNotification(
+          recipientId: targetUserId,
+          type: 'follow',
+          title: '$senderName started following you',
+          subtitle: 'Check out their profile!',
+          relatedId: currentUserId,
+        );
+      } catch (e) {
+        // Fail silently so it doesn't interrupt the main follow operation
+        print('Error sending follow notification: $e');
+      }
+    }
   }
 
   /// Real-time stream tracker to check if the current user is following a target user

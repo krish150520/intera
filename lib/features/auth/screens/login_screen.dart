@@ -5,6 +5,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_textfield.dart';
+import '../../../core/theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -107,13 +108,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: c.bg,
       appBar: AppBar(
         title: const Text(AppStrings.login, style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: c.surface,
+        foregroundColor: c.textHi,
       ),
       body: SafeArea(
         child: Center(
@@ -125,11 +127,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Welcome back',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: Colors.black87)),
+                  Text('Welcome back',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: c.textHi)),
                   const SizedBox(height: 6),
                   Text('Log in to continue earning Karma.',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                      style: TextStyle(color: c.textMuted, fontSize: 14)),
                   const SizedBox(height: 36),
                   CustomTextField(
                     label: AppStrings.emailOrPhone,
@@ -162,8 +164,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: _handleForgotPassword,
-                      child: const Text(AppStrings.forgotPassword,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      child: Text(AppStrings.forgotPassword,
+                          style: TextStyle(color: c.primary, fontWeight: FontWeight.w600, fontSize: 13)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -171,29 +173,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Expanded(child: Divider(color: c.border)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('or', style: TextStyle(color: Colors.grey.shade500)),
+                        child: Text('or', style: TextStyle(color: c.textMuted)),
                       ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Expanded(child: Divider(color: c.border)),
                     ],
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
                     onPressed: _isLoading ? null : _handleGoogleSignIn,
-                    icon: const Icon(Icons.g_mobiledata, size: 28),
-                    label: const Text('Continue with Google'),
+                    icon: Icon(Icons.g_mobiledata, size: 28, color: c.textHi),
+                    label: Text('Continue with Google', style: TextStyle(color: c.textHi)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey.shade300),
+                      side: BorderSide(color: c.border),
                     ),
                   ),
                   const SizedBox(height: 20),
                   Center(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pushNamed(AppRoutes.signup),
-                      child: const Text(AppStrings.dontHaveAccount, style: TextStyle(color: Colors.black54)),
+                      child: Text(AppStrings.dontHaveAccount, style: TextStyle(color: c.textSecondary)),
                     ),
                   ),
                 ],

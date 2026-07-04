@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intera/features/home/widgets/post_card.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../home/screens/post_detail_screen.dart';
 import '../../videos/screens/community_detail_screen.dart';
+import '../../../core/services/notification_service.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -41,7 +42,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return Scaffold(
       backgroundColor: c.bg,
       appBar: AppBar(
@@ -66,7 +67,7 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildSearchBar(_ThemeColors c) {
+  Widget _buildSearchBar(AppColorsExtension c) {
     return SizedBox(
       height: 40,
       child: TextField(
@@ -100,7 +101,7 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildTabBar(_ThemeColors c) {
+  Widget _buildTabBar(AppColorsExtension c) {
     return TabBar(
       controller: _tabController,
       isScrollable: true,
@@ -164,7 +165,7 @@ class _UserResultsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     if (searchQuery.isEmpty) {
       return _EmptyPlaceholder(icon: Icons.people_outline_rounded, label: 'Type to search community members');
     }
@@ -262,7 +263,7 @@ class _PostResultsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     if (searchQuery.isEmpty) {
       return _EmptyPlaceholder(
         icon: searchVideos ? Icons.videocam_outlined : Icons.article_outlined,
@@ -310,12 +311,13 @@ class _PostResultsList extends StatelessWidget {
                 post: post,
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post))),
                 onLike: () {
-                  final ref = FirebaseFirestore.instance.collection('posts').doc(post.id);
-                  if (post.isLiked) {
-                    ref.update({'likeCount': FieldValue.increment(-1), 'likedBy': FieldValue.arrayRemove([currentUid])});
-                  } else {
-                    ref.update({'likeCount': FieldValue.increment(1),  'likedBy': FieldValue.arrayUnion([currentUid])});
-                  }
+                  NotificationService.toggleLike(
+                    postId: post.id,
+                    postAuthorId: post.authorId,
+                    postTitle: post.title,
+                    currentUid: currentUid,
+                    likedBy: post.isLiked ? [currentUid] : [],
+                  );
                 },
                 onComment: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post))),
               ),
@@ -335,7 +337,7 @@ class _CommunityResultsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     if (searchQuery.isEmpty) {
       return const _EmptyPlaceholder(icon: Icons.groups_outlined, label: 'Discover communities');
     }
@@ -422,7 +424,7 @@ class _EmptyPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
@@ -437,21 +439,4 @@ class _EmptyPlaceholder extends StatelessWidget {
     );
   }
 }
-
-// ── Theme resolver ────────────────────────────────────────────────────────────
-
-class _ThemeColors {
-  final BuildContext context;
-  _ThemeColors(this.context);
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get primary   => _dark ? AppColors.primaryLight   : AppColors.primary;
-  Color get bg        => _dark ? AppColors.darkBg         : AppColors.lightBg;
-  Color get surface   => _dark ? AppColors.darkSurface    : AppColors.lightSurface;
-  Color get field     => _dark ? AppColors.darkField      : AppColors.lightField;
-  Color get border    => _dark ? AppColors.darkBorder     : AppColors.lightBorder;
-  Color get chipBorder=> _dark ? AppColors.darkChipBorder : AppColors.lightChipBorder;
-  Color get textHi    => _dark ? AppColors.darkTextPrimary   : AppColors.lightTextPrimary;
-  Color get textMuted => _dark ? AppColors.darkTextMuted     : AppColors.lightTextMuted;
-  Color get textDim   => _dark ? AppColors.darkTextDim       : AppColors.lightTextDim;
-  }
     

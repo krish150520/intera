@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../../shared/widgets/custom_avatar.dart';
@@ -14,6 +14,7 @@ import '../../../core/karma/karma_service.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
 import 'setting_screen.dart';
+import '../../../core/services/notification_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -82,7 +83,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   void _showMyCommunitiesSheet(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     showModalBottomSheet(
       context: context,
       backgroundColor: c.surface,
@@ -151,7 +152,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   void _confirmAndPurgeCommunity(BuildContext context, String communityId, String name) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -187,7 +188,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     if (_currentUid.isEmpty) return const Scaffold(body: Center(child: Text('Please sign in to view your profile.')));
 
     return StreamBuilder<DocumentSnapshot>(
@@ -257,7 +258,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                                 stream: KarmaService.balanceStream(_currentUid),
                                 builder: (context, snap) {
                                   final k = snap.data ?? 0;
-                                  return _StatColumn(value: k >= 1000 ? '${(k/1000).toStringAsFixed(1)}k' : '$k', label: 'Karma', valueColor: AppColors.warningKarma, icon: Icons.bolt_rounded);
+                                  return _StatColumn(value: k >= 1000 ? '${(k/1000).toStringAsFixed(1)}k' : '$k', label: 'Karma', valueColor: c.warningKarma, icon: Icons.bolt_rounded);
                                 },
                               ),
                             ),
@@ -334,35 +335,35 @@ class _WeeklyBonusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        gradient: available ? AppColors.karmaGoldGradient : null,
+        gradient: available ? c.karmaGoldGradient : null,
         color: available ? null : c.field,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: available ? const Color(0xFFFFCA28) : c.border),
+        border: Border.all(color: available ? c.warningKarmaBorder : c.border),
       ),
       child: Row(children: [
         Container(
           width: 40, height: 40,
           decoration: BoxDecoration(
-            color: available ? AppColors.warningKarma.withOpacity(0.12) : c.primary.withOpacity(0.08),
+            color: available ? c.warningKarma.withValues(alpha: 0.12) : c.primary.withValues(alpha: 0.08),
             shape: BoxShape.circle,
           ),
           child: Icon(available ? Icons.card_giftcard_rounded : Icons.hourglass_bottom_rounded,
-              color: available ? AppColors.warningKarma : c.textMuted, size: 20),
+              color: available ? c.warningKarma : c.textMuted, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(available ? 'Weekly bonus ready!' : 'Next bonus in $timeLabel',
-                style: TextStyle(color: available ? AppColors.warningKarma : c.textHi, fontSize: 13, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: available ? c.warningKarma : c.textHi, fontSize: 13, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(available ? 'Claim your +100 ⚡ karma now' : 'Come back to claim +100 ⚡ karma',
-                style: TextStyle(color: available ? const Color(0xFFA06820) : c.textMuted, fontSize: 11)),
+                style: TextStyle(color: available ? c.warningKarma : c.textMuted, fontSize: 11)),
           ]),
         ),
         const SizedBox(width: 10),
@@ -373,7 +374,7 @@ class _WeeklyBonusBanner extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: claiming ? const Color(0xFFF5DCAA) : AppColors.warningKarma,
+                color: claiming ? c.warningKarmaBorder : c.warningKarma,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: claiming
@@ -397,7 +398,7 @@ class _StatColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Row(mainAxisSize: MainAxisSize.min, children: [
         if (icon != null) ...[Icon(icon, color: valueColor ?? c.textHi, size: 14), const SizedBox(width: 2)],
@@ -414,7 +415,7 @@ class _HobbyChip extends StatelessWidget {
   const _HobbyChip({required this.label});
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -433,7 +434,7 @@ class _OutlineButton extends StatelessWidget {
   const _OutlineButton({required this.label, required this.onTap});
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -458,7 +459,7 @@ class _ProfileContentList extends StatelessWidget {
   const _ProfileContentList({required this.authorId, required this.targetType});
 
   void _confirmAndPurgePost(BuildContext context, String docId, String? mediaUrl) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -477,7 +478,7 @@ class _ProfileContentList extends StatelessWidget {
                 await FirebaseFirestore.instance.collection('posts').doc(docId).delete();
                 if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post removed.'), behavior: SnackBarBehavior.floating));
               } catch (e) {
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error));
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: c.error));
               }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
@@ -489,7 +490,7 @@ class _ProfileContentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('posts').where('authorId', isEqualTo: authorId).snapshots(),
       builder: (context, snapshot) {
@@ -532,12 +533,15 @@ class _ProfileContentList extends StatelessWidget {
                   post: post,
                   onTap: () => Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post),
                   onLike: () {
-                    final ref = FirebaseFirestore.instance.collection('posts').doc(doc.id);
-                    if (post.isLiked) {
-                      ref.update({'likeCount': FieldValue.increment(-1), 'likedBy': FieldValue.arrayRemove([authorId])});
-                    } else {
-                      ref.update({'likeCount': FieldValue.increment(1), 'likedBy': FieldValue.arrayUnion([authorId])});
-                    }
+                    final dataMap = doc.data() as Map<String, dynamic>?;
+                    final List likedBy = dataMap?['likedBy'] ?? [];
+                    NotificationService.toggleLike(
+                      postId: doc.id,
+                      postAuthorId: post.authorId,
+                      postTitle: post.title,
+                      currentUid: authorId,
+                      likedBy: likedBy,
+                    );
                   },
                   onComment: () => Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post),
                 ),
@@ -560,7 +564,7 @@ class _ConnectionsListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _ThemeColors(context);
+    final c = context.appColors;
     final collectionRef = isFollowersMode
         ? FirebaseFirestore.instance.collection('users').doc(userId).collection('followers')
         : FirebaseFirestore.instance.collection('users').doc(userId).collection('following');
@@ -617,23 +621,4 @@ class _ConnectionsListScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-// ── Theme resolver ────────────────────────────────────────────────────────────
-
-class _ThemeColors {
-  final BuildContext context;
-  _ThemeColors(this.context);
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get primary      => _dark ? AppColors.primaryLight        : AppColors.primary;
-  Color get bg           => _dark ? AppColors.darkBg              : AppColors.lightBg;
-  Color get surface      => _dark ? AppColors.darkSurface         : AppColors.lightSurface;
-  Color get field        => _dark ? AppColors.darkField           : AppColors.lightField;
-  Color get border       => _dark ? AppColors.darkBorder          : AppColors.lightBorder;
-  Color get chipBorder   => _dark ? AppColors.darkChipBorder      : AppColors.lightChipBorder;
-  Color get divider      => _dark ? AppColors.darkDivider         : AppColors.lightDivider;
-  Color get textHi       => _dark ? AppColors.darkTextPrimary     : AppColors.lightTextPrimary;
-  Color get textSecondary=> _dark ? AppColors.darkTextSecondary   : AppColors.lightTextSecondary;
-  Color get textMuted    => _dark ? AppColors.darkTextMuted       : AppColors.lightTextMuted;
-  Color get textDim      => _dark ? AppColors.darkTextDim         : AppColors.lightTextDim;
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_theme.dart';
 import '../models/message_model.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -6,13 +7,6 @@ class MessageBubble extends StatelessWidget {
   final bool isMe;
 
   const MessageBubble({super.key, required this.message, required this.isMe});
-
-  static const Color _primary    = Color(0xFF7C3AED);
-  static const Color _bubbleMine = Color(0xFF7C3AED);
-  static const Color _bubbleTheir = Color(0xFFEDE9FF);
-  static const Color _textMine   = Colors.white;
-  static const Color _textTheir  = Color(0xFF2D1B69);
-  static const Color _timeDim    = Color(0xFFA89FCC);
 
   String _formatTime(DateTime dt) {
     final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
@@ -52,10 +46,10 @@ class MessageBubble extends StatelessWidget {
                     return Container(
                       width: 200,
                       height: 200,
-                      color: _bubbleTheir,
-                      child: const Center(
+                      color: context.appColors.field,
+                      child: Center(
                         child: CircularProgressIndicator(
-                          color: _primary,
+                          color: context.colors.primary,
                           strokeWidth: 2,
                         ),
                       ),
@@ -64,9 +58,9 @@ class MessageBubble extends StatelessWidget {
                   errorBuilder: (context, error, stack) => Container(
                     width: 200,
                     height: 200,
-                    color: _bubbleTheir,
-                    child: const Icon(Icons.broken_image_outlined,
-                        color: _timeDim),
+                    color: context.appColors.field,
+                    child: Icon(Icons.broken_image_outlined,
+                        color: context.appColors.textDim),
                   ),
                 ),
               )
@@ -75,13 +69,13 @@ class MessageBubble extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isMe ? _bubbleMine : _bubbleTheir,
+                  color: isMe ? context.appColors.primary : context.appColors.field,
                   borderRadius: radius,
                 ),
                 child: Text(
                   message.text ?? '',
                   style: TextStyle(
-                    color: isMe ? _textMine : _textTheir,
+                    color: isMe ? Colors.white : context.appColors.textPrimary,
                     fontSize: 15,
                     height: 1.3,
                   ),
@@ -92,7 +86,7 @@ class MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 _formatTime(message.createdAt),
-                style: const TextStyle(fontSize: 10, color: _timeDim),
+                style: TextStyle(fontSize: 10, color: context.appColors.textDim),
               ),
             ),
           ],
