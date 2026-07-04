@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../shared/models/post_model.dart';
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 
 class PostCard extends StatelessWidget {
   final Post post;
@@ -19,15 +21,13 @@ class PostCard extends StatelessWidget {
     this.onShare,
   });
 
-  bool get _hasMedia =>
-      post.imageUrl != null && post.imageUrl!.isNotEmpty;
+  bool get _hasMedia => post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
   bool get _isMediaType =>
       post.type == PostType.image || post.type == PostType.video;
 
   @override
   Widget build(BuildContext context) {
-    // Image / video posts → full-bleed card (existing style, kept as-is)
     if (_hasMedia || _isMediaType) {
       return _MediaPostCard(
         post: post,
@@ -38,7 +38,6 @@ class PostCard extends StatelessWidget {
       );
     }
 
-    // All other post types → Option C tinted card
     return _TextPostCard(
       post: post,
       onTap: onTap,
@@ -48,8 +47,6 @@ class PostCard extends StatelessWidget {
     );
   }
 }
-
-// ── Option C: tinted background card (text / question / help / achievement) ──
 
 class _TextPostCard extends StatelessWidget {
   final Post post;
@@ -66,185 +63,133 @@ class _TextPostCard extends StatelessWidget {
     this.onComment,
   });
 
-  // Per-type colour config
-  _TypeStyle get _style => switch (post.type) {
-        PostType.question    => const _TypeStyle(
-            bg:         Color(0xFFF0FFF4),
-            border:     Color(0xFFC8E6C9),
-            pillBg:     Color(0xFF388E3C),
-            pillText:   Colors.white,
-            label:      'Question',
-            emoji:      '❓',
-          ),
-        PostType.helpRequest => const _TypeStyle(
-            bg:         Color(0xFFFFFBF0),
-            border:     Color(0xFFF5DCAA),
-            pillBg:     Color(0xFFC9830A),
-            pillText:   Colors.white,
-            label:      'Help',
-            emoji:      '🤝',
-          ),
-        PostType.achievement => const _TypeStyle(
-            bg:         Color(0xFFFFF8F0),
-            border:     Color(0xFFFFCC80),
-            pillBg:     Color(0xFFE65100),
-            pillText:   Colors.white,
-            label:      'Achievement',
-            emoji:      '🏆',
-          ),
-        _ => const _TypeStyle(
-            // text, question fallback
-            bg:         Color(0xFFF5F4FF),
-            border:     Color(0xFFE4E2F8),
-            pillBg:     Color(0xFF6C63D5),
-            pillText:   Colors.white,
-            label:      'Text',
-            emoji:      '💬',
-          ),
-      };
-
-  String _pillLabel() {
-    if (post.type == PostType.helpRequest &&
-        (post.rewardKarma ?? 0) > 0) {
+  String _pillLabel(BuildContext context) {
+    final style = _ThemeResolver.typeStyle(context, post.type);
+    if (post.type == PostType.helpRequest && (post.rewardKarma ?? 0) > 0) {
       return 'Help · ${post.rewardKarma} ⚡';
     }
-    return _style.label;
+    return style.label;
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = _style;
+    final style = _ThemeResolver.typeStyle(context, post.type);
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 160),
         decoration: BoxDecoration(
-          color: s.bg,
+          color: style.bg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: s.border),
+          border: Border.all(color: style.border),
         ),
         padding: const EdgeInsets.all(16),
         child: Stack(
           children: [
-            // Large faded emoji watermark (top-right)
             Positioned(
               top: -4,
               right: -2,
-              child: Text(
-                s.emoji,
-                style: const TextStyle(fontSize: 52),
-              ),
+              child: Text(style.emoji, style: const TextStyle(fontSize: 52)),
             ),
-
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Type pill ───────────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 9, vertical: 3),
+                    horizontal: 9,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: s.pillBg,
+                    color: style.pillBg,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    _pillLabel(),
+                    _pillLabel(context),
                     style: TextStyle(
-                      color: s.pillText,
+                      color: style.pillText,
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-                // ── Title ────────────────────────────────────────────────
                 if (post.title.isNotEmpty)
                   Text(
                     post.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF2D2A6E),
+                      color: _ThemeResolver.textHi(context),
                       height: 1.25,
                       letterSpacing: -0.2,
                     ),
                   ),
-
-                // ── Body ─────────────────────────────────────────────────
                 if (post.body.isNotEmpty) ...[
                   const SizedBox(height: 5),
                   Text(
                     post.body,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 12,
-                      color: Color(0xFF555555),
+                      color: _ThemeResolver.textBody(context),
                       height: 1.45,
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 14),
-
-                // ── Footer ────────────────────────────────────────────────
-                Row(children: [
-                  // Avatar
-                  _MiniAvatar(
-                    name: post.authorName,
-                    imageUrl: post.authorAvatarUrl,
-                  ),
-                  const SizedBox(width: 7),
-
-                  // Author + time
-                  Expanded(
-                    child: Text(
-                      '${post.authorUsername} · ${_formatTime(post.createdAt)}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF9E9BD0),
+                Row(
+                  children: [
+                    _MiniAvatar(
+                      name: post.authorName,
+                      imageUrl: post.authorAvatarUrl,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        '${post.authorUsername} · ${_formatTime(post.createdAt)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: _ThemeResolver.textDim(context),
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-
-                  // Stats
-                  _FooterStat(
-                    icon: post.isLiked
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    iconColor: post.isLiked
-                        ? const Color(0xFFFF6B8A)
-                        : const Color(0xFFB0ADDE),
-                    label: _compact(post.likeCount),
-                    onTap: onLike,
-                  ),
-                  const SizedBox(width: 10),
-                  _FooterStat(
-                    icon: Icons.chat_bubble_outline_rounded,
-                    iconColor: const Color(0xFFB0ADDE),
-                    label: _compact(post.commentCount),
-                    onTap: onComment,
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: onSave,
-                    child: Icon(
-                      post.isSaved
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                      size: 18,
-                      color: post.isSaved
-                          ? const Color(0xFF6C63D5)
-                          : const Color(0xFFB0ADDE),
+                    _FooterStat(
+                      icon: post.isLiked
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      iconColor: post.isLiked
+                          ? _ThemeResolver.like(context)
+                          : _ThemeResolver.iconMuted(context),
+                      label: _compact(post.likeCount),
+                      onTap: onLike,
                     ),
-                  ),
-                ]),
+                    const SizedBox(width: 10),
+                    _FooterStat(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      iconColor: _ThemeResolver.iconMuted(context),
+                      label: _compact(post.commentCount),
+                      onTap: onComment,
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: onSave,
+                      child: Icon(
+                        post.isSaved
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_border_rounded,
+                        size: 18,
+                        color: post.isSaved
+                            ? context.colors.primary
+                            : _ThemeResolver.iconMuted(context),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ],
@@ -253,8 +198,6 @@ class _TextPostCard extends StatelessWidget {
     );
   }
 }
-
-// ── Full-bleed media card (image / video posts) ───────────────────────────────
 
 class _MediaPostCard extends StatelessWidget {
   final Post post;
@@ -273,8 +216,7 @@ class _MediaPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage =
-        post.imageUrl != null && post.imageUrl!.isNotEmpty;
+    final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
     return GestureDetector(
       onTap: onTap,
@@ -285,17 +227,13 @@ class _MediaPostCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background image / fallback
               hasImage
                   ? Image.network(
                       post.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const _FallbackBg(),
+                      errorBuilder: (_, __, ___) => const _FallbackBg(),
                     )
                   : const _FallbackBg(),
-
-              // Gradient overlay
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -303,15 +241,13 @@ class _MediaPostCard extends StatelessWidget {
                     end: Alignment.bottomCenter,
                     stops: [0.0, 0.30, 1.0],
                     colors: [
-                      Color(0x00000000),
+                      Colors.transparent,
                       Color(0x44000000),
                       Color(0xE0000000),
                     ],
                   ),
                 ),
               ),
-
-              // Content
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -363,8 +299,6 @@ class _MediaPostCard extends StatelessWidget {
   }
 }
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
 String _formatTime(DateTime dt) {
   final diff = DateTime.now().difference(dt);
   if (diff.inMinutes < 1) return 'just now';
@@ -377,8 +311,6 @@ String _compact(int n) {
   if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
   return '$n';
 }
-
-// ── Sub-widgets ───────────────────────────────────────────────────────────────
 
 class _TypeStyle {
   final Color bg;
@@ -409,15 +341,16 @@ class _MiniAvatar extends StatelessWidget {
     final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
     return CircleAvatar(
       radius: 11,
-      backgroundColor: const Color(0xFF6C63D5),
+      backgroundColor: context.colors.primary,
       backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
       child: !hasImage
           ? Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700),
+                color: Colors.white,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+              ),
             )
           : null,
     );
@@ -441,22 +374,28 @@ class _FooterStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 15, color: iconColor),
-        const SizedBox(width: 3),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF9E9BD0))),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: iconColor),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _ThemeResolver.textDim(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Media card author row
 class _AuthorRow extends StatelessWidget {
   final Post post;
+
   const _AuthorRow({required this.post});
 
   @override
@@ -464,48 +403,56 @@ class _AuthorRow extends StatelessWidget {
     final hasAvatar =
         post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty;
 
-    return Row(children: [
-      CircleAvatar(
-        radius: 16,
-        backgroundColor: const Color(0xFF6C63D5),
-        backgroundImage:
-            hasAvatar ? NetworkImage(post.authorAvatarUrl!) : null,
-        child: !hasAvatar
-            ? Text(
-                post.authorName.isNotEmpty
-                    ? post.authorName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: context.colors.primary,
+          backgroundImage: hasAvatar
+              ? NetworkImage(post.authorAvatarUrl!)
+              : null,
+          child: !hasAvatar
+              ? Text(
+                  post.authorName.isNotEmpty
+                      ? post.authorName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
-                    fontWeight: FontWeight.w700),
-              )
-            : null,
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(post.authorName,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
-            Text(
-              _formatTime(post.createdAt),
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.6), fontSize: 10),
-            ),
-          ],
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              : null,
         ),
-      ),
-    ]);
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                post.authorName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                _formatTime(post.createdAt),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
-// Media card stats row
 class _MediaStatsRow extends StatelessWidget {
   final Post post;
   final VoidCallback? onLike;
@@ -521,36 +468,36 @@ class _MediaStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      _MediaStatBtn(
-        icon: post.isLiked
-            ? Icons.favorite_rounded
-            : Icons.favorite_border_rounded,
-        iconColor:
-            post.isLiked ? const Color(0xFFFF6B8A) : Colors.white,
-        label: _compact(post.likeCount),
-        onTap: onLike,
-      ),
-      const SizedBox(width: 16),
-      _MediaStatBtn(
-        icon: Icons.chat_bubble_outline_rounded,
-        iconColor: Colors.white,
-        label: _compact(post.commentCount),
-        onTap: onComment,
-      ),
-      const Spacer(),
-      GestureDetector(
-        onTap: onSave,
-        child: Icon(
-          post.isSaved
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
-          color:
-              post.isSaved ? const Color(0xFF6C63D5) : Colors.white,
-          size: 22,
+    return Row(
+      children: [
+        _MediaStatBtn(
+          icon: post.isLiked
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
+          iconColor: post.isLiked ? _ThemeResolver.like(context) : Colors.white,
+          label: _compact(post.likeCount),
+          onTap: onLike,
         ),
-      ),
-    ]);
+        const SizedBox(width: 16),
+        _MediaStatBtn(
+          icon: Icons.chat_bubble_outline_rounded,
+          iconColor: Colors.white,
+          label: _compact(post.commentCount),
+          onTap: onComment,
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: onSave,
+          child: Icon(
+            post.isSaved
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_border_rounded,
+            color: post.isSaved ? context.colors.primary : Colors.white,
+            size: 22,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -571,33 +518,100 @@ class _MediaStatBtn extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Row(children: [
-        Icon(icon, color: iconColor, size: 20),
-        const SizedBox(width: 4),
-        Text(label,
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 4),
+          Text(
+            label,
             style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600)),
-      ]),
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Fallback gradient background for media cards
 class _FallbackBg extends StatelessWidget {
   const _FallbackBg();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2D1B69), Color(0xFF6C63D5)],
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
     );
+  }
+}
+
+class _ThemeResolver {
+  const _ThemeResolver._();
+
+  static Color textHi(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextPrimary
+      : AppColors.lightTextPrimary;
+
+  static Color textBody(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextSecondary
+      : AppColors.lightTextSecondary;
+
+  static Color textDim(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
+
+  static Color iconMuted(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkTextMuted : AppColors.lightTextDim;
+
+  static Color like(BuildContext context) => AppColors.error;
+
+  static _TypeStyle typeStyle(BuildContext context, PostType type) {
+    return switch (type) {
+      PostType.question => _TypeStyle(
+        bg: context.isDarkMode
+            ? AppColors.success.withOpacity(0.16)
+            : AppColors.successBg,
+        border: context.isDarkMode
+            ? AppColors.success.withOpacity(0.34)
+            : AppColors.successBorder,
+        pillBg: AppColors.success,
+        pillText: Colors.white,
+        label: 'Question',
+        emoji: '?',
+      ),
+      PostType.helpRequest => _TypeStyle(
+        bg: context.isDarkMode
+            ? AppColors.warningKarma.withOpacity(0.14)
+            : AppColors.warningKarmaBg,
+        border: context.isDarkMode
+            ? AppColors.warningKarma.withOpacity(0.34)
+            : AppColors.warningKarmaBorder,
+        pillBg: AppColors.warningKarma,
+        pillText: Colors.white,
+        label: 'Help',
+        emoji: '🤝',
+      ),
+      PostType.achievement => _TypeStyle(
+        bg: context.isDarkMode
+            ? AppColors.accent.withOpacity(0.15)
+            : AppColors.primaryLight.withOpacity(0.12),
+        border: context.isDarkMode
+            ? AppColors.accent.withOpacity(0.34)
+            : AppColors.primaryLight.withOpacity(0.32),
+        pillBg: AppColors.accent,
+        pillText: Colors.white,
+        label: 'Achievement',
+        emoji: '🏆',
+      ),
+      _ => _TypeStyle(
+        bg: context.colors.surfaceContainerHighest,
+        border: context.colors.outline,
+        pillBg: context.colors.primary,
+        pillText: Colors.white,
+        label: 'Text',
+        emoji: '💬',
+      ),
+    };
   }
 }

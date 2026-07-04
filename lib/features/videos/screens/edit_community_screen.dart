@@ -22,20 +22,20 @@ class EditCommunityScreen extends StatefulWidget {
 }
 
 class _EditCommunityScreenState extends State<EditCommunityScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _descController;
-  late TextEditingController _rulesController;
-
+  late final TextEditingController _nameController;
+  late final TextEditingController _descController;
+  late final TextEditingController _rulesController;
   final ImagePicker _picker = ImagePicker();
+
   File? _avatarFile;
   File? _bannerFile;
-  bool _isUpdating = false;
+  bool  _isUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.currentData['name']);
-    _descController = TextEditingController(text: widget.currentData['description']);
+    _nameController  = TextEditingController(text: widget.currentData['name']);
+    _descController  = TextEditingController(text: widget.currentData['description']);
     _rulesController = TextEditingController(text: widget.currentData['rules'] ?? '');
   }
 
@@ -48,148 +48,203 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
   }
 
   Future<void> _pickImage(bool isBanner) async {
-    final XFile? picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    final XFile? picked =
+        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
     if (picked == null) return;
     setState(() {
       if (isBanner) _bannerFile = File(picked.path);
-      else _avatarFile = File(picked.path);
+      else          _avatarFile = File(picked.path);
     });
   }
 
   Future<String?> _uploadStorageAsset(File file, String childFolder) async {
     try {
-      final ref = FirebaseStorage.instance.ref().child('communities/${widget.communityId}/$childFolder.jpg');
-      final uploadTask = await ref.putFile(file);
-      return await uploadTask.ref.getDownloadURL();
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('communities/${widget.communityId}/$childFolder.jpg');
+      final task = await ref.putFile(
+          file, SettableMetadata(contentType: 'image/jpeg'));
+      return await task.ref.getDownloadURL();
     } catch (e) {
       return null;
     }
   }
 
   void _handleUpdate() async {
-    final nameText = _nameController.text.trim();
-    final descText = _descController.text.trim();
+    final nameText  = _nameController.text.trim();
+    final descText  = _descController.text.trim();
     final rulesText = _rulesController.text.trim();
 
     if (nameText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name cannot be empty!')));
+      _snack('Name cannot be empty.');
       return;
     }
 
     setState(() => _isUpdating = true);
-
     try {
-      String? avatarUrl = widget.currentData['avatarUrl'];
-      String? bannerUrl = widget.currentData['bannerUrl'];
+      final avatarUrl = _avatarFile != null
+          ? await _uploadStorageAsset(_avatarFile!, 'avatar')
+          : widget.currentData['avatarUrl'];
+      final bannerUrl = _bannerFile != null
+          ? await _uploadStorageAsset(_bannerFile!, 'banner')
+          : widget.currentData['bannerUrl'];
 
-      if (_avatarFile != null) {
-        avatarUrl = await _uploadStorageAsset(_avatarFile!, 'avatar');
-      }
-      if (_bannerFile != null) {
-        bannerUrl = await _uploadStorageAsset(_bannerFile!, 'banner');
-      }
-
-      final Map<String, dynamic> updatePayload = {
-        'name': nameText,
+      await FirebaseFirestore.instance
+          .collection('communities')
+          .doc(widget.communityId)
+          .update({
+        'name':        nameText,
         'description': descText,
-        'rules': rulesText,
-        'avatarUrl': avatarUrl ?? '',
-        'bannerUrl': bannerUrl ?? '',
-      };
-
-      await FirebaseFirestore.instance.collection('communities').doc(widget.communityId).update(updatePayload);
+        'rules':       rulesText,
+        'avatarUrl':   avatarUrl ?? '',
+        'bannerUrl':   bannerUrl ?? '',
+      });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🎉 Community Hub updated successfully!'), backgroundColor: Colors.green),
-      );
+      _snack('Community updated!', color: AppColors.success);
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $e'), backgroundColor: Colors.red));
+      _snack('Update failed: $e', color: AppColors.error);
     } finally {
       if (mounted) setState(() => _isUpdating = false);
     }
   }
 
+  void _snack(String msg, {Color? color}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final c = _ThemeColors(context);
     final networkBanner = widget.currentData['bannerUrl'] as String?;
     final networkAvatar = widget.currentData['avatarUrl'] as String?;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: c.bg,
       appBar: AppBar(
-        title: const Text('Edit Community Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: c.surface,
         elevation: 0,
+        foregroundColor: c.textHi,
+        title: Text('Edit community',
+            style: TextStyle(fontWeight: FontWeight.w700,
+                fontSize: 17, color: c.textHi)),
       ),
       body: _isUpdating
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: c.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Banner Preview
+                  // ── Banner picker ──────────────────────────────────────
                   GestureDetector(
                     onTap: () => _pickImage(true),
                     child: Container(
                       height: 120,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
+                        color: c.field,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: c.border),
                         image: _bannerFile != null
-                            ? DecorationImage(image: FileImage(_bannerFile!), fit: BoxFit.cover)
+                            ? DecorationImage(
+                                image: FileImage(_bannerFile!),
+                                fit: BoxFit.cover)
                             : (networkBanner != null && networkBanner.isNotEmpty)
-                                ? DecorationImage(image: NetworkImage(networkBanner), fit: BoxFit.cover)
+                                ? DecorationImage(
+                                    image: NetworkImage(networkBanner),
+                                    fit: BoxFit.cover)
                                 : null,
                       ),
-                      child: (_bannerFile == null && (networkBanner == null || networkBanner.isEmpty))
-                          ? const Center(child: Text('Tap to change Banner', style: TextStyle(color: Colors.grey)))
+                      child: (_bannerFile == null &&
+                              (networkBanner == null || networkBanner.isEmpty))
+                          ? Center(
+                              child: Text('Tap to change banner',
+                                  style: TextStyle(
+                                      color: c.textMuted, fontSize: 13)))
                           : null,
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Avatar Preview
+                  // ── Avatar picker ──────────────────────────────────────
                   Center(
                     child: GestureDetector(
                       onTap: () => _pickImage(false),
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: AppColors.primary.withOpacity(0.08),
-                            backgroundImage: _avatarFile != null 
-                                ? FileImage(_avatarFile!) 
-                                : (networkAvatar != null && networkAvatar.isNotEmpty)
-                                    ? NetworkImage(networkAvatar) as ImageProvider
-                                    : null,
-                            child: (_avatarFile == null && (networkAvatar == null || networkAvatar.isEmpty))
-                                ? Icon(Icons.groups_rounded, size: 32, color: AppColors.primary)
-                                : null,
-                          ),
-                          const CircleAvatar(radius: 12, backgroundColor: AppColors.primary, child: Icon(Icons.edit, size: 12, color: Colors.white)),
-                        ],
-                      ),
+                      child: Stack(alignment: Alignment.bottomRight, children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundColor: c.primary.withOpacity(0.08),
+                          backgroundImage: _avatarFile != null
+                              ? FileImage(_avatarFile!) as ImageProvider
+                              : (networkAvatar != null && networkAvatar.isNotEmpty)
+                                  ? NetworkImage(networkAvatar)
+                                  : null,
+                          child: (_avatarFile == null &&
+                                  (networkAvatar == null || networkAvatar.isEmpty))
+                              ? Icon(Icons.groups_rounded,
+                                  size: 32, color: c.primary)
+                              : null,
+                        ),
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundColor: c.primary,
+                          child: const Icon(Icons.edit,
+                              size: 12, color: Colors.white),
+                        ),
+                      ]),
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  CustomTextField(label: 'Community Name', controller: _nameController, prefixIcon: Icons.badge_outlined),
+                  // ── Fields ─────────────────────────────────────────────
+                  CustomTextField(
+                    label: 'Community name',
+                    controller: _nameController,
+                    prefixIcon: Icons.badge_outlined,
+                  ),
                   const SizedBox(height: 16),
-                  CustomTextField(label: 'Bio / Topic Description', controller: _descController, maxLines: 3),
+                  CustomTextField(
+                    label: 'Description',
+                    controller: _descController,
+                    maxLines: 3,
+                  ),
                   const SizedBox(height: 16),
-                  CustomTextField(label: 'Community Guidelines & Rules', controller: _rulesController, maxLines: 2, prefixIcon: Icons.gavel_outlined),
+                  CustomTextField(
+                    label: 'Community rules',
+                    controller: _rulesController,
+                    maxLines: 2,
+                    prefixIcon: Icons.gavel_outlined,
+                  ),
                   const SizedBox(height: 32),
-                  CustomButton(label: 'Save Configuration Changes', onPressed: _handleUpdate),
+                  CustomButton(
+                    label: 'Save changes',
+                    onPressed: _handleUpdate,
+                  ),
                 ],
               ),
             ),
     );
   }
+}
+
+// ── Theme resolver ────────────────────────────────────────────────────────────
+
+class _ThemeColors {
+  final BuildContext context;
+  _ThemeColors(this.context);
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
+  Color get primary  => _dark ? AppColors.primaryLight  : AppColors.primary;
+  Color get bg       => _dark ? AppColors.darkBg        : AppColors.lightBg;
+  Color get surface  => _dark ? AppColors.darkSurface   : AppColors.lightSurface;
+  Color get field    => _dark ? AppColors.darkField     : AppColors.lightField;
+  Color get border   => _dark ? AppColors.darkBorder    : AppColors.lightBorder;
+  Color get textHi   => _dark ? AppColors.darkTextPrimary   : AppColors.lightTextPrimary;
+  Color get textMuted=> _dark ? AppColors.darkTextMuted     : AppColors.lightTextMuted;
 }

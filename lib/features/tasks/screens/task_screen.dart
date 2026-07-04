@@ -4,10 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../home/screens/post_detail_screen.dart';
-import '../../../core/karma/karma_service.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
-
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 
 class HelpRequestScreen extends StatefulWidget {
   const HelpRequestScreen({super.key});
@@ -18,16 +18,6 @@ class HelpRequestScreen extends StatefulWidget {
 
 class _HelpRequestScreenState extends State<HelpRequestScreen>
     with SingleTickerProviderStateMixin {
-  // ── Palette ────────────────────────────────────────────────────────────────
-  static const Color _bg       = Color(0xFFEEF0FB);
-  static const Color _primary  = Color(0xFF6C63D5);
-  static const Color _surface  = Color(0xFFFFFFFF);
-  static const Color _textHi   = Color(0xFF2D1B69);
-  static const Color _textDim  = Color(0xFF9E9BD0);
-  static const Color _amber    = Color(0xFFC9830A);
-  static const Color _amberBg  = Color(0xFFFFF8EC);
-  static const Color _green    = Color(0xFF388E3C);
-
   late final TabController _tab;
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -46,18 +36,17 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
     super.dispose();
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [_buildSliverHeader()],
+        headerSliverBuilder: (_, __) => [_buildSliverHeader(context)],
         body: TabBarView(
           controller: _tab,
           children: [
             _RequestsTab(
-              myUid:      _myUid,
+              myUid: _myUid,
               filterOpen: _filterOpen,
               onFilterChanged: (v) => setState(() => _filterOpen = v),
             ),
@@ -68,25 +57,21 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
     );
   }
 
-  // ── Sliver header ──────────────────────────────────────────────────────────
-  Widget _buildSliverHeader() {
+  Widget _buildSliverHeader(BuildContext context) {
+    final colors = context.colors;
+    final tabBarTheme = Theme.of(context).tabBarTheme;
+
     return SliverAppBar(
       pinned: true,
       floating: false,
       expandedHeight: 130,
-      backgroundColor: _surface,
+      backgroundColor: colors.surface,
       elevation: 0,
       leading: const SizedBox.shrink(),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.pin,
         background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF6C63D5), Color(0xFF9B8FEA)],
-            ),
-          ),
+          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -117,11 +102,13 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
                       ],
                     ),
                   ),
-                  // My karma badge — taps into ledger
                   if (_myUid.isNotEmpty)
                     GestureDetector(
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => const KarmaLedgerScreen())),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const KarmaLedgerScreen(),
+                        ),
+                      ),
                       child: KarmaBadge(
                         uid: _myUid,
                         size: KarmaBadgeSize.medium,
@@ -134,20 +121,23 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
           ),
         ),
       ),
-      // Tab bar pinned at bottom of app bar
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(46),
         child: Container(
-          color: _surface,
+          color: colors.surface,
           child: TabBar(
             controller: _tab,
-            labelColor: _primary,
-            unselectedLabelColor: _textDim,
-            labelStyle: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700),
+            labelColor: tabBarTheme.labelColor ?? colors.primary,
+            unselectedLabelColor:
+                tabBarTheme.unselectedLabelColor ??
+                _ThemeResolver.textDim(context),
+            labelStyle:
+                tabBarTheme.labelStyle ??
+                const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             unselectedLabelStyle:
+                tabBarTheme.unselectedLabelStyle ??
                 const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
-            indicatorColor: _primary,
+            indicatorColor: tabBarTheme.indicatorColor ?? colors.primary,
             indicatorWeight: 2.5,
             tabs: const [
               Tab(text: 'Requests'),
@@ -160,8 +150,6 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
   }
 }
 
-// ─── Tab 1: Requests ──────────────────────────────────────────────────────────
-
 class _RequestsTab extends StatelessWidget {
   final String myUid;
   final bool? filterOpen;
@@ -172,10 +160,6 @@ class _RequestsTab extends StatelessWidget {
     required this.filterOpen,
     required this.onFilterChanged,
   });
-
-  static const Color _primary = Color(0xFF6C63D5);
-  static const Color _textDim = Color(0xFF9E9BD0);
-  static const Color _textHi  = Color(0xFF2D1B69);
 
   @override
   Widget build(BuildContext context) {
@@ -190,9 +174,8 @@ class _RequestsTab extends StatelessWidget {
 
     return Column(
       children: [
-        // ── Filter chips ─────────────────────────────────────────────────
         Container(
-          color: Colors.white,
+          color: context.colors.surface,
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: Row(
             children: [
@@ -216,16 +199,17 @@ class _RequestsTab extends StatelessWidget {
             ],
           ),
         ),
-
-        // ── List ─────────────────────────────────────────────────────────
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: query.snapshots(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator(
-                        color: _primary, strokeWidth: 2));
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: context.colors.primary,
+                    strokeWidth: 2,
+                  ),
+                );
               }
               if (snap.hasError) {
                 return _EmptyState(
@@ -260,12 +244,13 @@ class _RequestsTab extends StatelessWidget {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _HelpCard(
-                      post:        post,
+                      post: post,
                       isCompleted: isCompleted,
-                      reward:      reward,
+                      reward: reward,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                            builder: (_) => PostDetailScreen(post: post)),
+                          builder: (_) => PostDetailScreen(post: post),
+                        ),
                       ),
                     ),
                   );
@@ -278,8 +263,6 @@ class _RequestsTab extends StatelessWidget {
     );
   }
 }
-
-// ── Help card (wraps PostCard + status badge) ─────────────────────────────────
 
 class _HelpCard extends StatelessWidget {
   final Post post;
@@ -299,69 +282,20 @@ class _HelpCard extends StatelessWidget {
     return Stack(
       children: [
         PostCard(
-          post:      post,
-          onTap:     onTap,
-          onLike:    () {},
-          onSave:    () {},
+          post: post,
+          onTap: onTap,
+          onLike: () {},
+          onSave: () {},
           onComment: onTap,
         ),
-        // Status + reward badge top-right
         Positioned(
-          top: 12, right: 12,
+          top: 12,
+          right: 12,
           child: Row(
             children: [
-              if (reward > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8EC),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFF5DCAA)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.bolt_rounded,
-                          color: Color(0xFFC9830A), size: 12),
-                      const SizedBox(width: 2),
-                      Text(
-                        '$reward',
-                        style: const TextStyle(
-                          color: Color(0xFF7A5010),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              if (reward > 0) _RewardBadge(reward: reward),
               if (reward > 0) const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isCompleted
-                      ? const Color(0xFFE8F5E9)
-                      : const Color(0xFFEDE7FF),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isCompleted
-                        ? const Color(0xFFA5D6A7)
-                        : const Color(0xFFB39DDB),
-                  ),
-                ),
-                child: Text(
-                  isCompleted ? '✓ Resolved' : '● Open',
-                  style: TextStyle(
-                    color: isCompleted
-                        ? const Color(0xFF2E7D32)
-                        : const Color(0xFF5E35B1),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              _StatusBadge(isCompleted: isCompleted),
             ],
           ),
         ),
@@ -370,15 +304,81 @@ class _HelpCard extends StatelessWidget {
   }
 }
 
-// ─── Tab 2: Leaderboard ───────────────────────────────────────────────────────
+class _RewardBadge extends StatelessWidget {
+  final int reward;
+
+  const _RewardBadge({required this.reward});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.warningKarmaBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.warningKarmaBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.bolt_rounded,
+            color: AppColors.warningKarma,
+            size: 12,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            '$reward',
+            style: const TextStyle(
+              color: AppColors.warningKarma,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool isCompleted;
+
+  const _StatusBadge({required this.isCompleted});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isCompleted
+            ? AppColors.successBg
+            : _ThemeResolver.openStatusBg(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isCompleted
+              ? AppColors.successBorder
+              : _ThemeResolver.openStatusBorder(context),
+        ),
+      ),
+      child: Text(
+        isCompleted ? '✓ Resolved' : '● Open',
+        style: TextStyle(
+          color: isCompleted
+              ? AppColors.success
+              : _ThemeResolver.openStatusText(context),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
 
 class _LeaderboardTab extends StatelessWidget {
   final String myUid;
 
   const _LeaderboardTab({required this.myUid});
-
-  static const Color _primary = Color(0xFF6C63D5);
-  static const Color _textDim = Color(0xFF9E9BD0);
 
   @override
   Widget build(BuildContext context) {
@@ -390,9 +390,12 @@ class _LeaderboardTab extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: _primary, strokeWidth: 2));
+          return Center(
+            child: CircularProgressIndicator(
+              color: context.colors.primary,
+              strokeWidth: 2,
+            ),
+          );
         }
 
         final docs = snap.data?.docs ?? [];
@@ -406,36 +409,35 @@ class _LeaderboardTab extends StatelessWidget {
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
-          itemCount: docs.length + 1, // +1 for podium header
+          itemCount: docs.length + 1,
           itemBuilder: (context, i) {
             if (i == 0) {
-              // Podium for top 3
               if (docs.length >= 3) {
                 return _Podium(docs: docs.take(3).toList(), myUid: myUid);
               }
               return const SizedBox.shrink();
             }
 
-            final rank    = i; // 1-indexed (i == 1 → rank 1, etc.)
-            final doc     = docs[i - 1];
-            final data    = doc.data() as Map<String, dynamic>;
-            final isMe    = doc.id == myUid;
-            final karma   = (data['karmaBalance'] as num?)?.toInt() ?? 0;
-            final name    = data['name'] as String? ?? 'User';
-            final avatar  = data['profileImageUrl'] as String? ??
+            final rank = i;
+            final doc = docs[i - 1];
+            final data = doc.data() as Map<String, dynamic>;
+            final isMe = doc.id == myUid;
+            final karma = (data['karmaBalance'] as num?)?.toInt() ?? 0;
+            final name = data['name'] as String? ?? 'User';
+            final avatar =
+                data['profileImageUrl'] as String? ??
                 data['photoURL'] as String?;
             final username = data['username'] as String? ?? '';
 
-            // Skip top 3 — already shown in podium
             if (rank <= 3) return const SizedBox.shrink();
 
             return _LeaderRow(
-              rank:     rank,
-              name:     name,
+              rank: rank,
+              name: name,
               username: username,
-              avatar:   avatar,
-              karma:    karma,
-              isMe:     isMe,
+              avatar: avatar,
+              karma: karma,
+              isMe: isMe,
             );
           },
         );
@@ -444,36 +446,33 @@ class _LeaderboardTab extends StatelessWidget {
   }
 }
 
-// ── Podium ────────────────────────────────────────────────────────────────────
-
 class _Podium extends StatelessWidget {
   final List<QueryDocumentSnapshot> docs;
   final String myUid;
 
   const _Podium({required this.docs, required this.myUid});
 
+  static const _medalColors = [
+    Color(0xFFC0C0C0),
+    Color(0xFFFFD700),
+    Color(0xFFCD7F32),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    // Order: 2nd (left), 1st (centre, tallest), 3rd (right)
-    final order = [1, 0, 2]; // indices into docs[]
-
+    final order = [1, 0, 2];
     final heights = [88.0, 116.0, 72.0];
-    final colors  = [
-      const Color(0xFFC0C0C0), // silver
-      const Color(0xFFFFD700), // gold
-      const Color(0xFFCD7F32), // bronze
-    ];
     final crowns = ['🥈', '🥇', '🥉'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6C63D5).withOpacity(0.08),
+            color: context.colors.primary.withOpacity(0.08),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -481,11 +480,10 @@ class _Podium extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Text(
+          Text(
             '🏆  Top Karma Earners',
-            style: TextStyle(
-              color: Color(0xFF2D1B69),
-              fontSize: 15,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: _ThemeResolver.textHi(context),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -495,52 +493,45 @@ class _Podium extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(3, (slot) {
               final docIdx = order[slot];
-              final doc    = docs[docIdx];
-              final data   = doc.data() as Map<String, dynamic>;
-              final name   = (data['name'] as String? ?? 'User')
-                  .split(' ')
-                  .first;
-              final avatar = data['profileImageUrl'] as String? ??
+              final doc = docs[docIdx];
+              final data = doc.data() as Map<String, dynamic>;
+              final name = (data['name'] as String? ?? 'User').split(' ').first;
+              final avatar =
+                  data['profileImageUrl'] as String? ??
                   data['photoURL'] as String?;
-              final karma  = (data['karmaBalance'] as num?)?.toInt() ?? 0;
-              final rank   = docIdx + 1;
-              final isMe   = doc.id == myUid;
+              final karma = (data['karmaBalance'] as num?)?.toInt() ?? 0;
+              final rank = docIdx + 1;
+              final isMe = doc.id == myUid;
+              final medalColor = _medalColors[slot];
 
               return Padding(
-                padding: EdgeInsets.symmetric(
-                    horizontal: slot == 1 ? 12.0 : 6.0),
+                padding: EdgeInsets.symmetric(horizontal: slot == 1 ? 12 : 6),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Crown emoji
                     Text(crowns[slot], style: const TextStyle(fontSize: 20)),
                     const SizedBox(height: 4),
-                    // Avatar
                     Container(
                       width: slot == 1 ? 60 : 48,
                       height: slot == 1 ? 60 : 48,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isMe
-                              ? const Color(0xFF6C63D5)
-                              : colors[slot],
+                          color: isMe ? context.colors.primary : medalColor,
                           width: slot == 1 ? 3 : 2,
                         ),
                       ),
                       child: CircleAvatar(
                         radius: slot == 1 ? 28 : 22,
-                        backgroundColor: const Color(0xFFF5F4FF),
+                        backgroundColor: context.colors.surfaceContainerHighest,
                         backgroundImage: avatar != null && avatar.isNotEmpty
                             ? NetworkImage(avatar)
                             : null,
                         child: avatar == null || avatar.isEmpty
                             ? Text(
-                                name.isNotEmpty
-                                    ? name[0].toUpperCase()
-                                    : '?',
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
                                 style: TextStyle(
-                                  color: const Color(0xFF6C63D5),
+                                  color: context.colors.primary,
                                   fontSize: slot == 1 ? 20 : 15,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -551,8 +542,8 @@ class _Podium extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       name,
-                      style: TextStyle(
-                        color: const Color(0xFF2D1B69),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _ThemeResolver.textHi(context),
                         fontSize: slot == 1 ? 13 : 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -561,13 +552,15 @@ class _Podium extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bolt_rounded,
-                            color: colors[slot],
-                            size: slot == 1 ? 14 : 12),
+                        Icon(
+                          Icons.bolt_rounded,
+                          color: medalColor,
+                          size: slot == 1 ? 14 : 12,
+                        ),
                         Text(
                           _compact(karma),
                           style: TextStyle(
-                            color: colors[slot],
+                            color: medalColor,
                             fontSize: slot == 1 ? 13 : 11,
                             fontWeight: FontWeight.w700,
                           ),
@@ -575,22 +568,21 @@ class _Podium extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Podium block
                     Container(
                       width: slot == 1 ? 80 : 64,
                       height: heights[slot],
                       decoration: BoxDecoration(
-                        color: colors[slot].withOpacity(0.15),
+                        color: medalColor.withOpacity(0.15),
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(8)),
-                        border: Border.all(
-                            color: colors[slot].withOpacity(0.4)),
+                          top: Radius.circular(8),
+                        ),
+                        border: Border.all(color: medalColor.withOpacity(0.4)),
                       ),
                       child: Center(
                         child: Text(
                           '#$rank',
                           style: TextStyle(
-                            color: colors[slot],
+                            color: medalColor,
                             fontSize: slot == 1 ? 18 : 14,
                             fontWeight: FontWeight.w800,
                           ),
@@ -612,8 +604,6 @@ class _Podium extends StatelessWidget {
     return '$n';
   }
 }
-
-// ── Leaderboard row (rank 4+) ─────────────────────────────────────────────────
 
 class _LeaderRow extends StatelessWidget {
   final int rank;
@@ -639,104 +629,119 @@ class _LeaderRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: isMe
-            ? const Color(0xFFF0EEFF)
-            : Colors.white,
+            ? _ThemeResolver.selectedSurface(context)
+            : context.colors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isMe
-              ? const Color(0xFF6C63D5).withOpacity(0.4)
+              ? context.colors.primary.withOpacity(0.4)
               : Colors.transparent,
         ),
       ),
-      child: Row(children: [
-        // Rank number
-        SizedBox(
-          width: 28,
-          child: Text(
-            '#$rank',
-            style: TextStyle(
-              color: isMe
-                  ? const Color(0xFF6C63D5)
-                  : const Color(0xFF9E9BD0),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text(
+              '#$rank',
+              style: TextStyle(
+                color: isMe
+                    ? context.colors.primary
+                    : _ThemeResolver.textDim(context),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ),
-        // Avatar
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: const Color(0xFFF5F4FF),
-          backgroundImage:
-              avatar != null && avatar!.isNotEmpty
-                  ? NetworkImage(avatar!)
-                  : null,
-          child: (avatar == null || avatar!.isEmpty)
-              ? Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                      color: Color(0xFF6C63D5),
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: context.colors.surfaceContainerHighest,
+            backgroundImage: avatar != null && avatar!.isNotEmpty
+                ? NetworkImage(avatar!)
+                : null,
+            child: (avatar == null || avatar!.isEmpty)
+                ? Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: context.colors.primary,
                       fontWeight: FontWeight.w700,
-                      fontSize: 13),
-                )
-              : null,
-        ),
-        const SizedBox(width: 12),
-        // Name
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Color(0xFF2D1B69),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (isMe) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C63D5),
-                      borderRadius: BorderRadius.circular(6),
+                      fontSize: 13,
                     ),
-                    child: const Text('You',
-                        style: TextStyle(
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _ThemeResolver.textHi(context),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (isMe) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.colors.primary,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'You',
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 9,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ]),
-              if (username.isNotEmpty)
-                Text(
-                  username.startsWith('@') ? username : '@$username',
-                  style: const TextStyle(
-                      color: Color(0xFF9E9BD0), fontSize: 11),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-            ],
-          ),
-        ),
-        // Karma
-        Row(children: [
-          const Icon(Icons.bolt_rounded,
-              color: Color(0xFFC9830A), size: 14),
-          const SizedBox(width: 2),
-          Text(
-            _compact(karma),
-            style: const TextStyle(
-              color: Color(0xFF7A5010),
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+                if (username.isNotEmpty)
+                  Text(
+                    username.startsWith('@') ? username : '@$username',
+                    style: TextStyle(
+                      color: _ThemeResolver.textDim(context),
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
             ),
           ),
-        ]),
-      ]),
+          Row(
+            children: [
+              const Icon(
+                Icons.bolt_rounded,
+                color: AppColors.warningKarma,
+                size: 14,
+              ),
+              const SizedBox(width: 2),
+              Text(
+                _compact(karma),
+                style: const TextStyle(
+                  color: AppColors.warningKarma,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -745,8 +750,6 @@ class _LeaderRow extends StatelessWidget {
     return '$n';
   }
 }
-
-// ── Filter chip ───────────────────────────────────────────────────────────────
 
 class _FilterChip extends StatelessWidget {
   final String label;
@@ -765,34 +768,30 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF6C63D5)
-              : const Color(0xFFF5F4FF),
+              ? context.colors.primary
+              : context.colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
-                ? const Color(0xFF6C63D5)
-                : const Color(0xFFD8D5F8),
+                ? context.colors.primary
+                : _ThemeResolver.chipBorder(context),
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : const Color(0xFF6C63D5),
+            color: selected ? Colors.white : context.colors.primary,
             fontSize: 12,
-            fontWeight:
-                selected ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
       ),
     );
   }
 }
-
-// ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final IconData icon;
@@ -808,20 +807,55 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: const Color(0xFF9E9BD0), size: 44),
-        const SizedBox(height: 12),
-        Text(title,
-            style: const TextStyle(
-                color: Color(0xFF2D1B69),
-                fontSize: 15,
-                fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        Text(subtitle,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: _ThemeResolver.textDim(context), size: 44),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: _ThemeResolver.textHi(context),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: Color(0xFF9E9BD0), fontSize: 12)),
-      ]),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: _ThemeResolver.textDim(context),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _ThemeResolver {
+  const _ThemeResolver._();
+
+  static Color textHi(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextPrimary
+      : AppColors.lightTextPrimary;
+
+  static Color textDim(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
+
+  static Color chipBorder(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkChipBorder : AppColors.lightChipBorder;
+
+  static Color selectedSurface(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkField : AppColors.lightField;
+
+  static Color openStatusBg(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkField : AppColors.lightField;
+
+  static Color openStatusBorder(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkChipBorder : AppColors.lightChipBorder;
+
+  static Color openStatusText(BuildContext context) => context.colors.primary;
 }

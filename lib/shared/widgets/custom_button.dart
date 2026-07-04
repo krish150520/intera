@@ -1,18 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 
-/// Visual style variants for [CustomButton].
 enum CustomButtonType { primary, outline, text }
 
-/// A reusable, themed button used across INTERA.
-///
-/// Usage:
-/// ```dart
-/// CustomButton(
-///   label: 'Log In',
-///   onPressed: () {},
-/// )
-/// ```
 class CustomButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -56,6 +46,15 @@ class CustomButton extends StatelessWidget {
       case CustomButtonType.primary:
         return ElevatedButton(
           onPressed: isLoading ? null : onPressed,
+          // ← was missing entirely — caused the shrink-to-content bug
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
           child: child,
         );
       case CustomButtonType.outline:

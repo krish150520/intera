@@ -3,47 +3,55 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'karma_service.dart';
 import 'karma_badge.dart';
+import '../theme/colors.dart';
+import '../theme/app_theme.dart';
 
 class KarmaLedgerScreen extends StatelessWidget {
   const KarmaLedgerScreen({super.key});
-
-  static const Color _primary  = Color(0xFF6C63D5);
-  static const Color _bg       = Color(0xFFEEF0FB);
-  static const Color _textDark = Color(0xFF2D2A6E);
-  static const Color _muted    = Color(0xFF9E9BD0);
 
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: context.colors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: _primary),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 16,
+            color: context.colors.primary,
+          ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: const Text(
+        title: Text(
           'Karma',
-          style: TextStyle(color: _textDark, fontWeight: FontWeight.w700, fontSize: 17),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: _ThemeResolver.textHi(context),
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
-              child: KarmaBadge(uid: uid, size: KarmaBadgeSize.medium, showLabel: false),
+              child: KarmaBadge(
+                uid: uid,
+                size: KarmaBadgeSize.medium,
+                showLabel: false,
+              ),
             ),
           ),
         ],
       ),
       body: Column(
         children: [
-          // ── Balance hero ───────────────────────────────────────────────
           Container(
             width: double.infinity,
-            color: Colors.white,
+            color: context.colors.surface,
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
             child: Column(
               children: [
@@ -57,13 +65,16 @@ class KarmaLedgerScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Icon(Icons.bolt_rounded,
-                                color: Color(0xFFC9830A), size: 32),
+                            const Icon(
+                              Icons.bolt_rounded,
+                              color: AppColors.warningKarma,
+                              size: 32,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               '$karma',
                               style: const TextStyle(
-                                color: Color(0xFF7A5010),
+                                color: AppColors.warningKarma,
                                 fontSize: 42,
                                 fontWeight: FontWeight.w800,
                                 height: 1,
@@ -74,59 +85,66 @@ class KarmaLedgerScreen extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           karma == 1 ? '1 karma point' : '$karma karma points',
-                          style: const TextStyle(
-                              color: _muted, fontSize: 13),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: _ThemeResolver.textDim(context),
+                                fontSize: 13,
+                              ),
                         ),
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 16),
-                // Info pill
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F4FF),
+                    color: context.colors.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Earn karma by answering help requests · Tip great answers',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: _muted, fontSize: 11),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _ThemeResolver.textDim(context),
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-
           const SizedBox(height: 12),
-
-          // ── Transaction list ───────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 'HISTORY',
-                style: TextStyle(
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: _ThemeResolver.textDim(context),
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: _muted,
                   letterSpacing: 0.8,
                 ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: KarmaService.transactionStream(uid),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(
-                          color: _primary, strokeWidth: 2));
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: context.colors.primary,
+                      strokeWidth: 2,
+                    ),
+                  );
                 }
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) {
@@ -134,16 +152,28 @@ class KarmaLedgerScreen extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bolt_outlined, color: _muted, size: 40),
+                        Icon(
+                          Icons.bolt_outlined,
+                          color: _ThemeResolver.textDim(context),
+                          size: 40,
+                        ),
                         const SizedBox(height: 10),
-                        const Text(
+                        Text(
                           'No karma activity yet',
-                          style: TextStyle(color: _muted, fontSize: 14),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: _ThemeResolver.textDim(context),
+                                fontSize: 14,
+                              ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           'Answer help requests to start earning!',
-                          style: TextStyle(color: _muted, fontSize: 12),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: _ThemeResolver.textDim(context),
+                                fontSize: 12,
+                              ),
                         ),
                       ],
                     ),
@@ -168,8 +198,6 @@ class KarmaLedgerScreen extends StatelessWidget {
   }
 }
 
-// ── Transaction tile ─────────────────────────────────────────────────────────
-
 class _TxTile extends StatelessWidget {
   final Map<String, dynamic> data;
   final String myUid;
@@ -178,67 +206,71 @@ class _TxTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final type   = data['type'] as String? ?? '';
+    final type = data['type'] as String? ?? '';
     final amount = (data['amount'] as num?)?.toInt() ?? 0;
-    final note   = data['note'] as String? ?? type;
-    final ts     = data['createdAt'];
-    final toUid  = data['toUid'] as String?;
+    final note = data['note'] as String? ?? type;
+    final ts = data['createdAt'];
+    final toUid = data['toUid'] as String?;
 
     final isCredit = toUid == myUid;
-    final sign     = isCredit ? '+' : '−';
-    final amtColor = isCredit
-        ? const Color(0xFF388E3C)
-        : const Color(0xFFD32F2F);
+    final sign = isCredit ? '+' : '-';
+    final amtColor = isCredit ? AppColors.success : AppColors.error;
 
-    final (icon, iconBg) = _iconFor(type, isCredit);
+    final (icon, iconBg) = _iconFor(context, type);
 
     String timeStr = '';
     if (ts is Timestamp) {
-      final dt   = ts.toDate();
+      final dt = ts.toDate();
       final diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 60)      timeStr = '${diff.inMinutes}m ago';
-      else if (diff.inHours < 24)   timeStr = '${diff.inHours}h ago';
-      else                          timeStr = '${diff.inDays}d ago';
+      if (diff.inMinutes < 60) {
+        timeStr = '${diff.inMinutes}m ago';
+      } else if (diff.inHours < 24) {
+        timeStr = '${diff.inHours}h ago';
+      } else {
+        timeStr = '${diff.inDays}d ago';
+      }
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          // Icon
           Container(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
             child: Icon(icon, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 12),
-          // Label
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   note,
-                  style: const TextStyle(
-                    color: Color(0xFF2D2A6E),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: _ThemeResolver.textHi(context),
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 if (timeStr.isNotEmpty) ...[
                   const SizedBox(height: 2),
-                  Text(timeStr,
-                      style: const TextStyle(
-                          color: Color(0xFF9E9BD0), fontSize: 11)),
+                  Text(
+                    timeStr,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _ThemeResolver.textDim(context),
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
-          // Amount
           Text(
             '$sign $amount ⚡',
             style: TextStyle(
@@ -252,14 +284,25 @@ class _TxTile extends StatelessWidget {
     );
   }
 
-  (IconData, Color) _iconFor(String type, bool isCredit) {
+  (IconData, Color) _iconFor(BuildContext context, String type) {
     return switch (type) {
-      'earnedBestAnswer' => (Icons.emoji_events_rounded,  const Color(0xFF388E3C)),
-      'tipGiven'         => (Icons.volunteer_activism,    const Color(0xFF6C63D5)),
-      'tipReceived'      => (Icons.volunteer_activism,    const Color(0xFF388E3C)),
-      'deductedHelpPost' => (Icons.handshake_outlined,   const Color(0xFFC9830A)),
-      'refundedHelpPost' => (Icons.undo_rounded,         const Color(0xFF0288D1)),
-      _                  => (Icons.bolt_rounded,          const Color(0xFF6C63D5)),
+      'earnedBestAnswer' => (Icons.emoji_events_rounded, AppColors.success),
+      'tipGiven' => (Icons.volunteer_activism, context.colors.primary),
+      'tipReceived' => (Icons.volunteer_activism, AppColors.success),
+      'deductedHelpPost' => (Icons.handshake_outlined, AppColors.warningKarma),
+      'refundedHelpPost' => (Icons.undo_rounded, AppColors.info),
+      _ => (Icons.bolt_rounded, context.colors.primary),
     };
   }
+}
+
+class _ThemeResolver {
+  const _ThemeResolver._();
+
+  static Color textHi(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextPrimary
+      : AppColors.lightTextPrimary;
+
+  static Color textDim(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
 }

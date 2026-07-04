@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../messaging/services/messaging_service.dart';
 import '../../messaging/screens/chat_screen.dart';
-import 'connections_list_screen.dart'; // ◄── IMPORT THE PUBLIC CONNECTIONS SCREEN
+import 'connections_list_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -29,10 +30,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final _messagingService = MessagingService();
   bool _isOpeningChat = false;
 
-  /// Opens (or creates) the conversation with this profile's user and
-  /// navigates to ChatScreen. If the recipient doesn't follow me back yet,
-  /// this still proceeds - it just opens as a message request, and
-  /// ChatScreen shows the appropriate banner / "request sent" state.
   Future<void> _onMessageTap(String currentUid) async {
     if (_isOpeningChat) return;
     setState(() => _isOpeningChat = true);
@@ -57,8 +54,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) return;
 
       if (result.access == ConversationAccess.pending) {
-        // Let the sender know up front this will go out as a request,
-        // rather than surprising them inside the chat screen.
         final proceed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -100,9 +95,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open chat: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not open chat: $e')));
       }
     } finally {
       if (mounted) setState(() => _isOpeningChat = false);
@@ -115,35 +110,51 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isMe = currentUid == widget.userId;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        title: Text(
+          widget.userName,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: _ThemeResolver.textHi(context),
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        backgroundColor: context.colors.surface,
+        foregroundColor: _ThemeResolver.textHi(context),
         elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .snapshots(),
         builder: (context, userSnapshot) {
           if (userSnapshot.hasError) {
-            return Center(child: Text('Error loading profile: ${userSnapshot.error}'));
+            return Center(
+              child: Text('Error loading profile: ${userSnapshot.error}'),
+            );
           }
           if (userSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(color: context.colors.primary),
+            );
           }
 
-          final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
+          final userData =
+              userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
           final followersCount = userData['followersCount'] ?? 0;
           final followingCount = userData['followingCount'] ?? 0;
           final karmaPoints = userData['karmaPoints'] ?? 0;
-          final bio = userData['bio'] ?? 'Hey there! I am excited to join the INTERA community. 🚀';
+          final bio =
+              userData['bio'] ??
+              'Hey there! I am excited to join the INTERA community. 🚀';
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Profile Header Card Info
               Padding(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -154,15 +165,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           children: [
                             CircleAvatar(
                               radius: 40,
-                              backgroundColor: AppColors.primary.withOpacity(0.1),
-                              backgroundImage: widget.userAvatar.isNotEmpty ? NetworkImage(widget.userAvatar) : null,
+                              backgroundColor: context.colors.primary
+                                  .withOpacity(0.1),
+                              backgroundImage: widget.userAvatar.isNotEmpty
+                                  ? NetworkImage(widget.userAvatar)
+                                  : null,
                               child: widget.userAvatar.isEmpty
-                                  ? Text(widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : 'U',
-                                      style: TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.bold))
+                                  ? Text(
+                                      widget.userName.isNotEmpty
+                                          ? widget.userName[0].toUpperCase()
+                                          : 'U',
+                                      style: TextStyle(
+                                        color: context.colors.primary,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
                                   : null,
                             ),
-                            // Message icon button, anchored to the avatar -
-                            // only shown on other people's profiles.
                             if (!isMe)
                               Positioned(
                                 bottom: -2,
@@ -175,9 +195,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     width: 28,
                                     height: 28,
                                     decoration: BoxDecoration(
-                                      color: AppColors.primary,
+                                      color: context.colors.primary,
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
+                                      border: Border.all(
+                                        color: context.colors.surface,
+                                        width: 2,
+                                      ),
                                     ),
                                     child: _isOpeningChat
                                         ? const Padding(
@@ -198,67 +221,117 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ],
                         ),
                         const Expanded(child: SizedBox()),
-                        
-                        // Statistics Row
-                        _buildStatColumn('Posts', FirebaseFirestore.instance.collection('posts').where('authorId', isEqualTo: widget.userId).snapshots().map((s) => s.docs.length)),
-                        
-                        // FIXED: Wrapped Followers column in an interactive detector routing to the public screen layout
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => ConnectionsListScreen(
-                                userId: widget.userId, 
-                                isFollowersMode: true, 
-                                profileOwnerName: widget.userName,
-                              ),
-                            ),
-                          ),
-                          child: _buildStaticStatColumn('Followers', followersCount),
+                        _buildStatColumn(
+                          context,
+                          'Posts',
+                          FirebaseFirestore.instance
+                              .collection('posts')
+                              .where('authorId', isEqualTo: widget.userId)
+                              .snapshots()
+                              .map((s) => s.docs.length),
                         ),
-                        
-                        // FIXED: Wrapped Following column in an interactive detector routing to the public screen layout
                         GestureDetector(
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => ConnectionsListScreen(
-                                userId: widget.userId, 
-                                isFollowersMode: false, 
+                                userId: widget.userId,
+                                isFollowersMode: true,
                                 profileOwnerName: widget.userName,
                               ),
                             ),
                           ),
-                          child: _buildStaticStatColumn('Following', followingCount),
+                          child: _buildStaticStatColumn(
+                            context,
+                            'Followers',
+                            followersCount,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => ConnectionsListScreen(
+                                userId: widget.userId,
+                                isFollowersMode: false,
+                                profileOwnerName: widget.userName,
+                              ),
+                            ),
+                          ),
+                          child: _buildStaticStatColumn(
+                            context,
+                            'Following',
+                            followingCount,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(widget.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(
+                      widget.userName,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: _ThemeResolver.textHi(context),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.bolt_rounded, size: 16, color: Colors.amber.shade700),
+                        const Icon(
+                          Icons.bolt_rounded,
+                          size: 16,
+                          color: AppColors.warningKarma,
+                        ),
                         const SizedBox(width: 2),
-                        Text('$karmaPoints Karma', style: TextStyle(color: Colors.amber.shade800, fontWeight: FontWeight.w600, fontSize: 13)),
+                        Text(
+                          '$karmaPoints Karma',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.warningKarma,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(bio, style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4)),
+                    Text(
+                      bio,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _ThemeResolver.textBody(context),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
                     const SizedBox(height: 16),
-                    
                     if (!isMe)
                       StreamBuilder<bool>(
-                        stream: FollowService().isFollowingStream(currentUserId: currentUid, targetUserId: widget.userId),
+                        stream: FollowService().isFollowingStream(
+                          currentUserId: currentUid,
+                          targetUserId: widget.userId,
+                        ),
                         builder: (context, followSnapshot) {
                           final isFollowing = followSnapshot.data ?? false;
                           return SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
-                                backgroundColor: isFollowing ? Colors.white : AppColors.primary,
-                                foregroundColor: isFollowing ? Colors.black : Colors.white,
-                                side: BorderSide(color: isFollowing ? Colors.grey.shade300 : AppColors.primary),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                backgroundColor: isFollowing
+                                    ? context.colors.surface
+                                    : context.colors.primary,
+                                foregroundColor: isFollowing
+                                    ? _ThemeResolver.textHi(context)
+                                    : Colors.white,
+                                side: BorderSide(
+                                  color: isFollowing
+                                      ? context.colors.outline
+                                      : context.colors.primary,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                               ),
                               onPressed: () async {
                                 try {
@@ -269,13 +342,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   );
                                 } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Action failed: $e')),
+                                    SnackBar(
+                                      content: Text('Action failed: $e'),
+                                    ),
                                   );
                                 }
                               },
                               child: Text(
                                 isFollowing ? 'Following' : 'Follow',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           );
@@ -286,22 +363,30 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         width: double.infinity,
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: BorderSide(color: Colors.grey.shade300),
+                            side: BorderSide(color: context.colors.outline),
                           ),
-                          onPressed: () {
-                            // Edit profile routing hook path
-                          },
-                          child: const Text('Edit Profile', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          onPressed: () {},
+                          child: Text(
+                            'Edit Profile',
+                            style: TextStyle(
+                              color: _ThemeResolver.textHi(context),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                   ],
                 ),
               ),
-              const Divider(height: 1, thickness: 1),
-
-              // 2. User's Personal Shared Posts Stream
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: Theme.of(context).dividerColor,
+              ),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -311,10 +396,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       .snapshots(),
                   builder: (context, postSnapshot) {
                     if (postSnapshot.hasError) {
-                      return Center(child: Text('Error loading posts: ${postSnapshot.error}'));
+                      return Center(
+                        child: Text(
+                          'Error loading posts: ${postSnapshot.error}',
+                        ),
+                      );
                     }
-                    if (postSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                    if (postSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: context.colors.primary,
+                        ),
+                      );
                     }
 
                     final postsDocs = postSnapshot.data?.docs ?? [];
@@ -324,9 +418,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.image_not_supported_outlined, size: 40, color: Colors.grey.shade300),
+                            Icon(
+                              Icons.image_not_supported_outlined,
+                              size: 40,
+                              color: _ThemeResolver.textDim(context),
+                            ),
                             const SizedBox(height: 12),
-                            const Text('No posts shared yet.', style: TextStyle(color: Colors.grey)),
+                            Text(
+                              'No posts shared yet.',
+                              style: TextStyle(
+                                color: _ThemeResolver.textDim(context),
+                              ),
+                            ),
                           ],
                         ),
                       );
@@ -343,16 +446,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           post: postItem,
                           onTap: () {},
                           onLike: () {
-                            final docRef = FirebaseFirestore.instance.collection('posts').doc(doc.id);
+                            final docRef = FirebaseFirestore.instance
+                                .collection('posts')
+                                .doc(doc.id);
                             if (postItem.isLiked) {
                               docRef.update({
                                 'likeCount': FieldValue.increment(-1),
-                                'likedBy': FieldValue.arrayRemove([currentUid])
+                                'likedBy': FieldValue.arrayRemove([currentUid]),
                               });
                             } else {
                               docRef.update({
                                 'likeCount': FieldValue.increment(1),
-                                'likedBy': FieldValue.arrayUnion([currentUid])
+                                'likedBy': FieldValue.arrayUnion([currentUid]),
                               });
                             }
                           },
@@ -370,27 +475,59 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildStaticStatColumn(String label, int value) {
+  Widget _buildStaticStatColumn(BuildContext context, String label, int value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$value', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(
+            '$value',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: _ThemeResolver.textHi(context),
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 12,
+              color: _ThemeResolver.textDim(context),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatColumn(String label, Stream<int> countStream) {
+  Widget _buildStatColumn(
+    BuildContext context,
+    String label,
+    Stream<int> countStream,
+  ) {
     return StreamBuilder<int>(
       stream: countStream,
       builder: (context, snapshot) {
         final count = snapshot.data ?? 0;
-        return _buildStaticStatColumn(label, count);
+        return _buildStaticStatColumn(context, label, count);
       },
     );
   }
+}
+
+class _ThemeResolver {
+  const _ThemeResolver._();
+
+  static Color textHi(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextPrimary
+      : AppColors.lightTextPrimary;
+
+  static Color textBody(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextSecondary
+      : AppColors.lightTextSecondary;
+
+  static Color textDim(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
 }

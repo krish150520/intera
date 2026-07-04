@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../models/message_model.dart';
 import '../services/messaging_service.dart';
 import 'chat_screen.dart';
 
-/// Tab / screen showing all 1-on-1 conversations the current user has.
-///
-/// Split into two tabs:
-/// - "Chats": active threads, plus pending requests *I* sent (shown as
-///   "Request sent" until the other person replies).
-/// - "Requests": pending threads sent *to me* by people I don't follow
-///   back yet - tapping one opens ChatScreen's Accept/Decline flow.
 class MessagesListScreen extends StatefulWidget {
   const MessagesListScreen({super.key});
 
@@ -20,14 +15,6 @@ class MessagesListScreen extends StatefulWidget {
 
 class _MessagesListScreenState extends State<MessagesListScreen>
     with SingleTickerProviderStateMixin {
-  static const Color _bg      = Color(0xFFF5F3FF);
-  static const Color _surface = Color(0xFFFFFFFF);
-  static const Color _muted   = Color(0xFFEDE9FF);
-  static const Color _border  = Color(0xFFE9E4FF);
-  static const Color _primary = Color(0xFF7C3AED);
-  static const Color _textHi  = Color(0xFF2D1B69);
-  static const Color _textDim = Color(0xFFA89FCC);
-
   final _messagingService = MessagingService();
   late final TabController _tabController;
 
@@ -74,15 +61,15 @@ class _MessagesListScreenState extends State<MessagesListScreen>
     final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         titleSpacing: 20,
-        title: const Text(
+        title: Text(
           'Messages',
-          style: TextStyle(
-            color: _textHi,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: _ThemeResolver.textHi(context),
             fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.5,
@@ -90,13 +77,18 @@ class _MessagesListScreenState extends State<MessagesListScreen>
         ),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: _primary,
-          unselectedLabelColor: _textDim,
-          indicatorColor: _primary,
+          labelColor: context.colors.primary,
+          unselectedLabelColor: _ThemeResolver.textDim(context),
+          indicatorColor: context.colors.primary,
           indicatorWeight: 2.5,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-          unselectedLabelStyle:
-              const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
           tabs: const [
             Tab(text: 'Chats'),
             Tab(text: 'Requests'),
@@ -124,18 +116,11 @@ class _MessagesListScreenState extends State<MessagesListScreen>
   }
 }
 
-/// "Chats" tab - active threads plus my own outgoing pending requests.
 class _ChatsTab extends StatelessWidget {
   final MessagingService messagingService;
   final String myUid;
   final String Function(DateTime?) relativeTime;
   final void Function(ConversationModel, String) onOpenChat;
-
-  static const Color _muted   = Color(0xFFEDE9FF);
-  static const Color _border  = Color(0xFFE9E4FF);
-  static const Color _primary = Color(0xFF7C3AED);
-  static const Color _textHi  = Color(0xFF2D1B69);
-  static const Color _textDim = Color(0xFFA89FCC);
 
   const _ChatsTab({
     required this.messagingService,
@@ -150,22 +135,27 @@ class _ChatsTab extends StatelessWidget {
       stream: messagingService.conversationsStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
-            child: Text('Could not load conversations',
-                style: TextStyle(color: _textDim)),
-          );
+          return _CenteredMessage(text: 'Could not load conversations');
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: _primary, strokeWidth: 2),
+          return Center(
+            child: CircularProgressIndicator(
+              color: context.colors.primary,
+              strokeWidth: 2,
+            ),
           );
         }
 
         final allDocs = snapshot.data?.docs ?? [];
-        // Exclude incoming requests (those live in the Requests tab) and
-        // declined threads (hidden entirely).
         final docs = allDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final hiddenFor = List<String>.from(data['hiddenFor'] ?? const []);
+          final deletedFor = List<String>.from(data['deletedFor'] ?? const []);
+          if (hiddenFor.contains(myUid) || deletedFor.contains(myUid)) {
+            return false;
+          }
+
           final convo = ConversationModel.fromFirestore(doc);
           if (convo.status == 'declined') return false;
           if (convo.isPending && convo.requestedBy != myUid) return false;
@@ -173,44 +163,21 @@ class _ChatsTab extends StatelessWidget {
         }).toList();
 
         if (docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: _muted,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.chat_bubble_outline_rounded,
-                      color: _primary, size: 28),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'No messages yet',
-                  style: TextStyle(
-                    color: _textHi,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Start a conversation from someone\'s profile',
-                  style: TextStyle(color: _textDim, fontSize: 13),
-                ),
-              ],
-            ),
+          return const _EmptyState(
+            icon: Icons.chat_bubble_outline_rounded,
+            title: 'No messages yet',
+            subtitle: 'Start a conversation from someone\'s profile',
           );
         }
 
         return ListView.separated(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: docs.length,
-          separatorBuilder: (_, __) =>
-              const Divider(height: 1, indent: 78, color: _border),
+          separatorBuilder: (_, __) => Divider(
+            height: 1,
+            indent: 78,
+            color: _ThemeResolver.border(context),
+          ),
           itemBuilder: (context, index) {
             final convo = ConversationModel.fromFirestore(docs[index]);
             final otherName = convo.otherName(myUid);
@@ -223,25 +190,13 @@ class _ChatsTab extends StatelessWidget {
             return InkWell(
               onTap: () => onOpenChat(convo, myUid),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: _muted,
-                      backgroundImage:
-                          otherAvatar != null ? NetworkImage(otherAvatar) : null,
-                      child: otherAvatar == null
-                          ? Text(
-                              otherName.isNotEmpty ? otherName[0] : '?',
-                              style: const TextStyle(
-                                color: _primary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            )
-                          : null,
-                    ),
+                    _ConversationAvatar(name: otherName, avatar: otherAvatar),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -251,38 +206,41 @@ class _ChatsTab extends StatelessWidget {
                             otherName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: _textHi,
-                              fontSize: 15,
-                              fontWeight:
-                                  isUnread ? FontWeight.w700 : FontWeight.w600,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: _ThemeResolver.textHi(context),
+                                  fontSize: 15,
+                                  fontWeight: isUnread
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             isMyPendingRequest
                                 ? 'Request sent'
                                 : convo.lastMessage.isEmpty
-                                    ? 'Say hello 👋'
-                                    : isMine
-                                        ? 'You: ${convo.lastMessage}'
-                                        : convo.lastMessage,
+                                ? 'Say hello 👋'
+                                : isMine
+                                ? 'You: ${convo.lastMessage}'
+                                : convo.lastMessage,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: isMyPendingRequest
-                                  ? _primary
-                                  : isUnread
-                                      ? _textHi
-                                      : _textDim,
-                              fontSize: 13,
-                              fontStyle: isMyPendingRequest
-                                  ? FontStyle.italic
-                                  : FontStyle.normal,
-                              fontWeight: isUnread && !isMyPendingRequest
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: isMyPendingRequest
+                                      ? context.colors.primary
+                                      : isUnread
+                                      ? _ThemeResolver.textHi(context)
+                                      : _ThemeResolver.textDim(context),
+                                  fontSize: 13,
+                                  fontStyle: isMyPendingRequest
+                                      ? FontStyle.italic
+                                      : FontStyle.normal,
+                                  fontWeight: isUnread && !isMyPendingRequest
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
                           ),
                         ],
                       ),
@@ -293,19 +251,27 @@ class _ChatsTab extends StatelessWidget {
                       children: [
                         Text(
                           relativeTime(convo.lastMessageAt),
-                          style: const TextStyle(color: _textDim, fontSize: 11),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: _ThemeResolver.textDim(context),
+                                fontSize: 11,
+                              ),
                         ),
                         const SizedBox(height: 6),
                         if (isUnread && !isMyPendingRequest)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: const BoxDecoration(
-                              color: _primary,
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.colors.primary,
                               shape: BoxShape.circle,
                             ),
-                            constraints:
-                                const BoxConstraints(minWidth: 18, minHeight: 18),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
                             child: Text(
                               unread > 99 ? '99+' : '$unread',
                               textAlign: TextAlign.center,
@@ -329,18 +295,11 @@ class _ChatsTab extends StatelessWidget {
   }
 }
 
-/// "Requests" tab - incoming pending threads awaiting Accept/Decline.
 class _RequestsTab extends StatelessWidget {
   final MessagingService messagingService;
   final String myUid;
   final String Function(DateTime?) relativeTime;
   final void Function(ConversationModel, String) onOpenChat;
-
-  static const Color _muted   = Color(0xFFEDE9FF);
-  static const Color _border  = Color(0xFFE9E4FF);
-  static const Color _primary = Color(0xFF7C3AED);
-  static const Color _textHi  = Color(0xFF2D1B69);
-  static const Color _textDim = Color(0xFFA89FCC);
 
   const _RequestsTab({
     required this.messagingService,
@@ -355,66 +314,47 @@ class _RequestsTab extends StatelessWidget {
       stream: messagingService.pendingRequestsStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(
-            child: Text('Could not load requests',
-                style: TextStyle(color: _textDim)),
-          );
+          return _CenteredMessage(text: 'Could not load requests');
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: _primary, strokeWidth: 2),
+          return Center(
+            child: CircularProgressIndicator(
+              color: context.colors.primary,
+              strokeWidth: 2,
+            ),
           );
         }
 
-        // pendingRequestsStream already filters to status == 'pending' for
-        // threads I'm part of; drop the ones I myself sent (those surface
-        // in the Chats tab as "Request sent" instead).
         final docs = (snapshot.data?.docs ?? []).where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final hiddenFor = List<String>.from(data['hiddenFor'] ?? const []);
+          final deletedFor = List<String>.from(data['deletedFor'] ?? const []);
+          if (hiddenFor.contains(myUid) || deletedFor.contains(myUid)) {
+            return false;
+          }
+
           final convo = ConversationModel.fromFirestore(doc);
           return convo.requestedBy != myUid;
         }).toList();
 
         if (docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: _muted,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.inbox_outlined,
-                      color: _primary, size: 28),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'No message requests',
-                  style: TextStyle(
-                    color: _textHi,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Requests from people you don\'t follow back\nwill show up here',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: _textDim, fontSize: 13, height: 1.4),
-                ),
-              ],
-            ),
+          return const _EmptyState(
+            icon: Icons.inbox_outlined,
+            title: 'No message requests',
+            subtitle:
+                'Requests from people you don\'t follow back\nwill show up here',
           );
         }
 
         return ListView.separated(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: docs.length,
-          separatorBuilder: (_, __) =>
-              const Divider(height: 1, indent: 78, color: _border),
+          separatorBuilder: (_, __) => Divider(
+            height: 1,
+            indent: 78,
+            color: _ThemeResolver.border(context),
+          ),
           itemBuilder: (context, index) {
             final convo = ConversationModel.fromFirestore(docs[index]);
             final otherName = convo.otherName(myUid);
@@ -423,25 +363,13 @@ class _RequestsTab extends StatelessWidget {
             return InkWell(
               onTap: () => onOpenChat(convo, myUid),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: _muted,
-                      backgroundImage:
-                          otherAvatar != null ? NetworkImage(otherAvatar) : null,
-                      child: otherAvatar == null
-                          ? Text(
-                              otherName.isNotEmpty ? otherName[0] : '?',
-                              style: const TextStyle(
-                                color: _primary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            )
-                          : null,
-                    ),
+                    _ConversationAvatar(name: otherName, avatar: otherAvatar),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -451,11 +379,12 @@ class _RequestsTab extends StatelessWidget {
                             otherName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _textHi,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: _ThemeResolver.textHi(context),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                           const SizedBox(height: 3),
                           Text(
@@ -464,17 +393,21 @@ class _RequestsTab extends StatelessWidget {
                                 : convo.lastMessage,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _textDim,
-                              fontSize: 13,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: _ThemeResolver.textDim(context),
+                                  fontSize: 13,
+                                ),
                           ),
                         ],
                       ),
                     ),
                     Text(
                       relativeTime(convo.lastMessageAt),
-                      style: const TextStyle(color: _textDim, fontSize: 11),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _ThemeResolver.textDim(context),
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -485,4 +418,110 @@ class _RequestsTab extends StatelessWidget {
       },
     );
   }
+}
+
+class _ConversationAvatar extends StatelessWidget {
+  final String name;
+  final String? avatar;
+
+  const _ConversationAvatar({required this.name, required this.avatar});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 26,
+      backgroundColor: context.colors.surfaceContainerHighest,
+      backgroundImage: avatar != null ? NetworkImage(avatar!) : null,
+      child: avatar == null
+          ? Text(
+              name.isNotEmpty ? name[0] : '?',
+              style: TextStyle(
+                color: context.colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: context.colors.surfaceContainerHighest,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: context.colors.primary, size: 28),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: _ThemeResolver.textHi(context),
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: _ThemeResolver.textDim(context),
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CenteredMessage extends StatelessWidget {
+  final String text;
+
+  const _CenteredMessage({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        text,
+        style: TextStyle(color: _ThemeResolver.textDim(context)),
+      ),
+    );
+  }
+}
+
+class _ThemeResolver {
+  const _ThemeResolver._();
+
+  static Color textHi(BuildContext context) => context.isDarkMode
+      ? AppColors.darkTextPrimary
+      : AppColors.lightTextPrimary;
+
+  static Color textDim(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
+
+  static Color border(BuildContext context) =>
+      context.isDarkMode ? AppColors.darkDivider : AppColors.lightDivider;
 }
