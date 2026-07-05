@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/theme/colors.dart';
-// import '../../../shared/models/user_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_textfield.dart';
@@ -20,8 +19,8 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _bioController;
-  late final TextEditingController _skillInputController;
-  List<String> _skills = [];
+  late final TextEditingController _hobbyInputController;
+  List<String> _hobbies = [];
   
   bool _isLoading = true; // Block UI inputs while fetching initial data
   bool _isSaving = false;  // Show overlay loading spinner during save operations
@@ -34,7 +33,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     _nameController = TextEditingController();
     _bioController = TextEditingController();
-    _skillInputController = TextEditingController();
+    _hobbyInputController = TextEditingController();
     _fetchUserData();
   }
 
@@ -42,7 +41,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void dispose() {
     _nameController.dispose();
     _bioController.dispose();
-    _skillInputController.dispose();
+    _hobbyInputController.dispose();
     super.dispose();
   }
 
@@ -62,7 +61,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         setState(() {
           _nameController.text = data['name'] ?? user.displayName ?? '';
           _bioController.text = data['bio'] ?? '';
-          _skills = List<String>.from(data['skills'] ?? []);
+          _hobbies = List<String>.from(data['hobbies'] ?? data['skills'] ?? []);
           _currentAvatarUrl = data['avatarUrl'] ?? user.photoURL;
           _isLoading = false;
         });
@@ -83,17 +82,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  void _addSkill() {
-    final value = _skillInputController.text.trim();
-    if (value.isEmpty || _skills.contains(value)) return;
+  void _addHobby() {
+    final value = _hobbyInputController.text.trim();
+    if (value.isEmpty || _hobbies.contains(value)) return;
     setState(() {
-      _skills.add(value);
-      _skillInputController.clear();
+      _hobbies.add(value);
+      _hobbyInputController.clear();
     });
   }
 
-  void _removeSkill(String skill) {
-    setState(() => _skills.remove(skill));
+  void _removeHobby(String hobby) {
+    setState(() => _hobbies.remove(hobby));
   }
 
   /// Launches local file explorer to capture and stage image data files
@@ -156,7 +155,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final Map<String, dynamic> updatedProfilePayload = {
         'name': _nameController.text.trim(),
         'bio': _bioController.text.trim(),
-        'skills': _skills,
+        'skills': _hobbies,
+        'hobbies': _hobbies,
         'avatarUrl': finalAvatarUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -251,7 +251,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const SizedBox(height: 16),
                         
                         const Text(
-                          'Skills',
+                          'Hobbies',
                           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         const SizedBox(height: 8),
@@ -259,10 +259,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
-                          children: _skills
-                              .map((skill) => Chip(
-                                    label: Text(skill),
-                                    onDeleted: () => _removeSkill(skill),
+                          children: _hobbies
+                              .map((hobby) => Chip(
+                                    label: Text(hobby),
+                                    onDeleted: () => _removeHobby(hobby),
                                     backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                                   ))
                               .toList(),
@@ -273,14 +273,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           children: [
                             Expanded(
                               child: CustomTextField(
-                                label: 'Add a skill',
-                                controller: _skillInputController,
+                                label: 'Add a hobby',
+                                controller: _hobbyInputController,
                                 prefixIcon: Icons.add,
                               ),
                             ),
                             const SizedBox(width: 8),
                             IconButton.filled(
-                              onPressed: _addSkill,
+                              onPressed: _addHobby,
                               icon: const Icon(Icons.add),
                               style: IconButton.styleFrom(
                                 backgroundColor: AppColors.primary,
@@ -310,8 +310,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 CircularProgressIndicator(),
-                                SizedBox(height: 16),
-                                Text('Uploading modifications...', style: TextStyle(fontWeight: FontWeight.w600)),
+                                  SizedBox(height: 16),
+                                  Text('Uploading modifications...', style: TextStyle(fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),

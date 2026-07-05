@@ -10,6 +10,7 @@ import '../widgets/post_card.dart';
 import '../../../core/karma/karma_service.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/reaction_service.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post? post;
@@ -164,6 +165,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (!mounted) return;
       _showSnack('Error: $e', isError: true);
     }
+  }
+
+  Future<void> _handleReaction(String type) async {
+    final post = widget.post;
+    if (post == null || _myUid.isEmpty) return;
+    await ReactionService.toggleReaction(
+      postId: post.id,
+      postAuthorId: post.authorId,
+      postTitle: post.title,
+      currentUid: _myUid,
+      reactionType: type,
+    );
   }
 
   // ── Tip dialog ─────────────────────────────────────────────────────────────
@@ -322,6 +335,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     final bestCmtId   = postData['bestAnswerCommentId'] as String?;
                     final reward      = (postData['rewardKarma'] as num?)?.toInt() ?? 0;
 
+                    final realTimePost = postSnap.hasData && postSnap.data!.exists
+                        ? Post.fromFirestore(postSnap.data!, _myUid)
+                        : post;
+
                     return StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('posts')
@@ -337,7 +354,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           if (_hasMedia)
                             SliverToBoxAdapter(
                               child: _MediaHero(
-                                mediaUrl: post.imageUrl ?? '',
+                                mediaUrl: realTimePost.imageUrl ?? '',
                                 isVideo:  _isVideo,
                                 onExpand: _openFullscreen,
                               ),
@@ -346,8 +363,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           // ── Post card (no media shown inside it now) ─────
                           SliverToBoxAdapter(
                             child: _hasMedia
-                                ? _PostBodyCard(post: post)
-                                : PostCard(post: post),
+                                ? _PostBodyCard(post: realTimePost)
+                                : PostCard(
+                                    post: realTimePost,
+                                    onReact: _handleReaction,
+                                  ),
                           ),
 
                           // ── Help banner ──────────────────────────────────

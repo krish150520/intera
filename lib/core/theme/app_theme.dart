@@ -21,12 +21,14 @@ import 'colors.dart';
 class AppTheme {
   AppTheme._();
 
-  // ── Shared values ─────────────────────────────────────────────────────────
-  static const String _fontFamily = 'Roboto'; // swap for your app's font
+  // ── Shared values ──────────────────────────────────────────────────────────
+  static const String _fontFamily = 'Roboto';
 
-  static const BorderRadius _radiusSm = BorderRadius.all(Radius.circular(10));
-  static const BorderRadius _radiusMd = BorderRadius.all(Radius.circular(14));
-  static const BorderRadius _radiusLg = BorderRadius.all(Radius.circular(18));
+  // Minimal — clean, flat radii
+  static const BorderRadius _radiusSm = BorderRadius.all(Radius.circular(8));
+  static const BorderRadius _radiusMd = BorderRadius.all(Radius.circular(12));
+  static const BorderRadius _radiusLg = BorderRadius.all(Radius.circular(16));
+  static const BorderRadius _radiusXl = BorderRadius.all(Radius.circular(20));
 
   // ── LIGHT THEME ───────────────────────────────────────────────────────────
   static ThemeData get light {
@@ -100,8 +102,9 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: _radiusLg,
-          side: const BorderSide(color: AppColors.lightBorder),
+          side: const BorderSide(color: AppColors.lightBorder, width: 0.8),
         ),
+        margin: EdgeInsets.zero,
       ),
 
       inputDecorationTheme: InputDecorationTheme(
@@ -136,15 +139,15 @@ class AppTheme {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.lightChipBorder, width: 1.5),
+          foregroundColor: AppColors.primaryLight,
+          side: const BorderSide(color: AppColors.darkBorder, width: 1),
           padding: const EdgeInsets.symmetric(vertical: 10),
           shape: RoundedRectangleBorder(borderRadius: _radiusSm),
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+        style: TextButton.styleFrom(foregroundColor: AppColors.primaryLight),
       ),
 
       iconTheme: const IconThemeData(color: AppColors.primary),
@@ -168,19 +171,20 @@ class AppTheme {
 
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: _radiusSm),
+        shape: RoundedRectangleBorder(borderRadius: _radiusMd),
         backgroundColor: AppColors.lightTextSecondary,
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: 13),
       ),
 
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.lightSurface,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(20))),
+            borderRadius: const BorderRadius.all(Radius.circular(16))),
         titleTextStyle: const TextStyle(
-            color: AppColors.lightTextSecondary,
-            fontSize: 16,
-            fontWeight: FontWeight.w700),
+            color: AppColors.lightTextPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w800),
         contentTextStyle:
             const TextStyle(color: AppColors.lightTextSecondary, fontSize: 13),
       ),
@@ -198,6 +202,8 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.lightField,
         selectedColor: AppColors.primary,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         labelStyle: const TextStyle(
             color: AppColors.primary,
             fontSize: 12,
@@ -205,8 +211,8 @@ class AppTheme {
         secondaryLabelStyle:
             const TextStyle(color: Colors.white, fontSize: 12),
         shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(20)),
-          side: const BorderSide(color: AppColors.lightChipBorder),
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          side: const BorderSide(color: AppColors.lightBorder, width: 0.8),
         ),
       ),
       extensions: [
@@ -247,14 +253,14 @@ class AppTheme {
     const cs = ColorScheme.dark(
       brightness: Brightness.dark,
       primary:          AppColors.primaryLight,
-      onPrimary:        Color(0xFF1E1B3A),
+      onPrimary:        Color(0xFF1C1833),
       primaryContainer: AppColors.darkField,
       secondary:        AppColors.accent,
       onSecondary:      Colors.white,
       surface:          AppColors.darkSurface,
       onSurface:        AppColors.darkTextSecondary,
       surfaceContainerHighest: AppColors.darkField,
-      error:            Color(0xFFEF5350),
+      error:            Color(0xFFFF6B6B),
       onError:          Colors.white,
       outline:          AppColors.darkBorder,
     );
@@ -312,10 +318,12 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.darkSurface,
         elevation: 0,
+        shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: _radiusLg,
-          side: const BorderSide(color: AppColors.darkBorder),
+          side: const BorderSide(color: AppColors.darkBorder, width: 0.8),
         ),
+        margin: EdgeInsets.zero,
       ),
 
       inputDecorationTheme: InputDecorationTheme(
@@ -353,7 +361,7 @@ class AppTheme {
           foregroundColor: AppColors.primaryLight,
           side: const BorderSide(color: AppColors.darkChipBorder, width: 1.5),
           padding: const EdgeInsets.symmetric(vertical: 10),
-          shape: RoundedRectangleBorder(borderRadius: _radiusSm),
+          shape: RoundedRectangleBorder(borderRadius: _radiusMd),
         ),
       ),
 
@@ -382,7 +390,7 @@ class AppTheme {
 
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: _radiusSm),
+        shape: RoundedRectangleBorder(borderRadius: _radiusMd),
         backgroundColor: AppColors.darkField,
         contentTextStyle:
             const TextStyle(color: AppColors.darkTextSecondary, fontSize: 13),
@@ -390,12 +398,14 @@ class AppTheme {
 
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.darkSurface,
+        elevation: 24,
+        shadowColor: AppColors.primaryLight.withValues(alpha: 0.20),
         shape: RoundedRectangleBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(20))),
+            borderRadius: const BorderRadius.all(Radius.circular(28))),
         titleTextStyle: const TextStyle(
-            color: AppColors.darkTextSecondary,
-            fontSize: 16,
-            fontWeight: FontWeight.w700),
+            color: AppColors.darkTextPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w800),
         contentTextStyle:
             const TextStyle(color: AppColors.darkTextSecondary, fontSize: 13),
       ),
@@ -412,16 +422,18 @@ class AppTheme {
 
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.darkField,
-        selectedColor: AppColors.primaryLight,
+        selectedColor: AppColors.primary,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         labelStyle: const TextStyle(
             color: AppColors.primaryLight,
             fontSize: 12,
             fontWeight: FontWeight.w500),
         secondaryLabelStyle:
-            const TextStyle(color: Color(0xFF1E1B3A), fontSize: 12),
+            const TextStyle(color: Colors.white, fontSize: 12),
         shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(20)),
-          side: const BorderSide(color: AppColors.darkChipBorder),
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          side: const BorderSide(color: AppColors.darkBorder, width: 0.8),
         ),
       ),
       extensions: [
@@ -503,12 +515,27 @@ class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
   final LinearGradient storyRingGradient;
   final LinearGradient karmaGoldGradient;
 
-  Color get textHi => textPrimary;
-  Color get pill => field;
-  Color get inactive => textDim;
+  Color get textHi    => textPrimary;
+  Color get pill      => field;
+  Color get inactive  => textDim;
   Color get primaryTint => field;
-  Color get panelBg => field;
+  Color get panelBg   => field;
   Color get panelBorder => border;
+
+  // ── Minimal shadow helper ──────────────────────────────────────────────────
+  /// Subtle card shadow — only used sparingly in minimal design.
+  List<BoxShadow> subtleShadow() => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.08),
+      blurRadius: 8,
+      offset: const Offset(0, 2),
+    ),
+  ];
+
+  // Kept for API compatibility (legacy callers)
+  List<BoxShadow> clayShadow({Color? color, double intensity = 1.0}) => subtleShadow();
+  List<BoxShadow> clayDarkShadow({Color? color, double intensity = 1.0}) => subtleShadow();
+  List<BoxShadow> clayButtonShadow({Color? color}) => [];
 
   AppColorsExtension({
     required this.primary,

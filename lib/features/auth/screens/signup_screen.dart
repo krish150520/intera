@@ -7,6 +7,7 @@ import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_textfield.dart';
 
@@ -97,6 +98,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
 
         await AuthService.instance.sendEmailVerification();
+
+        final prefs = await SharedPreferences.getInstance();
+        final emailVal = _emailController.text.trim();
+        final passVal = _passwordController.text;
+        await prefs.setString('pass_for_$emailVal', passVal);
+
+        final list = prefs.getStringList('recent_accounts') ?? [];
+        list.remove(emailVal);
+        list.insert(0, emailVal);
+        if (list.length > 5) list.removeRange(5, list.length);
+        await prefs.setStringList('recent_accounts', list);
       }
 
       if (!mounted) return;

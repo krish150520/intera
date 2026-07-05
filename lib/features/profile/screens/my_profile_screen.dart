@@ -10,11 +10,10 @@ import '../../home/widgets/post_card.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../videos/screens/community_detail_screen.dart';
 import 'user_profile_screen.dart';
-import '../../../core/karma/karma_service.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
 import 'setting_screen.dart';
-import '../../../core/services/notification_service.dart';
+import '../../../core/services/reaction_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -205,16 +204,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         final String bio         = ud['bio'] ?? 'No bio yet.';
         final int followers      = ud['followersCount'] ?? 0;
         final int following      = ud['followingCount'] ?? 0;
-        final List<String> hobbies = List<String>.from(ud['hobbiesAndInterests'] ?? ud['skills'] ?? []);
+        final List<String> hobbies = List<String>.from(ud['hobbies'] ?? ud['hobbiesAndInterests'] ?? ud['skills'] ?? []);
 
         return Scaffold(
           backgroundColor: c.bg,
           appBar: AppBar(
-            backgroundColor: c.surface,
+            backgroundColor: c.bg,
             elevation: 0,
             centerTitle: true,
             title: Text(handle.startsWith('@') ? handle : '@$handle',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: c.textHi)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: c.textHi)),
             actions: [
               GestureDetector(
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KarmaLedgerScreen())),
@@ -222,12 +221,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     child: Center(child: KarmaBadge(uid: _currentUid, size: KarmaBadgeSize.small))),
               ),
               Container(
-                margin: const EdgeInsets.only(right: 10),
+                margin: const EdgeInsets.only(right: 12),
                 width: 36, height: 36,
-                decoration: BoxDecoration(color: c.field, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.border, width: 0.8),
+                ),
                 child: IconButton(
                   padding: EdgeInsets.zero,
-                  icon: Icon(Icons.settings_outlined, size: 18, color: c.primary),
+                  icon: Icon(Icons.settings_outlined, size: 18, color: c.textPrimary),
                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
                 ),
               ),
@@ -236,36 +239,38 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           body: Column(
             children: [
               Container(
-                color: c.surface,
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                color: c.bg,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
                       Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c.primary, width: 2)),
-                        child: CustomAvatar(name: displayName, imageUrl: avatarUrl, radius: 34),
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.primary, width: 1.5),
+                        ),
+                        child: CustomAvatar(name: displayName, imageUrl: avatarUrl, radius: 36),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 20),
                       Expanded(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            GestureDetector(
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const KarmaLedgerScreen())),
-                              child: StreamBuilder<int>(
-                                stream: KarmaService.balanceStream(_currentUid),
-                                builder: (context, snap) {
-                                  final k = snap.data ?? 0;
-                                  return _StatColumn(value: k >= 1000 ? '${(k/1000).toStringAsFixed(1)}k' : '$k', label: 'Karma', valueColor: c.warningKarma, icon: Icons.bolt_rounded);
-                                },
-                              ),
-                            ),
+                             GestureDetector(
+                               onTap: () {
+                                 final String displayedType = ud['displayedPointType'] as String? ?? 'karma';
+                                 _showPointTypeSelector(context, displayedType);
+                               },
+                               child: _buildDisplayedStatColumn(c, ud, ud['displayedPointType'] as String? ?? 'karma'),
+                             ),
+                            _divider(c),
                             GestureDetector(
                               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ConnectionsListScreen(userId: _currentUid, isFollowersMode: true, profileOwnerName: displayName))),
                               child: _StatColumn(value: '$followers', label: AppStrings.followers),
                             ),
+                            _divider(c),
                             GestureDetector(
                               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ConnectionsListScreen(userId: _currentUid, isFollowersMode: false, profileOwnerName: displayName))),
                               child: _StatColumn(value: '$following', label: AppStrings.following),
@@ -274,8 +279,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         ),
                       ),
                     ]),
-                    const SizedBox(height: 14),
-                    Text(displayName, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: c.textHi)),
+                    const SizedBox(height: 16),
+                    Text(displayName, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: c.textHi)),
                     const SizedBox(height: 4),
                     Text(bio, style: TextStyle(fontSize: 13, color: c.textSecondary, height: 1.4)),
                     if (hobbies.isNotEmpty) ...[
@@ -294,14 +299,18 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 ),
               ),
               Container(
-                color: c.surface,
+                decoration: BoxDecoration(
+                  color: c.bg,
+                  border: Border(bottom: BorderSide(color: c.border, width: 0.8)),
+                ),
                 child: TabBar(
                   controller: _tabController,
                   labelColor: c.primary,
                   unselectedLabelColor: c.textMuted,
-                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                   unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  indicator: UnderlineTabIndicator(borderSide: BorderSide(color: c.primary, width: 2.5), insets: const EdgeInsets.symmetric(horizontal: 20)),
+                  indicatorColor: c.primary,
+                  indicatorSize: TabBarIndicatorSize.label,
                   tabs: const [Tab(text: AppStrings.posts), Tab(text: AppStrings.videos), Tab(text: AppStrings.answers)],
                 ),
               ),
@@ -320,6 +329,124 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         );
       },
     );
+  }
+
+  void _showPointTypeSelector(BuildContext context, String currentType) {
+    final c = context.appColors;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 10, bottom: 14),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: c.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Text(
+                'Display Points Badge',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: c.textHi,
+                ),
+              ),
+            ),
+            Divider(height: 1, color: c.divider),
+            _pointTypeTile(sheetCtx, 'karma', 'Karma ⚡', currentType),
+            _pointTypeTile(sheetCtx, 'beauty', 'Beauty 💖', currentType),
+            _pointTypeTile(sheetCtx, 'art', 'Art 🎨', currentType),
+            _pointTypeTile(sheetCtx, 'funny', 'Funny 😂', currentType),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pointTypeTile(BuildContext context, String type, String label, String currentType) {
+    final c = context.appColors;
+    final isSelected = type == currentType;
+    return ListTile(
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? c.primary : c.textHi,
+          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+      trailing: isSelected ? Icon(Icons.check_circle_rounded, color: c.primary) : null,
+      onTap: () async {
+        Navigator.pop(context);
+        if (_currentUid.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_currentUid)
+              .update({'displayedPointType': type});
+        }
+      },
+    );
+  }
+
+  Widget _buildDisplayedStatColumn(AppColorsExtension c, Map<String, dynamic> ud, String displayedType) {
+    final String label;
+    final int val;
+    final IconData icon;
+    final Color valueColor;
+
+    switch (displayedType) {
+      case 'beauty':
+        label = 'Beauty';
+        val = (ud['beautyPoints'] as num?)?.toInt() ?? 0;
+        icon = Icons.favorite_rounded;
+        valueColor = Colors.pinkAccent;
+        break;
+      case 'art':
+        label = 'Art';
+        val = (ud['artPoints'] as num?)?.toInt() ?? 0;
+        icon = Icons.palette_rounded;
+        valueColor = Colors.orangeAccent;
+        break;
+      case 'funny':
+        label = 'Funny';
+        val = (ud['funnyPoints'] as num?)?.toInt() ?? 0;
+        icon = Icons.emoji_emotions_rounded;
+        valueColor = Colors.amber;
+        break;
+      case 'karma':
+      default:
+        label = 'Karma';
+        val = (ud['karmaBalance'] as num?)?.toInt() ?? 0;
+        icon = Icons.bolt_rounded;
+        valueColor = c.primary;
+        break;
+    }
+
+    final String displayVal = val >= 1000 ? '${(val / 1000).toStringAsFixed(1)}k' : '$val';
+
+    return _StatColumn(
+      value: displayVal,
+      label: label,
+      valueColor: valueColor,
+      icon: icon,
+    );
+  }
+
+  Widget _divider(AppColorsExtension c) {
+    return Container(width: 0.8, height: 24, color: c.border);
   }
 }
 
@@ -341,29 +468,29 @@ class _WeeklyBonusBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        gradient: available ? c.karmaGoldGradient : null,
-        color: available ? null : c.field,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: available ? c.warningKarmaBorder : c.border),
+        color: available ? c.surface : c.field,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: available ? c.primary : c.border, width: 0.8),
       ),
       child: Row(children: [
         Container(
-          width: 40, height: 40,
+          width: 36, height: 36,
           decoration: BoxDecoration(
-            color: available ? c.warningKarma.withValues(alpha: 0.12) : c.primary.withValues(alpha: 0.08),
+            color: available ? c.primary.withValues(alpha: 0.08) : c.field,
             shape: BoxShape.circle,
+            border: Border.all(color: c.border, width: 0.8),
           ),
           child: Icon(available ? Icons.card_giftcard_rounded : Icons.hourglass_bottom_rounded,
-              color: available ? c.warningKarma : c.textMuted, size: 20),
+              color: available ? c.primary : c.textMuted, size: 18),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(available ? 'Weekly bonus ready!' : 'Next bonus in $timeLabel',
-                style: TextStyle(color: available ? c.warningKarma : c.textHi, fontSize: 13, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(available ? 'Claim your +100 ⚡ karma now' : 'Come back to claim +100 ⚡ karma',
-                style: TextStyle(color: available ? c.warningKarma : c.textMuted, fontSize: 11)),
+                style: TextStyle(color: c.textMuted, fontSize: 11)),
           ]),
         ),
         const SizedBox(width: 10),
@@ -374,8 +501,8 @@ class _WeeklyBonusBanner extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: claiming ? c.warningKarmaBorder : c.warningKarma,
-                borderRadius: BorderRadius.circular(10),
+                color: claiming ? c.border : c.primary,
+                borderRadius: BorderRadius.circular(8),
               ),
               child: claiming
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -402,7 +529,7 @@ class _StatColumn extends StatelessWidget {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Row(mainAxisSize: MainAxisSize.min, children: [
         if (icon != null) ...[Icon(icon, color: valueColor ?? c.textHi, size: 14), const SizedBox(width: 2)],
-        Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: valueColor ?? c.textHi)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: valueColor ?? c.textHi)),
       ]),
       const SizedBox(height: 2),
       Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: c.textMuted)),
@@ -417,13 +544,13 @@ class _HobbyChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.appColors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: c.field,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.chipBorder),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: c.border, width: 0.8),
       ),
-      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: c.primary)),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.textMuted)),
     );
   }
 }
@@ -441,11 +568,11 @@ class _OutlineButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.chipBorder, width: 1.5),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.border, width: 0.8),
         ),
         alignment: Alignment.center,
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.primary)),
+        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textPrimary)),
       ),
     );
   }
@@ -532,15 +659,13 @@ class _ProfileContentList extends StatelessWidget {
                 child: PostCard(
                   post: post,
                   onTap: () => Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post),
-                  onLike: () {
-                    final dataMap = doc.data() as Map<String, dynamic>?;
-                    final List likedBy = dataMap?['likedBy'] ?? [];
-                    NotificationService.toggleLike(
+                  onReact: (type) {
+                    ReactionService.toggleReaction(
                       postId: doc.id,
                       postAuthorId: post.authorId,
                       postTitle: post.title,
                       currentUid: authorId,
-                      likedBy: likedBy,
+                      reactionType: type,
                     );
                   },
                   onComment: () => Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post),

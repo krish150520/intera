@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
@@ -74,163 +73,148 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Elegant dark themed splash for maximum visual impact on launch
     final c = context.appColors;
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF131127), // Deep slate dark blue
-              Color(0xFF1C1A3A), // Dark purple slate
-              Color(0xFF100E20), // Midnight black
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // ── Center Branding ───────────────────────────────────────────
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Glowing logo squircle with scale animation
-                    ScaleTransition(
-                      scale: _scale,
-                      child: FadeTransition(
-                        opacity: _fade,
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF8B7DFC), // Light vibrant indigo
-                                Color(0xFF6352E9), // Accent purple
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF6352E9).withValues(alpha: 0.4),
-                                blurRadius: 28,
-                                spreadRadius: 2,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Decorative background circles
-                              Positioned(
-                                top: -10,
-                                left: -10,
-                                child: CircleAvatar(
-                                  radius: 24,
-                                  backgroundColor: Colors.white.withValues(alpha: 0.06),
-                                ),
-                              ),
-                              // Logo letter mark
-                              const Center(
-                                child: Text(
-                                  'IN',
-                                  style: TextStyle(
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    letterSpacing: -1,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // Brand title with fade-in animation
-                    FadeTransition(
+      backgroundColor: c.bg,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // ── Center Branding ───────────────────────────────────────────
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Glowing logo squircle with scale animation
+                  ScaleTransition(
+                    scale: _scale,
+                    child: FadeTransition(
                       opacity: _fade,
-                      child: Column(
-                        children: [
-                          Text(
-                            AppStrings.appName.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 6,
-                            ),
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              c.primary,
+                              c.primary.withValues(alpha: 0.8),
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            AppStrings.tagline,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.5,
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: c.primary.withValues(alpha: 0.25),
+                              blurRadius: 28,
+                              spreadRadius: 2,
+                              offset: const Offset(0, 8),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Loading indicator at the bottom ───────────────────────────
-              Positioned(
-                bottom: 40,
-                left: 0,
-                right: 0,
-                child: FadeTransition(
-                  opacity: _fade,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          child: LinearProgressIndicator(
-                            minHeight: 2.5,
-                            backgroundColor: Colors.white.withValues(alpha: 0.1),
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              Color(0xFF8B7DFC),
-                            ),
+                          ],
+                          border: Border.all(
+                            color: c.primary.withValues(alpha: 0.1),
+                            width: 1.5,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Decorative background circles
+                            Positioned(
+                              top: -10,
+                              left: -10,
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            // Logo letter mark
+                            const Center(
+                              child: Text(
+                                'IN',
+                                style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Brand title with fade-in animation
+                  FadeTransition(
+                    opacity: _fade,
+                    child: Column(
+                      children: [
                         Text(
-                          'INTERACTION DESIGNED',
+                          AppStrings.appName.toUpperCase(),
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.35),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
+                            color: c.textHi,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 6,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          AppStrings.tagline,
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
                   ),
+                ],
+              ),
+            ),
+
+            // ── Loading indicator at the bottom ───────────────────────────
+            Positioned(
+              bottom: 40,
+              left: 0,
+              right: 0,
+              child: FadeTransition(
+                opacity: _fade,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        child: LinearProgressIndicator(
+                          minHeight: 2.5,
+                          backgroundColor: c.field,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            c.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'INTERACTION DESIGNED',
+                        style: TextStyle(
+                          color: c.textDim,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

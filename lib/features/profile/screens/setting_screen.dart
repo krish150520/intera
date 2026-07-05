@@ -233,6 +233,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () async {
                       Navigator.pop(sheetCtx);
                       await _rememberAccountLocally();
+                      
+                      final savedPass = prefs.getString('pass_for_$email');
+                      if (savedPass != null && savedPass.isNotEmpty) {
+                        try {
+                          await FirebaseAuth.instance.signOut();
+                          await FirebaseAuth.instance.signInWithEmailAndPassword(
+                            email: email,
+                            password: savedPass,
+                          );
+                          if (context.mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              AppRoutes.main,
+                              (route) => false,
+                            );
+                          }
+                          return;
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Auto-login failed: $e')),
+                            );
+                          }
+                        }
+                      }
+
                       await FirebaseAuth.instance.signOut();
                       if (context.mounted) {
                         Navigator.of(context).pushNamedAndRemoveUntil(

@@ -6,7 +6,6 @@ import '../../home/widgets/post_card.dart';
 import '../../home/screens/post_detail_screen.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
-import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/notification_service.dart';
 
@@ -394,235 +393,148 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _LeaderboardTab extends StatelessWidget {
+class _LeaderboardTab extends StatefulWidget {
   final String myUid;
-
   const _LeaderboardTab({required this.myUid});
 
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .orderBy('karmaBalance', descending: true)
-          .limit(50)
-          .snapshots(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              color: context.colors.primary,
-              strokeWidth: 2,
-            ),
-          );
-        }
-
-        final docs = snap.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return const _EmptyState(
-            icon: Icons.emoji_events_outlined,
-            title: 'No rankings yet',
-            subtitle: 'Answer help requests to appear here!',
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
-          itemCount: docs.length + 1,
-          itemBuilder: (context, i) {
-            if (i == 0) {
-              if (docs.length >= 3) {
-                return _Podium(docs: docs.take(3).toList(), myUid: myUid);
-              }
-              return const SizedBox.shrink();
-            }
-
-            final rank = i;
-            final doc = docs[i - 1];
-            final data = doc.data() as Map<String, dynamic>;
-            final isMe = doc.id == myUid;
-            final karma = (data['karmaBalance'] as num?)?.toInt() ?? 0;
-            final name = data['name'] as String? ?? 'User';
-            final avatar =
-                data['profileImageUrl'] as String? ??
-                data['photoURL'] as String?;
-            final username = data['username'] as String? ?? '';
-
-            if (rank <= 3) return const SizedBox.shrink();
-
-            return _LeaderRow(
-              rank: rank,
-              name: name,
-              username: username,
-              avatar: avatar,
-              karma: karma,
-              isMe: isMe,
-            );
-          },
-        );
-      },
-    );
-  }
+  State<_LeaderboardTab> createState() => _LeaderboardTabState();
 }
 
-class _Podium extends StatelessWidget {
-  final List<QueryDocumentSnapshot> docs;
-  final String myUid;
-
-  const _Podium({required this.docs, required this.myUid});
-
-  static const _medalColors = [
-    Color(0xFFC0C0C0),
-    Color(0xFFFFD700),
-    Color(0xFFCD7F32),
-  ];
+class _LeaderboardTabState extends State<_LeaderboardTab> {
+  String _selectedCategory = 'karma';
 
   @override
   Widget build(BuildContext context) {
-    final order = [1, 0, 2];
-    final heights = [88.0, 116.0, 72.0];
-    final crowns = ['🥈', '🥇', '🥉'];
+    final c = context.appColors;
+    final String orderByField;
+    final IconData icon;
+    final Color pointColor;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: context.colors.primary.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            '🏆  Top Karma Earners',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: context.appColors.textHi,
-              fontWeight: FontWeight.w800,
+    switch (_selectedCategory) {
+      case 'beauty':
+        orderByField = 'beautyPoints';
+        icon = Icons.favorite_rounded;
+        pointColor = Colors.pinkAccent;
+        break;
+      case 'art':
+        orderByField = 'artPoints';
+        icon = Icons.palette_rounded;
+        pointColor = Colors.orangeAccent;
+        break;
+      case 'funny':
+        orderByField = 'funnyPoints';
+        icon = Icons.emoji_emotions_rounded;
+        pointColor = Colors.amber;
+        break;
+      case 'karma':
+      default:
+        orderByField = 'karmaBalance';
+        icon = Icons.bolt_rounded;
+        pointColor = c.primary;
+        break;
+    }
+
+    return Column(
+      children: [
+        Container(
+          color: context.colors.surface,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: 'Karma ⚡',
+                  selected: _selectedCategory == 'karma',
+                  onTap: () => setState(() => _selectedCategory = 'karma'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Beauty 💖',
+                  selected: _selectedCategory == 'beauty',
+                  onTap: () => setState(() => _selectedCategory = 'beauty'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Art 🎨',
+                  selected: _selectedCategory == 'art',
+                  onTap: () => setState(() => _selectedCategory = 'art'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Funny 😂',
+                  selected: _selectedCategory == 'funny',
+                  onTap: () => setState(() => _selectedCategory = 'funny'),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (slot) {
-              final docIdx = order[slot];
-              final doc = docs[docIdx];
-              final data = doc.data() as Map<String, dynamic>;
-              final name = (data['name'] as String? ?? 'User').split(' ').first;
-              final avatar =
-                  data['profileImageUrl'] as String? ??
-                  data['photoURL'] as String?;
-              final karma = (data['karmaBalance'] as num?)?.toInt() ?? 0;
-              final rank = docIdx + 1;
-              final isMe = doc.id == myUid;
-              final medalColor = _medalColors[slot];
+        ),
+        Divider(height: 1, color: context.appColors.border),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .orderBy(orderByField, descending: true)
+                .limit(100)
+                .snapshots(),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: context.colors.primary,
+                    strokeWidth: 2,
+                  ),
+                );
+              }
 
-              return Padding(
-                padding: EdgeInsets.symmetric(horizontal: slot == 1 ? 12 : 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(crowns[slot], style: const TextStyle(fontSize: 20)),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: slot == 1 ? 60 : 48,
-                      height: slot == 1 ? 60 : 48,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isMe ? context.colors.primary : medalColor,
-                          width: slot == 1 ? 3 : 2,
-                        ),
-                      ),
-                      child: CircleAvatar(
-                        radius: slot == 1 ? 28 : 22,
-                        backgroundColor: context.colors.surfaceContainerHighest,
-                        backgroundImage: avatar != null && avatar.isNotEmpty
-                            ? NetworkImage(avatar)
-                            : null,
-                        child: avatar == null || avatar.isEmpty
-                            ? Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                style: TextStyle(
-                                  color: context.colors.primary,
-                                  fontSize: slot == 1 ? 20 : 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              )
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      name,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: context.appColors.textHi,
-                        fontSize: slot == 1 ? 13 : 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.bolt_rounded,
-                          color: medalColor,
-                          size: slot == 1 ? 14 : 12,
-                        ),
-                        Text(
-                          _compact(karma),
-                          style: TextStyle(
-                            color: medalColor,
-                            fontSize: slot == 1 ? 13 : 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: slot == 1 ? 80 : 64,
-                      height: heights[slot],
-                      decoration: BoxDecoration(
-                        color: medalColor.withValues(alpha: 0.15),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(8),
-                        ),
-                        border: Border.all(color: medalColor.withValues(alpha: 0.4)),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '#$rank',
-                          style: TextStyle(
-                            color: medalColor,
-                            fontSize: slot == 1 ? 18 : 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              final docs = snap.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return const _EmptyState(
+                  icon: Icons.emoji_events_outlined,
+                  title: 'No rankings yet',
+                  subtitle: 'Earn points to appear here!',
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                itemCount: docs.length,
+                itemBuilder: (context, i) {
+                  final rank = i + 1;
+                  final doc = docs[i];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final isMe = doc.id == widget.myUid;
+                  final points = (data[orderByField] as num?)?.toInt() ?? 0;
+                  final name = data['name'] as String? ?? 'User';
+                  final avatar =
+                      data['profileImageUrl'] as String? ??
+                      data['photoURL'] as String?;
+                  final username = data['username'] as String? ?? '';
+
+                  return _LeaderRow(
+                    rank: rank,
+                    name: name,
+                    username: username,
+                    avatar: avatar,
+                    karma: points,
+                    isMe: isMe,
+                    icon: icon,
+                    pointColor: pointColor,
+                  );
+                },
               );
-            }),
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-
-  String _compact(int n) {
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-    return '$n';
-  }
 }
+
+
 
 class _LeaderRow extends StatelessWidget {
   final int rank;
@@ -631,6 +543,8 @@ class _LeaderRow extends StatelessWidget {
   final String? avatar;
   final int karma;
   final bool isMe;
+  final IconData icon;
+  final Color pointColor;
 
   const _LeaderRow({
     required this.rank,
@@ -639,6 +553,8 @@ class _LeaderRow extends StatelessWidget {
     required this.avatar,
     required this.karma,
     required this.isMe,
+    required this.icon,
+    required this.pointColor,
   });
 
   @override
@@ -744,15 +660,15 @@ class _LeaderRow extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.bolt_rounded,
-                color: context.appColors.warningKarma,
+                icon,
+                color: pointColor,
                 size: 14,
               ),
               const SizedBox(width: 2),
               Text(
                 _compact(karma),
                 style: TextStyle(
-                  color: context.appColors.warningKarma,
+                  color: pointColor,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),

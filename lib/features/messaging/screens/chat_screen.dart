@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
@@ -267,6 +268,18 @@ class _ChatScreenState extends State<ChatScreen> {
               .doc(widget.conversationId)
               .snapshots(),
           builder: (context, convoSnapshot) {
+            if (convoSnapshot.hasData && !convoSnapshot.data!.exists) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('This conversation has been deleted.')),
+                  );
+                }
+              });
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            }
+
             final convoData =
                 convoSnapshot.data?.data() as Map<String, dynamic>?;
             final status = convoData?['status'] as String? ?? 'active';
@@ -337,13 +350,14 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final hasAvatar = avatar != null && avatar!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 16, 12),
       decoration: BoxDecoration(
-        color: context.colors.surface,
-        border: Border(bottom: BorderSide(color: _ChatColors.border(context))),
+        color: c.bg,
+        border: Border(bottom: BorderSide(color: c.border, width: 0.8)),
       ),
       child: Row(
         children: [
@@ -351,7 +365,7 @@ class _ChatHeader extends StatelessWidget {
             onPressed: () => Navigator.of(context).maybePop(),
             icon: Icon(
               Icons.arrow_back_ios_new_rounded,
-              color: context.colors.primary,
+              color: c.textPrimary,
               size: 18,
             ),
           ),
@@ -359,15 +373,15 @@ class _ChatHeader extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               CircleAvatar(
-                radius: 23,
-                backgroundColor: context.colors.surfaceContainerHighest,
+                radius: 20,
+                backgroundColor: c.field,
                 backgroundImage: hasAvatar ? NetworkImage(avatar!) : null,
                 child: !hasAvatar
                     ? Text(
                         name.isNotEmpty ? name[0].toUpperCase() : '?',
                         style: TextStyle(
-                          color: context.colors.primary,
-                          fontSize: 17,
+                          color: c.textPrimary,
+                          fontSize: 14,
                           fontWeight: FontWeight.w800,
                         ),
                       )
@@ -377,14 +391,14 @@ class _ChatHeader extends StatelessWidget {
                 right: -1,
                 bottom: -1,
                 child: Container(
-                  width: 13,
-                  height: 13,
+                  width: 10,
+                  height: 10,
                   decoration: BoxDecoration(
                     color: isPending
-                        ? AppColors.warningKarma
+                        ? c.primary
                         : AppColors.success,
                     shape: BoxShape.circle,
-                    border: Border.all(color: context.colors.surface, width: 2),
+                    border: Border.all(color: c.bg, width: 1.5),
                   ),
                 ),
               ),
@@ -399,9 +413,9 @@ class _ChatHeader extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: _ChatColors.textHi(context),
-                    fontSize: 16,
+                  style: TextStyle(
+                    color: c.textHi,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -412,8 +426,8 @@ class _ChatHeader extends StatelessWidget {
                       : isPending
                       ? 'Request pending'
                       : 'Direct message',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _ChatColors.textDim(context),
+                  style: TextStyle(
+                    color: c.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -425,7 +439,7 @@ class _ChatHeader extends StatelessWidget {
             onPressed: onActionsTap,
             icon: Icon(
               Icons.more_horiz_rounded,
-              color: _ChatColors.textDim(context),
+              color: c.textMuted,
             ),
           ),
         ],
@@ -449,33 +463,27 @@ class _ChatActionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return SafeArea(
       top: false,
       child: Container(
         margin: const EdgeInsets.all(12),
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
         decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _ChatColors.border(context)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(context.isDarkMode ? 0.28 : 0.10),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          color: c.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.border, width: 0.8),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 42,
+              width: 36,
               height: 4,
               margin: const EdgeInsets.only(bottom: 14),
               decoration: BoxDecoration(
-                color: _ChatColors.border(context),
-                borderRadius: BorderRadius.circular(99),
+                color: c.border,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
             Align(
@@ -486,8 +494,9 @@ class _ChatActionsSheet extends StatelessWidget {
                   otherName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: _ChatColors.textHi(context),
+                  style: TextStyle(
+                    color: c.textHi,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -536,23 +545,24 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppColors.error : context.colors.primary;
+    final c = context.appColors;
+    final color = isDestructive ? AppColors.error : c.primary;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
             Container(
-              width: 42,
-              height: 42,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: color.withOpacity(context.isDarkMode ? 0.18 : 0.10),
+                color: color.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 21),
+              child: Icon(icon, color: color, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -561,10 +571,10 @@ class _ActionTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    style: TextStyle(
                       color: isDestructive
                           ? AppColors.error
-                          : _ChatColors.textHi(context),
+                          : c.textPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -572,8 +582,8 @@ class _ActionTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _ChatColors.textDim(context),
+                    style: TextStyle(
+                      color: c.textMuted,
                       fontSize: 11,
                     ),
                   ),
@@ -582,7 +592,7 @@ class _ActionTile extends StatelessWidget {
             ),
             Icon(
               Icons.chevron_right_rounded,
-              color: _ChatColors.textDim(context),
+              color: c.textMuted,
             ),
           ],
         ),
@@ -599,28 +609,29 @@ class _RequestBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _ChatColors.warningBg(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _ChatColors.warningBorder(context)),
+        color: c.field,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border, width: 0.8),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 30,
-            height: 30,
-            decoration: const BoxDecoration(
-              color: AppColors.warningKarma,
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: c.primary,
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.lock_open_rounded,
               color: Colors.white,
-              size: 15,
+              size: 14,
             ),
           ),
           const SizedBox(width: 10),
@@ -629,8 +640,8 @@ class _RequestBanner extends StatelessWidget {
               isMyRequest
                   ? 'Message request sent. $otherName will see your chat once they accept.'
                   : '$otherName is not following you yet. Accept this request to continue the conversation.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: _ChatColors.warningText(context),
+              style: TextStyle(
+                color: c.textSecondary,
                 fontSize: 12,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
@@ -656,8 +667,83 @@ class _MessagesPanel extends StatelessWidget {
     required this.otherName,
   });
 
+  void _showMessageActions(BuildContext context, String messageId, MessageModel message, bool isMe) {
+    final c = context.appColors;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 10),
+                decoration: BoxDecoration(
+                  color: c.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              if (message.text != null && message.text!.isNotEmpty)
+                ListTile(
+                  leading: Icon(Icons.copy_rounded, color: c.primary),
+                  title: Text('Copy text', style: TextStyle(color: c.textPrimary)),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: message.text!));
+                    Navigator.pop(sheetCtx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Message copied to clipboard')),
+                    );
+                  },
+                ),
+              if (isMe)
+                ListTile(
+                  leading: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+                  title: const Text('Delete for Everyone', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogCtx) => AlertDialog(
+                        title: const Text('Delete message?'),
+                        content: const Text('This will delete the message for everyone in this chat.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogCtx, false),
+                            child: Text('Cancel', style: TextStyle(color: c.textSecondary)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogCtx, true),
+                            child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await FirebaseFirestore.instance
+                          .collection('conversations')
+                          .doc(conversationId)
+                          .collection('messages')
+                          .doc(messageId)
+                          .delete();
+                    }
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return StreamBuilder(
       stream: messagingService.messagesStream(conversationId),
       builder: (context, snapshot) {
@@ -665,7 +751,7 @@ class _MessagesPanel extends StatelessWidget {
           return Center(
             child: Text(
               'Could not load messages',
-              style: TextStyle(color: _ChatColors.textDim(context)),
+              style: TextStyle(color: c.textMuted),
             ),
           );
         }
@@ -673,7 +759,7 @@ class _MessagesPanel extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
             child: CircularProgressIndicator(
-              color: context.colors.primary,
+              color: c.primary,
               strokeWidth: 2,
             ),
           );
@@ -686,26 +772,21 @@ class _MessagesPanel extends StatelessWidget {
         }
 
         return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Theme.of(context).scaffoldBackgroundColor,
-                context.colors.surfaceContainerHighest.withOpacity(0.6),
-              ],
-            ),
-          ),
+          color: c.bg,
           child: ListView.builder(
             reverse: true,
             padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
             itemCount: docs.length,
             itemBuilder: (context, index) {
-              final message = MessageModel.fromFirestore(docs[index]);
+              final doc = docs[index];
+              final message = MessageModel.fromFirestore(doc);
               final isMe = message.senderId == myUid;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
-                child: MessageBubble(message: message, isMe: isMe),
+                child: GestureDetector(
+                  onLongPress: () => _showMessageActions(context, doc.id, message, isMe),
+                  child: MessageBubble(message: message, isMe: isMe),
+                ),
               );
             },
           ),
@@ -722,6 +803,7 @@ class _EmptyConversation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 34),
@@ -729,32 +811,26 @@ class _EmptyConversation extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                color: c.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: context.colors.primary.withOpacity(0.18),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+                border: Border.all(color: c.primary, width: 0.8),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.waving_hand_rounded,
-                color: Colors.white,
-                size: 30,
+                color: c.primary,
+                size: 26,
               ),
             ),
             const SizedBox(height: 16),
             Text(
               'Say hello to $otherName',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: _ChatColors.textHi(context),
-                fontSize: 17,
+              style: TextStyle(
+                color: c.textHi,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -762,8 +838,8 @@ class _EmptyConversation extends StatelessWidget {
             Text(
               'Start with a quick note, a question, or share a photo.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: _ChatColors.textDim(context),
+              style: TextStyle(
+                color: c.textMuted,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -788,17 +864,12 @@ class _AcceptDeclineBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: context.colors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(context.isDarkMode ? 0.20 : 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          ),
-        ],
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border, width: 0.8)),
       ),
       child: Row(
         children: [
@@ -808,11 +879,11 @@ class _AcceptDeclineBar extends StatelessWidget {
               icon: const Icon(Icons.close_rounded, size: 17),
               label: const Text('Decline'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _ChatColors.textDim(context),
-                side: BorderSide(color: _ChatColors.border(context)),
+                foregroundColor: c.textSecondary,
+                side: BorderSide(color: c.border),
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
@@ -833,12 +904,12 @@ class _AcceptDeclineBar extends StatelessWidget {
                   : const Icon(Icons.check_rounded, size: 17),
               label: const Text('Accept'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.colors.primary,
+                backgroundColor: c.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
@@ -866,18 +937,12 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: context.colors.surface,
-        border: Border(top: BorderSide(color: _ChatColors.border(context))),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(context.isDarkMode ? 0.20 : 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, -5),
-          ),
-        ],
+        color: c.bg,
+        border: Border(top: BorderSide(color: c.border, width: 0.8)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -889,13 +954,13 @@ class _Composer extends StatelessWidget {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                      color: context.colors.primary,
+                      color: c.primary,
                       strokeWidth: 2,
                     ),
                   )
                 : Icon(
                     Icons.add_photo_alternate_outlined,
-                    color: context.colors.primary,
+                    color: c.textPrimary,
                     size: 22,
                   ),
           ),
@@ -904,22 +969,22 @@ class _Composer extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               decoration: BoxDecoration(
-                color: context.colors.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: _ChatColors.border(context)),
+                color: c.field,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: c.border, width: 0.8),
               ),
               child: TextField(
                 controller: controller,
                 minLines: 1,
                 maxLines: 4,
                 textCapitalization: TextCapitalization.sentences,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _ChatColors.textHi(context),
+                style: TextStyle(
+                  color: c.textPrimary,
                   fontSize: 14,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Write a message...',
-                  hintStyle: TextStyle(color: _ChatColors.textDim(context)),
+                  hintStyle: TextStyle(color: c.textMuted),
                   border: InputBorder.none,
                   isCollapsed: true,
                   contentPadding: const EdgeInsets.symmetric(vertical: 11),
@@ -932,18 +997,11 @@ class _Composer extends StatelessWidget {
           GestureDetector(
             onTap: isSending ? null : onSend,
             child: Container(
-              width: 42,
-              height: 42,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                color: c.primary,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: context.colors.primary.withOpacity(0.24),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
               ),
               child: isSending
                   ? const Padding(
@@ -956,7 +1014,7 @@ class _Composer extends StatelessWidget {
                   : const Icon(
                       Icons.send_rounded,
                       color: Colors.white,
-                      size: 18,
+                      size: 16,
                     ),
             ),
           ),
@@ -974,15 +1032,16 @@ class _ComposerIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GestureDetector(
       onTap: onPressed,
       child: Container(
-        width: 42,
-        height: 42,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-          color: context.colors.surfaceContainerHighest,
+          color: c.field,
           shape: BoxShape.circle,
-          border: Border.all(color: _ChatColors.border(context)),
+          border: Border.all(color: c.border, width: 0.8),
         ),
         child: Center(child: child),
       ),
@@ -990,27 +1049,4 @@ class _ComposerIconButton extends StatelessWidget {
   }
 }
 
-class _ChatColors {
-  const _ChatColors._();
 
-  static Color textHi(BuildContext context) => context.isDarkMode
-      ? AppColors.darkTextPrimary
-      : AppColors.lightTextPrimary;
-
-  static Color textDim(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
-
-  static Color border(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkDivider : AppColors.lightDivider;
-
-  static Color warningBg(BuildContext context) => context.isDarkMode
-      ? AppColors.warningKarma.withOpacity(0.16)
-      : AppColors.warningKarmaBg;
-
-  static Color warningBorder(BuildContext context) => context.isDarkMode
-      ? AppColors.warningKarma.withOpacity(0.36)
-      : AppColors.warningKarmaBorder;
-
-  static Color warningText(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkTextSecondary : AppColors.warningKarma;
-}

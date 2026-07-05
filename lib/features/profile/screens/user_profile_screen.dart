@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/follow_service.dart';
-import '../../../core/services/notification_service.dart';
+import '../../../core/services/reaction_service.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../messaging/services/messaging_service.dart';
@@ -147,7 +147,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
           final followersCount = userData['followersCount'] ?? 0;
           final followingCount = userData['followingCount'] ?? 0;
-          final karmaPoints = userData['karmaPoints'] ?? 0;
           final bio =
               userData['bio'] ??
               'Hey there! I am excited to join the INTERA community. 🚀';
@@ -276,24 +275,62 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.bolt_rounded,
-                          size: 16,
-                          color: AppColors.warningKarma,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '$karmaPoints Karma',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: AppColors.warningKarma,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                        ),
-                      ],
+                    Builder(
+                      builder: (context) {
+                        final String dispType = userData['displayedPointType'] as String? ?? 'karma';
+                        final String label;
+                        final int val;
+                        final IconData icon;
+                        final Color valColor;
+
+                        switch (dispType) {
+                          case 'beauty':
+                            label = 'Beauty';
+                            val = (userData['beautyPoints'] as num?)?.toInt() ?? 0;
+                            icon = Icons.favorite_rounded;
+                            valColor = Colors.pinkAccent;
+                            break;
+                          case 'art':
+                            label = 'Art';
+                            val = (userData['artPoints'] as num?)?.toInt() ?? 0;
+                            icon = Icons.palette_rounded;
+                            valColor = Colors.orangeAccent;
+                            break;
+                          case 'funny':
+                            label = 'Funny';
+                            val = (userData['funnyPoints'] as num?)?.toInt() ?? 0;
+                            icon = Icons.emoji_emotions_rounded;
+                            valColor = Colors.amber;
+                            break;
+                          case 'karma':
+                          default:
+                            label = 'Karma';
+                            val = (userData['karmaBalance'] as num?)?.toInt() ?? (userData['karmaPoints'] as num?)?.toInt() ?? 0;
+                            icon = Icons.bolt_rounded;
+                            valColor = AppColors.warningKarma;
+                            break;
+                        }
+
+                        return Row(
+                          children: [
+                            Icon(
+                              icon,
+                              size: 16,
+                              color: valColor,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '$val $label',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: valColor,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -448,15 +485,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           post: postItem,
                           onTap: () => Navigator.of(context)
                               .pushNamed(AppRoutes.postDetail, arguments: postItem),
-                          onLike: () {
-                            final dataMap = doc.data() as Map<String, dynamic>?;
-                            final List likedBy = dataMap?['likedBy'] ?? [];
-                            NotificationService.toggleLike(
+                          onReact: (type) {
+                            ReactionService.toggleReaction(
                               postId: doc.id,
                               postAuthorId: postItem.authorId,
                               postTitle: postItem.title,
                               currentUid: currentUid,
-                              likedBy: likedBy,
+                              reactionType: type,
                             );
                           },
                           onComment: () => Navigator.of(context)

@@ -11,14 +11,14 @@ import '../../../core/services/notification_service.dart';
 //  DATA MODELS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class StoryViewerArgs {
-  final List<StoryItem> stories;
+class SparkViewerArgs {
+  final List<SparkItem> sparks;
   final int initialIndex;
-  const StoryViewerArgs({required this.stories, required this.initialIndex});
+  const SparkViewerArgs({required this.sparks, required this.initialIndex});
 }
 
-class StoryItem {
-  final String storyId;
+class SparkItem {
+  final String sparkId;
   final String authorId;
   final String authorName;
   final String? authorAvatar;
@@ -28,8 +28,8 @@ class StoryItem {
   final List<int>? gradientColors;
   final DateTime createdAt;
 
-  const StoryItem({
-    required this.storyId,
+  const SparkItem({
+    required this.sparkId,
     required this.authorId,
     required this.authorName,
     this.authorAvatar,
@@ -40,10 +40,10 @@ class StoryItem {
     required this.createdAt,
   });
 
-  factory StoryItem.fromFirestore(DocumentSnapshot doc) {
+  factory SparkItem.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
-    return StoryItem(
-      storyId: doc.id,
+    return SparkItem(
+      sparkId: doc.id,
       authorId: d['authorId'] ?? '',
       authorName: d['authorName'] ?? 'User',
       authorAvatar: d['authorAvatar'],
@@ -59,25 +59,25 @@ class StoryItem {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  STORY VIEWER SCREEN — Instagram-style
+//  SPARK VIEWER SCREEN — Instagram-style
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class StoryViewerScreen extends StatefulWidget {
-  final StoryViewerArgs args;
-  const StoryViewerScreen({super.key, required this.args});
+class SparkViewerScreen extends StatefulWidget {
+  final SparkViewerArgs args;
+  const SparkViewerScreen({super.key, required this.args});
 
   @override
-  State<StoryViewerScreen> createState() => _StoryViewerScreenState();
+  State<SparkViewerScreen> createState() => _SparkViewerScreenState();
 }
 
-class _StoryViewerScreenState extends State<StoryViewerScreen>
+class _SparkViewerScreenState extends State<SparkViewerScreen>
     with TickerProviderStateMixin {
   late int _currentIndex;
-  StoryItem get _current => widget.args.stories[_currentIndex];
+  SparkItem get _current => widget.args.sparks[_currentIndex];
   final String _myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   AnimationController? _progressCtrl;
-  static const Duration _storyDuration = Duration(seconds: 5);
+  static const Duration _sparkDuration = Duration(seconds: 5);
 
   bool _paused = false;
   bool _showViewers = false;
@@ -100,7 +100,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     super.initState();
     _currentIndex = widget.args.initialIndex;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    _initStory();
+    _initSpark();
   }
 
   @override
@@ -111,14 +111,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     super.dispose();
   }
 
-  // ── Story lifecycle ─────────────────────────────────────────────────────
-  void _initStory() {
+  // ── Spark lifecycle ─────────────────────────────────────────────────────
+  void _initSpark() {
     _progressCtrl?.dispose();
     _mediaReady = _current.mediaUrl == null || _current.mediaUrl!.isEmpty;
 
-    _progressCtrl = AnimationController(vsync: this, duration: _storyDuration)
+    _progressCtrl = AnimationController(vsync: this, duration: _sparkDuration)
       ..addStatusListener((s) {
-        if (s == AnimationStatus.completed) _nextStory();
+        if (s == AnimationStatus.completed) _nextSpark();
       });
 
     _markViewed();
@@ -130,7 +130,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     if (_current.authorId == _myUid) return;
     FirebaseFirestore.instance
         .collection('stories')
-        .doc(_current.storyId)
+        .doc(_current.sparkId)
         .update({
       'viewedBy': FieldValue.arrayUnion([_myUid])
     }).catchError((_) {});
@@ -143,27 +143,27 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     }
   }
 
-  void _nextStory() {
-    if (_currentIndex < widget.args.stories.length - 1) {
+  void _nextSpark() {
+    if (_currentIndex < widget.args.sparks.length - 1) {
       setState(() {
         _currentIndex++;
         _showViewers = false;
         _showReplyField = false;
       });
-      _initStory();
+      _initSpark();
     } else {
       if (mounted) Navigator.of(context).pop();
     }
   }
 
-  void _prevStory() {
+  void _prevSpark() {
     if (_currentIndex > 0) {
       setState(() {
         _currentIndex--;
         _showViewers = false;
         _showReplyField = false;
       });
-      _initStory();
+      _initSpark();
     } else {
       _progressCtrl?.reset();
       _progressCtrl?.forward();
@@ -180,8 +180,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     setState(() => _paused = false);
   }
 
-  // ── Delete story ────────────────────────────────────────────────────────
-  Future<void> _deleteStory() async {
+  // ── Delete spark ────────────────────────────────────────────────────────
+  Future<void> _deleteSpark() async {
     _pause();
 
     final confirm = await showDialog<bool>(
@@ -189,11 +189,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1C1B2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete story?',
+        title: const Text('Delete spark?',
             style:
                 TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         content: const Text(
-            'This will remove your story for everyone immediately.',
+            'This will remove your spark for everyone immediately.',
             style: TextStyle(color: Colors.white60, fontSize: 13)),
         actions: [
           TextButton(
@@ -220,12 +220,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     setState(() => _isDeleting = true);
 
     try {
-      final storyId = _current.storyId;
+      final sparkId = _current.sparkId;
       final mediaUrl = _current.mediaUrl;
 
       await FirebaseFirestore.instance
           .collection('stories')
-          .doc(storyId)
+          .doc(sparkId)
           .delete();
 
       if (mediaUrl != null && mediaUrl.isNotEmpty) {
@@ -243,13 +243,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
       if (!mounted) return;
 
-      if (_currentIndex < widget.args.stories.length - 1) {
+      if (_currentIndex < widget.args.sparks.length - 1) {
         setState(() {
           _currentIndex++;
           _showViewers = false;
           _isDeleting = false;
         });
-        _initStory();
+          _initSpark();
       } else {
         Navigator.of(context).pop();
       }
@@ -258,7 +258,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       setState(() => _isDeleting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Could not delete story: $e'),
+            content: Text('Could not delete spark: $e'),
             backgroundColor: Colors.redAccent),
       );
     }
@@ -277,7 +277,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     try {
       final doc = await FirebaseFirestore.instance
           .collection('stories')
-          .doc(_current.storyId)
+          .doc(_current.sparkId)
           .get();
       final viewedBy = List<String>.from(doc.data()?['viewedBy'] ?? []);
 
@@ -330,7 +330,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       // Save reply to subcollection
       await FirebaseFirestore.instance
           .collection('stories')
-          .doc(_current.storyId)
+          .doc(_current.sparkId)
           .collection('replies')
           .add({
         'senderId': _myUid,
@@ -338,13 +338,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Send notification to story author
+      // Send notification to spark author
       NotificationService.sendNotification(
         recipientId: _current.authorId,
-        type: 'story_reply',
-        title: 'replied to your story',
+        type: 'spark_reply',
+        title: 'replied to your spark',
         subtitle: text,
-        relatedId: _current.storyId,
+        relatedId: _current.sparkId,
       );
 
       _replyController.clear();
@@ -388,8 +388,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   @override
   Widget build(BuildContext context) {
-    final story = _current;
-    final isOwn = story.authorId == _myUid;
+    final spark = _current;
+    final isOwn = spark.authorId == _myUid;
     final size = MediaQuery.of(context).size;
     final topPad = MediaQuery.of(context).padding.top;
     final botPad = MediaQuery.of(context).padding.bottom;
@@ -431,340 +431,340 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(radius),
               child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // ── 1. Background ─────────────────────────────────────────
-                _buildBackground(story),
+                fit: StackFit.expand,
+                children: [
+                  // ── 1. Background ─────────────────────────────────────────
+                  _buildBackground(spark),
 
-                // ── 2. Top scrim ──────────────────────────────────────────
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 180,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.6),
-                            Colors.transparent,
-                          ],
+                  // ── 2. Top scrim ──────────────────────────────────────────
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 180,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.6),
+                              Colors.transparent,
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
 
-                // ── 3. Bottom scrim ───────────────────────────────────────
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: size.height * 0.35,
-                  child: const IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black87],
+                  // ── 3. Bottom scrim ───────────────────────────────────────
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: size.height * 0.35,
+                    child: const IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black87],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
 
-                // ── 4. Tap / hold gesture ─────────────────────────────────
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTapUp: (d) {
-                      if (_showViewers || _isDeleting || _showReplyField) return;
-                      d.localPosition.dx < size.width * 0.35
-                          ? _prevStory()
-                          : _nextStory();
-                    },
-                    onLongPressStart: (_) => _pause(),
-                    onLongPressEnd: (_) => _resume(),
-                    child: const SizedBox.expand(),
+                  // ── 4. Tap / hold gesture ─────────────────────────────────
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTapUp: (d) {
+                        if (_showViewers || _isDeleting || _showReplyField) return;
+                        d.localPosition.dx < size.width * 0.35
+                            ? _prevSpark()
+                            : _nextSpark();
+                      },
+                      onLongPressStart: (_) => _pause(),
+                      onLongPressEnd: (_) => _resume(),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
-                ),
 
-                // ── 5. Progress bars + header ─────────────────────────────
-                Positioned(
-                  top: topPad + 8,
-                  left: 0,
-                  right: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Progress bars
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(
-                          children: List.generate(
-                              widget.args.stories.length, (i) {
-                            return Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                    right:
-                                        i < widget.args.stories.length - 1
-                                            ? 3
-                                            : 0),
-                                child: _ProgressBar(
-                                  filled: i < _currentIndex,
-                                  active: i == _currentIndex,
-                                  controller: i == _currentIndex
-                                      ? _progressCtrl
-                                      : null,
+                  // ── 5. Progress bars + header ─────────────────────────────
+                  Positioned(
+                    top: topPad + 8,
+                    left: 0,
+                    right: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Progress bars
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: List.generate(
+                                widget.args.sparks.length, (i) {
+                              return Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                      right:
+                                          i < widget.args.sparks.length - 1
+                                              ? 3
+                                              : 0),
+                                  child: _ProgressBar(
+                                    filled: i < _currentIndex,
+                                    active: i == _currentIndex,
+                                    controller: i == _currentIndex
+                                        ? _progressCtrl
+                                        : null,
+                                  ),
                                 ),
-                              ),
-                            );
-                          }),
+                              );
+                            }),
+                          ),
                         ),
-                      ),
 
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      // Header row
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            // Avatar with gradient ring
-                            Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    context.appColors.primary,
-                                    context.appColors.primaryDark,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.black,
-                                ),
-                                child: CircleAvatar(
-                                  radius: 17,
-                                  backgroundColor: const Color(0xFF1C1B2E),
-                                  backgroundImage: (story.authorAvatar !=
-                                              null &&
-                                          story.authorAvatar!.isNotEmpty)
-                                      ? NetworkImage(story.authorAvatar!)
-                                      : null,
-                                  child: (story.authorAvatar == null ||
-                                          story.authorAvatar!.isEmpty)
-                                      ? Text(
-                                          story.authorName.isNotEmpty
-                                              ? story.authorName[0]
-                                                  .toUpperCase()
-                                              : '?',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13))
-                                      : null,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-
-                            // Name + time
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Text(story.authorName,
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14)),
-                                  const SizedBox(width: 8),
-                                  Text(_timeAgo(story.createdAt),
-                                      style: TextStyle(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.5),
-                                          fontSize: 12)),
-                                ],
-                              ),
-                            ),
-
-                            // Paused pill
-                            if (_paused &&
-                                !_isDeleting &&
-                                !_showReplyField)
+                        // Header row
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Row(
+                            children: [
+                              // Avatar with gradient ring
                               Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.all(2),
                                 decoration: BoxDecoration(
-                                  color: Colors.black45,
-                                  borderRadius: BorderRadius.circular(12),
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      context.appColors.primary,
+                                      context.appColors.primaryDark,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
                                 ),
-                                child: const Text('PAUSED',
-                                    style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1)),
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.black,
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 17,
+                                    backgroundColor: const Color(0xFF1C1B2E),
+                                    backgroundImage: (spark.authorAvatar !=
+                                                null &&
+                                            spark.authorAvatar!.isNotEmpty)
+                                        ? NetworkImage(spark.authorAvatar!)
+                                        : null,
+                                    child: (spark.authorAvatar == null ||
+                                            spark.authorAvatar!.isEmpty)
+                                        ? Text(
+                                            spark.authorName.isNotEmpty
+                                                ? spark.authorName[0]
+                                                    .toUpperCase()
+                                                : '?',
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13))
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+
+                              // Name + time
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Text(spark.authorName,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14)),
+                                    const SizedBox(width: 8),
+                                    Text(_timeAgo(spark.createdAt),
+                                        style: TextStyle(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.5),
+                                            fontSize: 12)),
+                                  ],
+                                ),
                               ),
 
-                            // Delete button (own stories)
-                            if (isOwn)
+                              // Paused pill
+                              if (_paused &&
+                                  !_isDeleting &&
+                                  !_showReplyField)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black45,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text('PAUSED',
+                                      style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 1)),
+                                ),
+
+                              // Delete button (own sparks)
+                              if (isOwn)
+                                GestureDetector(
+                                  onTap: _isDeleting ? null : _deleteSpark,
+                                  child: Container(
+                                    width: 32,
+                                    height: 32,
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: const BoxDecoration(
+                                        color: Colors.black38,
+                                        shape: BoxShape.circle),
+                                    child: _isDeleting
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: CircularProgressIndicator(
+                                                color: Colors.redAccent,
+                                                strokeWidth: 2),
+                                          )
+                                        : const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: Colors.redAccent,
+                                            size: 17),
+                                  ),
+                                ),
+
+                              // Close
                               GestureDetector(
-                                onTap: _isDeleting ? null : _deleteStory,
+                                onTap: () => Navigator.of(context).pop(),
                                 child: Container(
                                   width: 32,
                                   height: 32,
-                                  margin: const EdgeInsets.only(right: 6),
                                   decoration: const BoxDecoration(
                                       color: Colors.black38,
                                       shape: BoxShape.circle),
-                                  child: _isDeleting
-                                      ? const Padding(
-                                          padding: EdgeInsets.all(8),
-                                          child: CircularProgressIndicator(
-                                              color: Colors.redAccent,
-                                              strokeWidth: 2),
-                                        )
-                                      : const Icon(
-                                          Icons.delete_outline_rounded,
-                                          color: Colors.redAccent,
-                                          size: 17),
+                                  child: const Icon(Icons.close_rounded,
+                                      color: Colors.white, size: 18),
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-                            // Close
-                            GestureDetector(
-                              onTap: () => Navigator.of(context).pop(),
-                              child: Container(
-                                width: 32,
-                                height: 32,
-                                decoration: const BoxDecoration(
-                                    color: Colors.black38,
-                                    shape: BoxShape.circle),
-                                child: const Icon(Icons.close_rounded,
-                                    color: Colors.white, size: 18),
-                              ),
-                            ),
+                  // ── 6. Caption ────────────────────────────────────────────
+                  if (spark.caption != null && spark.caption!.isNotEmpty)
+                    Positioned(
+                      left: 24,
+                      right: 24,
+                      bottom: isOwn ? (botPad + 100) : (botPad + 80),
+                      child: Text(
+                        spark.caption!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                          shadows: [
+                            Shadow(
+                                color: Colors.black87,
+                                blurRadius: 12,
+                                offset: Offset(0, 2)),
+                            Shadow(
+                                color: Colors.black54,
+                                blurRadius: 24,
+                                offset: Offset(0, 4)),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
+                    ),
 
-                // ── 6. Caption ────────────────────────────────────────────
-                if (story.caption != null && story.caption!.isNotEmpty)
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: isOwn ? (botPad + 100) : (botPad + 80),
-                    child: Text(
-                      story.caption!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        height: 1.4,
-                        shadows: [
-                          Shadow(
-                              color: Colors.black87,
-                              blurRadius: 12,
-                              offset: Offset(0, 2)),
-                          Shadow(
-                              color: Colors.black54,
-                              blurRadius: 24,
-                              offset: Offset(0, 4)),
-                        ],
+                  // ── 7. Bottom bar ─────────────────────────────────────────
+                  if (!_showViewers && !_isDeleting)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: botPad + 12,
+                      child: isOwn
+                          ? _buildSeenByBar()
+                          : _buildReplyBar(),
+                    ),
+
+                  // ── 8. Reply text field ───────────────────────────────────
+                  if (_showReplyField)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: botPad + 12,
+                      child: _buildReplyInput(),
+                    ),
+
+                  // ── 9. Viewers sheet ──────────────────────────────────────
+                  if (_showViewers) ...[
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: _closeViewers,
+                        child: const ColoredBox(color: Colors.black54),
                       ),
                     ),
-                  ),
-
-                // ── 7. Bottom bar ─────────────────────────────────────────
-                if (!_showViewers && !_isDeleting)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: botPad + 12,
-                    child: isOwn
-                        ? _buildSeenByBar()
-                        : _buildReplyBar(),
-                  ),
-
-                // ── 8. Reply text field ───────────────────────────────────
-                if (_showReplyField)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: botPad + 12,
-                    child: _buildReplyInput(),
-                  ),
-
-                // ── 9. Viewers sheet ──────────────────────────────────────
-                if (_showViewers) ...[
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: _closeViewers,
-                      child: const ColoredBox(color: Colors.black54),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _buildViewersSheet(),
                     ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: _buildViewersSheet(),
-                  ),
+                  ],
+
+                  // ── 10. Deleting overlay ──────────────────────────────────
+                  if (_isDeleting)
+                    Positioned.fill(
+                      child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(
+                                  color: Colors.redAccent, strokeWidth: 2.5),
+                              SizedBox(height: 16),
+                              Text('Deleting spark…',
+                                  style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
-
-                // ── 10. Deleting overlay ──────────────────────────────────
-                if (_isDeleting)
-                  Positioned.fill(
-                    child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      child: const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(
-                                color: Colors.redAccent, strokeWidth: 2.5),
-                            SizedBox(height: 16),
-                            Text('Deleting story…',
-                                style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ── Background ──────────────────────────────────────────────────────────────
-  Widget _buildBackground(StoryItem story) {
-    if (story.mediaUrl != null &&
-        story.mediaUrl!.isNotEmpty &&
-        !story.isVideo) {
+  Widget _buildBackground(SparkItem spark) {
+    if (spark.mediaUrl != null &&
+        spark.mediaUrl!.isNotEmpty &&
+        !spark.isVideo) {
       return Image.network(
-        story.mediaUrl!,
+        spark.mediaUrl!,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
@@ -774,19 +774,19 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 .addPostFrameCallback((_) => _onMediaReady());
             return child;
           }
-          return _gradientBg(context, story);
+          return _gradientBg(context, spark);
         },
         errorBuilder: (_, __, ___) {
           WidgetsBinding.instance
               .addPostFrameCallback((_) => _onMediaReady());
-          return _gradientBg(context, story);
+          return _gradientBg(context, spark);
         },
       );
     }
 
-    if (story.mediaUrl != null &&
-        story.mediaUrl!.isNotEmpty &&
-        story.isVideo) {
+    if (spark.mediaUrl != null &&
+        spark.mediaUrl!.isNotEmpty &&
+        spark.isVideo) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _onMediaReady());
       return Container(
         color: Colors.black,
@@ -804,7 +804,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                     size: 64, color: Colors.white60),
               ),
               const SizedBox(height: 14),
-              Text('Video story',
+              Text('Video spark',
                   style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.4),
                       fontSize: 13)),
@@ -814,15 +814,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       );
     }
 
-    return _gradientBg(context, story);
+    return _gradientBg(context, spark);
   }
 
-  Widget _gradientBg(BuildContext context, StoryItem story) {
-    final colors = (story.gradientColors != null &&
-            story.gradientColors!.length >= 2)
+  Widget _gradientBg(BuildContext context, SparkItem spark) {
+    final colors = (spark.gradientColors != null &&
+            spark.gradientColors!.length >= 2)
         ? [
-            Color(story.gradientColors![0]),
-            Color(story.gradientColors![1])
+            Color(spark.gradientColors![0]),
+            Color(spark.gradientColors![1])
           ]
         : [context.appColors.primary, context.appColors.primaryDark];
 
@@ -837,7 +837,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     );
   }
 
-  // ── Seen-by bar (own stories) ───────────────────────────────────────────────
+  // ── Seen-by bar (own sparks) ───────────────────────────────────────────────
   Widget _buildSeenByBar() {
     return GestureDetector(
       onTap: _openViewers,
@@ -868,7 +868,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     );
   }
 
-  // ── Reply bar (other users' stories) ────────────────────────────────────────
+  // ── Reply bar (other users' sparks) ────────────────────────────────────────
   Widget _buildReplyBar() {
     return GestureDetector(
       onTap: _toggleReply,

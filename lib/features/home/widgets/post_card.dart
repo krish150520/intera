@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -9,6 +10,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onComment;
   final VoidCallback? onShare;
+  final void Function(String type)? onReact;
 
   const PostCard({
     super.key,
@@ -18,10 +20,10 @@ class PostCard extends StatelessWidget {
     this.onSave,
     this.onComment,
     this.onShare,
+    this.onReact,
   });
 
   bool get _hasMedia => post.imageUrl != null && post.imageUrl!.isNotEmpty;
-
   bool get _isMediaType =>
       post.type == PostType.image || post.type == PostType.video;
 
@@ -34,15 +36,18 @@ class PostCard extends StatelessWidget {
         onLike: onLike,
         onSave: onSave,
         onComment: onComment,
+        onShare: onShare,
+        onReact: onReact,
       );
     }
-
     return _TextPostCard(
       post: post,
       onTap: onTap,
       onLike: onLike,
       onSave: onSave,
       onComment: onComment,
+      onShare: onShare,
+      onReact: onReact,
     );
   }
 }
@@ -53,6 +58,8 @@ class _TextPostCard extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onSave;
   final VoidCallback? onComment;
+  final VoidCallback? onShare;
+  final void Function(String type)? onReact;
 
   const _TextPostCard({
     required this.post,
@@ -60,136 +67,185 @@ class _TextPostCard extends StatelessWidget {
     this.onLike,
     this.onSave,
     this.onComment,
+    this.onShare,
+    this.onReact,
   });
-
-  String _pillLabel(BuildContext context) {
-    final style = _typeStyle(context, post.type);
-    if (post.type == PostType.helpRequest && (post.rewardKarma ?? 0) > 0) {
-      return 'Help · ${post.rewardKarma} ⚡';
-    }
-    return style.label;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final style = _typeStyle(context, post.type);
+    final c = context.appColors;
+    final typeInfo = _typeInfo(post.type);
+
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final myReaction = post.reactions[myUid];
+    final bool hasReacted = myReaction != null;
+    final IconData reactionIcon = switch (myReaction) {
+      'beauty' => Icons.favorite_rounded,
+      'art' => Icons.palette_rounded,
+      'funny' => Icons.emoji_emotions_rounded,
+      'like' => Icons.favorite_rounded,
+      _ => Icons.favorite_border_rounded,
+    };
+    final Color reactionColor = switch (myReaction) {
+      'beauty' => Colors.pinkAccent,
+      'art' => Colors.orangeAccent,
+      'funny' => Colors.amber,
+      'like' => const Color(0xFFEF4444),
+      _ => c.textMuted,
+    };
 
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 160),
         decoration: BoxDecoration(
-          color: style.bg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: style.border),
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border, width: 0.8),
         ),
-        padding: const EdgeInsets.all(16),
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Positioned(
-              top: -4,
-              right: -2,
-              child: Text(style.emoji, style: const TextStyle(fontSize: 52)),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 3,
+            // ── Header ─────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Row(
+                children: [
+                  _Avatar(
+                    name: post.authorName,
+                    imageUrl: post.authorAvatarUrl,
+                    radius: 17,
                   ),
-                  decoration: BoxDecoration(
-                    color: style.pillBg,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _pillLabel(context),
-                    style: TextStyle(
-                      color: style.pillText,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.authorName,
+                          style: TextStyle(
+                            color: c.textHi,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                        Text(
+                          '${post.authorUsername} · ${_formatTime(post.createdAt)}',
+                          style: TextStyle(
+                            color: c.textDim,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                if (post.title.isNotEmpty)
-                  Text(
-                    post.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: context.appColors.textHi,
-                      height: 1.25,
-                      letterSpacing: -0.2,
+                  // Type badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: typeInfo.badgeBg(c),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                  ),
-                if (post.body.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    post.body,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 12,
-                      color: context.appColors.textSecondary,
-                      height: 1.45,
+                    child: Text(
+                      typeInfo.label,
+                      style: TextStyle(
+                        color: typeInfo.badgeText(c),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _MiniAvatar(
-                      name: post.authorName,
-                      imageUrl: post.authorAvatarUrl,
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        '${post.authorUsername} · ${_formatTime(post.createdAt)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          color: context.appColors.textDim,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+            // ── Content ────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post.title.isNotEmpty)
+                    Text(
+                      post.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textHi,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        height: 1.3,
+                        letterSpacing: -0.3,
                       ),
                     ),
-                    _FooterStat(
-                      icon: post.isLiked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      iconColor: post.isLiked
-                          ? context.appColors.error
-                          : context.appColors.textMuted,
-                      label: _compact(post.likeCount),
-                      onTap: onLike,
-                    ),
-                    const SizedBox(width: 10),
-                    _FooterStat(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      iconColor: context.appColors.textMuted,
-                      label: _compact(post.commentCount),
-                      onTap: onComment,
-                    ),
-                    const SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: onSave,
-                      child: Icon(
-                        post.isSaved
-                            ? Icons.bookmark_rounded
-                            : Icons.bookmark_border_rounded,
-                        size: 18,
-                        color: post.isSaved
-                            ? context.colors.primary
-                            : context.appColors.textMuted,
+                  if (post.body.isNotEmpty) ...[
+                    if (post.title.isNotEmpty) const SizedBox(height: 4),
+                    Text(
+                      post.body,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 14,
+                        height: 1.5,
                       ),
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Divider ────────────────────────────────────────────────────
+            Divider(height: 1, thickness: 0.8, color: c.border),
+
+            // ── Actions ────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Row(
+                children: [
+                  _ActionBtn(
+                    icon: reactionIcon,
+                    label: _compact(post.likeCount),
+                    active: hasReacted,
+                    activeColor: reactionColor,
+                    inactiveColor: c.textMuted,
+                    onTap: onReact != null ? () => onReact!('like') : onLike,
+                    onLongPress: onReact != null ? () => _showReactionSheet(context, onReact!) : null,
+                  ),
+                  _ActionBtn(
+                    icon: Icons.mode_comment_outlined,
+                    label: _compact(post.commentCount),
+                    active: false,
+                    activeColor: c.primary,
+                    inactiveColor: c.textMuted,
+                    onTap: onComment,
+                  ),
+                  _ActionBtn(
+                    icon: Icons.share_outlined,
+                    label: '',
+                    active: false,
+                    activeColor: c.primary,
+                    inactiveColor: c.textMuted,
+                    onTap: onShare,
+                  ),
+                  const Spacer(),
+                  _ActionBtn(
+                    icon: post.isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    label: '',
+                    active: post.isSaved,
+                    activeColor: c.primary,
+                    inactiveColor: c.textMuted,
+                    onTap: onSave,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -198,12 +254,16 @@ class _TextPostCard extends StatelessWidget {
   }
 }
 
+// ── Media Post Card ───────────────────────────────────────────────────────────
+
 class _MediaPostCard extends StatelessWidget {
   final Post post;
   final VoidCallback? onTap;
   final VoidCallback? onLike;
   final VoidCallback? onSave;
   final VoidCallback? onComment;
+  final VoidCallback? onShare;
+  final void Function(String type)? onReact;
 
   const _MediaPostCard({
     required this.post,
@@ -211,143 +271,218 @@ class _MediaPostCard extends StatelessWidget {
     this.onLike,
     this.onSave,
     this.onComment,
+    this.onShare,
+    this.onReact,
   });
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
+
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final myReaction = post.reactions[myUid];
+    final bool hasReacted = myReaction != null;
+    final IconData reactionIcon = switch (myReaction) {
+      'beauty' => Icons.favorite_rounded,
+      'art' => Icons.palette_rounded,
+      'funny' => Icons.emoji_emotions_rounded,
+      'like' => Icons.favorite_rounded,
+      _ => Icons.favorite_border_rounded,
+    };
+    final Color reactionColor = switch (myReaction) {
+      'beauty' => Colors.pinkAccent,
+      'art' => Colors.orangeAccent,
+      'funny' => Colors.amber,
+      'like' => const Color(0xFFEF4444),
+      _ => Colors.white,
+    };
 
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: SizedBox(
-          height: 360,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              hasImage
-                  ? Image.network(
-                      post.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const _FallbackBg(),
-                    )
-                  : const _FallbackBg(),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.0, 0.30, 1.0],
-                    colors: [
-                      Colors.transparent,
-                      Color(0x44000000),
-                      Color(0xE0000000),
-                    ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border, width: 0.8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ─────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Row(
+                children: [
+                  _Avatar(
+                    name: post.authorName,
+                    imageUrl: post.authorAvatarUrl,
+                    radius: 17,
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.authorName,
+                          style: TextStyle(
+                            color: c.textHi,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          _formatTime(post.createdAt),
+                          style: TextStyle(color: c.textDim, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+
+            // ── Media ──────────────────────────────────────────────────────
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+              child: SizedBox(
+                height: 280,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    _AuthorRow(post: post),
-                    const Spacer(),
-                    if (post.title.isNotEmpty)
-                      Text(
-                        post.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
-                          letterSpacing: -0.3,
+                    hasImage
+                        ? Image.network(
+                            post.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _FallbackBg(c: c),
+                          )
+                        : _FallbackBg(c: c),
+                    // Bottom gradient for text legibility
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: [0.4, 1.0],
+                          colors: [Colors.transparent, Color(0xCC000000)],
                         ),
                       ),
-                    if (post.body.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        post.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.72),
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
+                    ),
+                    // Caption overlay
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 52,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (post.title.isNotEmpty)
+                            Text(
+                              post.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                height: 1.2,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          if (post.body.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              post.body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.75),
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                    const SizedBox(height: 14),
-                    _MediaStatsRow(
-                      post: post,
-                      onLike: onLike,
-                      onComment: onComment,
-                      onSave: onSave,
+                    ),
+                    // Action row overlay at bottom
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 12,
+                      child: Row(
+                        children: [
+                          _ActionBtn(
+                            icon: reactionIcon,
+                            label: _compact(post.likeCount),
+                            active: hasReacted,
+                            activeColor: reactionColor,
+                            inactiveColor: Colors.white70,
+                            onTap: onReact != null ? () => onReact!('like') : onLike,
+                            onLongPress: onReact != null ? () => _showReactionSheet(context, onReact!) : null,
+                          ),
+                          _ActionBtn(
+                            icon: Icons.mode_comment_outlined,
+                            label: _compact(post.commentCount),
+                            active: false,
+                            activeColor: Colors.white,
+                            inactiveColor: Colors.white70,
+                            onTap: onComment,
+                          ),
+                          const Spacer(),
+                          _ActionBtn(
+                            icon: post.isSaved
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            label: '',
+                            active: post.isSaved,
+                            activeColor: Colors.white,
+                            inactiveColor: Colors.white70,
+                            onTap: onSave,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-String _formatTime(DateTime dt) {
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  return '${diff.inDays}d ago';
-}
+// ── Shared Widgets ────────────────────────────────────────────────────────────
 
-String _compact(int n) {
-  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-  return '$n';
-}
-
-class _TypeStyle {
-  final Color bg;
-  final Color border;
-  final Color pillBg;
-  final Color pillText;
-  final String label;
-  final String emoji;
-
-  const _TypeStyle({
-    required this.bg,
-    required this.border,
-    required this.pillBg,
-    required this.pillText,
-    required this.label,
-    required this.emoji,
-  });
-}
-
-class _MiniAvatar extends StatelessWidget {
+class _Avatar extends StatelessWidget {
   final String name;
   final String? imageUrl;
+  final double radius;
 
-  const _MiniAvatar({required this.name, this.imageUrl});
+  const _Avatar({required this.name, this.imageUrl, this.radius = 17});
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+    final c = context.appColors;
+    final hasImg = imageUrl != null && imageUrl!.isNotEmpty;
     return CircleAvatar(
-      radius: 11,
-      backgroundColor: context.colors.primary,
-      backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
-      child: !hasImage
+      radius: radius,
+      backgroundColor: c.primary,
+      backgroundImage: hasImg ? NetworkImage(imageUrl!) : null,
+      child: !hasImg
           ? Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 9,
+                fontSize: radius * 0.7,
                 fontWeight: FontWeight.w700,
               ),
             )
@@ -356,230 +491,225 @@ class _MiniAvatar extends StatelessWidget {
   }
 }
 
-class _FooterStat extends StatelessWidget {
+class _ActionBtn extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
   final String label;
+  final bool active;
+  final Color activeColor;
+  final Color inactiveColor;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
-  const _FooterStat({
+  const _ActionBtn({
     required this.icon,
-    required this.iconColor,
     required this.label,
+    required this.active,
+    required this.activeColor,
+    required this.inactiveColor,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = active ? activeColor : inactiveColor;
     return GestureDetector(
       onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: iconColor),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: context.appColors.textDim,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AuthorRow extends StatelessWidget {
-  final Post post;
-
-  const _AuthorRow({required this.post});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasAvatar =
-        post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty;
-
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: context.colors.primary,
-          backgroundImage: hasAvatar
-              ? NetworkImage(post.authorAvatarUrl!)
-              : null,
-          child: !hasAvatar
-              ? Text(
-                  post.authorName.isNotEmpty
-                      ? post.authorName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                )
-              : null,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
+      onLongPress: onLongPress,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 19, color: color),
+            if (label.isNotEmpty) ...[
+              const SizedBox(width: 4),
               Text(
-                post.authorName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Text(
-                _formatTime(post.createdAt),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
-                  fontSize: 10,
-                ),
-              ),
             ],
-          ),
+          ],
         ),
-      ],
-    );
-  }
-}
-
-class _MediaStatsRow extends StatelessWidget {
-  final Post post;
-  final VoidCallback? onLike;
-  final VoidCallback? onComment;
-  final VoidCallback? onSave;
-
-  const _MediaStatsRow({
-    required this.post,
-    this.onLike,
-    this.onComment,
-    this.onSave,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _MediaStatBtn(
-          icon: post.isLiked
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
-          iconColor: post.isLiked ? context.appColors.error : Colors.white,
-          label: _compact(post.likeCount),
-          onTap: onLike,
-        ),
-        const SizedBox(width: 16),
-        _MediaStatBtn(
-          icon: Icons.chat_bubble_outline_rounded,
-          iconColor: Colors.white,
-          label: _compact(post.commentCount),
-          onTap: onComment,
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: onSave,
-          child: Icon(
-            post.isSaved
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_border_rounded,
-            color: post.isSaved ? context.colors.primary : Colors.white,
-            size: 22,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MediaStatBtn extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _MediaStatBtn({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 20),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
+// ── Reaction Selector Bottom Sheet ───────────────────────────────────────────
+
+void _showReactionSheet(BuildContext context, void Function(String) onSelect) {
+  final c = context.appColors;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: c.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (sheetCtx) {
+      return SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: c.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'React with points',
+                style: TextStyle(
+                  color: c.textHi,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _reactionItem(sheetCtx, 'like', '👍', 'Like', onSelect),
+                  _reactionItem(sheetCtx, 'beauty', '💖', 'Beauty', onSelect),
+                  _reactionItem(sheetCtx, 'art', '🎨', 'Art', onSelect),
+                  _reactionItem(sheetCtx, 'funny', '😂', 'Funny', onSelect),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Widget _reactionItem(
+  BuildContext context,
+  String type,
+  String emoji,
+  String label,
+  void Function(String) onSelect,
+) {
+  final c = context.appColors;
+  return GestureDetector(
+    onTap: () {
+      Navigator.pop(context);
+      onSelect(type);
+    },
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: c.field,
+            shape: BoxShape.circle,
+            border: Border.all(color: c.border, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: Text(emoji, style: const TextStyle(fontSize: 22)),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+
 class _FallbackBg extends StatelessWidget {
-  const _FallbackBg();
+  final AppColorsExtension c;
+  const _FallbackBg({required this.c});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(gradient: context.appColors.primaryGradient),
-    );
+    return Container(color: c.field);
   }
 }
 
-_TypeStyle _typeStyle(BuildContext context, PostType type) {
-  final c = context.appColors;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+String _formatTime(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+  if (diff.inHours < 24) return '${diff.inHours}h';
+  if (diff.inDays < 7) return '${diff.inDays}d';
+  return '${(diff.inDays / 7).floor()}w';
+}
+
+String _compact(int n) {
+  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+  return '$n';
+}
+
+// ── Post type info ────────────────────────────────────────────────────────────
+
+class _TypeInfo {
+  final String label;
+  final Color Function(AppColorsExtension) badgeBg;
+  final Color Function(AppColorsExtension) badgeText;
+  const _TypeInfo({
+    required this.label,
+    required this.badgeBg,
+    required this.badgeText,
+  });
+}
+
+_TypeInfo _typeInfo(PostType type) {
   return switch (type) {
-    PostType.question => _TypeStyle(
-      bg: c.successBg,
-      border: c.successBorder,
-      pillBg: c.success,
-      pillText: Colors.white,
+    PostType.question => _TypeInfo(
       label: 'Question',
-      emoji: '?',
+      badgeBg: (c) => c.primary.withValues(alpha: 0.12),
+      badgeText: (c) => c.primary,
     ),
-    PostType.helpRequest => _TypeStyle(
-      bg: c.warningKarmaBg,
-      border: c.warningKarmaBorder,
-      pillBg: c.warningKarma,
-      pillText: Colors.white,
+    PostType.helpRequest => _TypeInfo(
       label: 'Help',
-      emoji: '🤝',
+      badgeBg: (c) => const Color(0xFFF59E0B).withValues(alpha: 0.12),
+      badgeText: (_) => const Color(0xFFB45309),
     ),
-    PostType.achievement => _TypeStyle(
-      bg: c.accent.withValues(alpha: 0.15),
-      border: c.accent.withValues(alpha: 0.34),
-      pillBg: c.accent,
-      pillText: Colors.white,
+    PostType.achievement => _TypeInfo(
       label: 'Achievement',
-      emoji: '🏆',
+      badgeBg: (c) => const Color(0xFF22C55E).withValues(alpha: 0.12),
+      badgeText: (_) => const Color(0xFF16A34A),
     ),
-    _ => _TypeStyle(
-      bg: context.colors.surfaceContainerHighest,
-      border: context.colors.outline,
-      pillBg: context.colors.primary,
-      pillText: Colors.white,
-      label: 'Text',
-      emoji: '💬',
+    PostType.image => _TypeInfo(
+      label: 'Photo',
+      badgeBg: (c) => const Color(0xFF3B82F6).withValues(alpha: 0.12),
+      badgeText: (_) => const Color(0xFF2563EB),
+    ),
+    PostType.video => _TypeInfo(
+      label: 'Video',
+      badgeBg: (c) => const Color(0xFFEF4444).withValues(alpha: 0.12),
+      badgeText: (_) => const Color(0xFFDC2626),
+    ),
+    _ => _TypeInfo(
+      label: 'Post',
+      badgeBg: (c) => c.field,
+      badgeText: (c) => c.textMuted,
     ),
   };
 }

@@ -20,6 +20,11 @@ class Post {
   final int shareCount;
   final bool isLiked;
   final bool isSaved;
+  final List<String> tags;
+  final int beautyCount;
+  final int artCount;
+  final int funnyCount;
+  final Map<String, String> reactions;
   final DateTime createdAt;
   static const String typeHelpRequest = 'helpRequest';
   final int? rewardKarma;
@@ -40,6 +45,11 @@ class Post {
     this.shareCount = 0,
     this.isLiked = false,
     this.isSaved = false,
+    this.tags = const [],
+    this.beautyCount = 0,
+    this.artCount = 0,
+    this.funnyCount = 0,
+    this.reactions = const {},
     required this.createdAt,
     this.rewardKarma,
   });
@@ -89,6 +99,11 @@ class Post {
       shareCount: data['shareCount'] ?? 0,
       isLiked: likedBy.contains(currentUid),
       isSaved: savedBy.contains(currentUid),
+      tags: List<String>.from(data['tags'] ?? []),
+      beautyCount: (data['beautyCount'] as num?)?.toInt() ?? 0,
+      artCount: (data['artCount'] as num?)?.toInt() ?? 0,
+      funnyCount: (data['funnyCount'] as num?)?.toInt() ?? 0,
+      reactions: Map<String, String>.from(data['reactions'] ?? {}),
       createdAt: parsedDate,
       rewardKarma: data['karmaReward'] ?? data['rewardKarma'],
     );
@@ -104,13 +119,18 @@ class Post {
       'type': type.name,
       'title': title,
       'body': body,
-      'content': '$title\n$body', // legacy fallback field
+      'content': '$title\n$body',
       if (imageUrl != null) 'imageUrl': imageUrl,
       'likeCount': likeCount,
       'commentCount': commentCount,
       'shareCount': shareCount,
       'likedBy': [],
       'savedBy': [],
+      'tags': tags,
+      'beautyCount': beautyCount,
+      'artCount': artCount,
+      'funnyCount': funnyCount,
+      'reactions': reactions,
       'createdAt': FieldValue.serverTimestamp(),
       if (rewardKarma != null) 'rewardKarma': rewardKarma,
     };

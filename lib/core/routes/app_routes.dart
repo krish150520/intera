@@ -10,7 +10,7 @@ import '../../features/home/screens/post_detail_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/create/screens/create_post_screen.dart';
 import '../../features/create/screens/create_community_screen.dart';
-import '../../features/home/screens/create_story_screen.dart';
+import '../../features/home/screens/create_spark_screen.dart';
 import '../../shared/models/post_model.dart';
 
 /// Centralized named-route definitions for INTERA.
@@ -27,7 +27,7 @@ class AppRoutes {
   static const String editProfile = '/edit-profile';
   static const String createPost = '/create-post';
   static const String createCommunity = '/create-community';
-  static const String createStory = '/create-story';
+  static const String createSpark = '/create-spark';
 
   static Map<String, WidgetBuilder> get routes => {
         splash: (context) => const SplashScreen(),
@@ -39,7 +39,7 @@ class AppRoutes {
         editProfile: (context) => const EditProfileScreen(),
         createPost: (context) => const CreatePostScreen(),
         createCommunity: (context) => const CreateCommunityScreen(),
-        createStory: (context) => const CreateStoryScreen(),
+        createSpark: (context) => const CreateSparkScreen(),
       };
 
   /// For routes that need arguments (e.g. PostDetailScreen needs a [Post]),

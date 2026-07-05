@@ -5,6 +5,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_textfield.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -27,18 +28,39 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null && args.containsKey('prefillEmail')) {
+      _identifierController.text = args['prefillEmail'] ?? '';
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
+    final emailVal = _identifierController.text.trim();
+    final passVal = _passwordController.text;
+
     try {
       final credentials = await AuthService.instance.signIn(
-        email: _identifierController.text,
-        password: _passwordController.text,
+        email: emailVal,
+        password: passVal,
       );
 
       if (credentials.user != null) {
         await AuthService.instance.ensureUserProfileExists(credentials.user!);
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('pass_for_$emailVal', passVal);
+
+        final list = prefs.getStringList('recent_accounts') ?? [];
+        list.remove(emailVal);
+        list.insert(0, emailVal);
+        if (list.length > 5) list.removeRange(5, list.length);
+        await prefs.setStringList('recent_accounts', list);
       }
 
       if (!mounted) return;

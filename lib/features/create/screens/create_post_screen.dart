@@ -11,6 +11,8 @@ import '../../../core/karma/karma_badge.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/nsfw_detection_service.dart';
+import '../../../core/services/feed_algorithm.dart';
+import '../../navigation/screens/bottom_nav_screen.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String? communityId;
@@ -32,6 +34,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   VideoPlayerController? _videoPreviewController;
   bool _isLoading = false;
   bool _isVideoMedia = false; // tracks whether picked media is video
+  final Set<String> _selectedTags = {};
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeAnim;
@@ -156,13 +159,13 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     }
 
     setState(() => _isLoading = true);
-    
+
     // ── NSFW Check ──────────────────────────────────────────────────────
-    final hasNsfwText = await NsfwDetectionService.isTextNsfw(title) || 
-                        await NsfwDetectionService.isTextNsfw(body);
-    final hasNsfwMedia = _selectedMediaFile != null && 
-                         await NsfwDetectionService.isMediaNsfw(_selectedMediaFile);
-                         
+    final hasNsfwText = await NsfwDetectionService.isTextNsfw(title) ||
+        await NsfwDetectionService.isTextNsfw(body);
+    final hasNsfwMedia = _selectedMediaFile != null &&
+        await NsfwDetectionService.isMediaNsfw(_selectedMediaFile);
+
     if (hasNsfwText || hasNsfwMedia) {
       setState(() => _isLoading = false);
       _showNsfwWarningDialog();
@@ -179,10 +182,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             _selectedMediaFile!.path.toLowerCase().endsWith('.mp4');
         final folder = isVid ? 'posts/videos' : 'posts/images';
         final ext = isVid ? 'mp4' : 'jpg';
-        final ref = FirebaseStorage.instance
-            .ref('$folder/${user.uid}_$ts.$ext');
-        final task =
-            await ref.putFile(_selectedMediaFile!).whenComplete(() {});
+        final ref =
+            FirebaseStorage.instance.ref('$folder/${user.uid}_$ts.$ext');
+        final task = await ref.putFile(_selectedMediaFile!).whenComplete(() {});
         if (task.state != TaskState.success) throw Exception('Upload failed');
         mediaUrl = await ref.getDownloadURL();
       }
@@ -193,10 +195,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           .doc(user.uid)
           .get();
       final ud = userDoc.data() ?? {};
-      final displayName =
-          ud['name'] ?? user.displayName ?? 'Anonymous';
-      final rawUsername =
-          ud['username'] ?? user.email?.split('@')[0] ?? 'user';
+      final displayName = ud['name'] ?? user.displayName ?? 'Anonymous';
+      final rawUsername = ud['username'] ?? user.email?.split('@')[0] ?? 'user';
       final username =
           rawUsername.startsWith('@') ? rawUsername : '@$rawUsername';
       final avatarUrl =
@@ -221,6 +221,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         likeCount: 0,
         commentCount: 0,
         shareCount: 0,
+        tags: _selectedTags.toList(),
         createdAt: DateTime.now(),
         rewardKarma: isHelp ? reward : null,
       );
@@ -276,7 +277,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: context.appColors.error, size: 28),
+            Icon(Icons.warning_amber_rounded,
+                color: context.appColors.error, size: 28),
             const SizedBox(width: 10),
             const Text('Content Flagged'),
           ],
@@ -382,6 +384,20 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
                       const SizedBox(height: 28),
 
+                      // ── Tag picker ──────────────────────────────────────
+                      _TagPickerSection(
+                        selectedTags: _selectedTags,
+                        onToggle: (tag) => setState(() {
+                          if (_selectedTags.contains(tag)) {
+                            _selectedTags.remove(tag);
+                          } else {
+                            _selectedTags.add(tag);
+                          }
+                        }),
+                      ),
+
+                      const SizedBox(height: 28),
+
                       // ── Submit button ───────────────────────────────────
                       _GradientSubmitButton(
                         label: _selectedType == PostType.helpRequest
@@ -408,7 +424,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   // ── Content section builder ─────────────────────────────────────────────
 
   Widget _buildContentSection(BuildContext context) {
-    final c = context.appColors;
     final isHelp = _selectedType == PostType.helpRequest;
     final isImage = _selectedType == PostType.image;
     final isVideo = _selectedType == PostType.video;
@@ -472,13 +487,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             isVideo: _isVideoMedia,
             videoController: _videoPreviewController,
             onPickImage: () async {
-              final file =
-                  await _picker.pickImage(source: ImageSource.gallery);
+              final file = await _picker.pickImage(source: ImageSource.gallery);
               _pickMedia(file, false);
             },
             onPickVideo: () async {
-              final file =
-                  await _picker.pickVideo(source: ImageSource.gallery);
+              final file = await _picker.pickVideo(source: ImageSource.gallery);
               _pickMedia(file, true);
             },
             onRemove: _removeMedia,
@@ -553,15 +566,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                     height: 200,
                     width: double.infinity,
                     child: AspectRatio(
-                      aspectRatio:
-                          _videoPreviewController!.value.aspectRatio,
+                      aspectRatio: _videoPreviewController!.value.aspectRatio,
                       child: VideoPlayer(_videoPreviewController!),
                     ),
                   )
                 : Image.file(_selectedMediaFile!,
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover),
+                    height: 200, width: double.infinity, fit: BoxFit.cover),
           ),
           Padding(
             padding: const EdgeInsets.all(8),
@@ -574,8 +584,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   color: Colors.black.withValues(alpha: 0.6),
                   shape: BoxShape.circle,
                 ),
-                child:
-                    const Icon(Icons.close, color: Colors.white, size: 16),
+                child: const Icon(Icons.close, color: Colors.white, size: 16),
               ),
             ),
           ),
@@ -595,8 +604,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         decoration: BoxDecoration(
           color: c.field,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: c.border, width: 1.5, style: BorderStyle.solid),
+          border:
+              Border.all(color: c.border, width: 1.5, style: BorderStyle.solid),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
@@ -618,9 +627,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           Text(
             isVideo ? 'Tap to select video' : 'Tap to select image',
             style: TextStyle(
-                fontSize: 13,
-                color: c.textMuted,
-                fontWeight: FontWeight.w500),
+                fontSize: 13, color: c.textMuted, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(
@@ -652,15 +659,12 @@ class _AuthorStrip extends StatelessWidget {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
       builder: (context, snap) {
-        final ud =
-            snap.data?.data() as Map<String, dynamic>? ?? {};
+        final ud = snap.data?.data() as Map<String, dynamic>? ?? {};
         final name = ud['name'] ?? user!.displayName ?? 'You';
-        final raw =
-            ud['username'] ?? user!.email?.split('@')[0] ?? 'user';
+        final raw = ud['username'] ?? user!.email?.split('@')[0] ?? 'user';
         final username = raw.startsWith('@') ? raw : '@$raw';
-        final avatar = ud['profileImageUrl'] ??
-            ud['photoURL'] ??
-            user!.photoURL;
+        final avatar =
+            ud['profileImageUrl'] ?? ud['photoURL'] ?? user!.photoURL;
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -682,15 +686,13 @@ class _AuthorStrip extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           color: c.textHi)),
                   Text(username,
-                      style:
-                          TextStyle(fontSize: 11, color: c.textMuted)),
+                      style: TextStyle(fontSize: 11, color: c.textMuted)),
                 ],
               ),
             ),
             // Audience indicator
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: c.field,
                 borderRadius: BorderRadius.circular(8),
@@ -804,14 +806,11 @@ class _PostTypeCard extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: selected
-                    ? c.primary
-                    : c.primary.withValues(alpha: 0.08),
+                color: selected ? c.primary : c.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon,
-                  size: 18,
-                  color: selected ? Colors.white : c.primary),
+                  size: 18, color: selected ? Colors.white : c.primary),
             ),
             const SizedBox(height: 8),
             Text(
@@ -861,8 +860,6 @@ class _HelpMediaAttachment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
-
     // Show preview if media selected
     if (mediaFile != null) {
       return Stack(
@@ -882,9 +879,7 @@ class _HelpMediaAttachment extends StatelessWidget {
                     ),
                   )
                 : Image.file(mediaFile!,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover),
+                    height: 180, width: double.infinity, fit: BoxFit.cover),
           ),
           Padding(
             padding: const EdgeInsets.all(8),
@@ -897,8 +892,7 @@ class _HelpMediaAttachment extends StatelessWidget {
                   color: Colors.black.withValues(alpha: 0.6),
                   shape: BoxShape.circle,
                 ),
-                child:
-                    const Icon(Icons.close, color: Colors.white, size: 16),
+                child: const Icon(Icons.close, color: Colors.white, size: 16),
               ),
             ),
           ),
@@ -907,8 +901,7 @@ class _HelpMediaAttachment extends StatelessWidget {
             bottom: 8,
             left: 8,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(6),
@@ -997,11 +990,8 @@ class _MediaPickButton extends StatelessWidget {
           const SizedBox(height: 6),
           Text(label,
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: c.textHi)),
-          Text(subtitle,
-              style: TextStyle(fontSize: 9, color: c.textMuted)),
+                  fontSize: 12, fontWeight: FontWeight.w600, color: c.textHi)),
+          Text(subtitle, style: TextStyle(fontSize: 9, color: c.textMuted)),
         ]),
       ),
     );
@@ -1181,13 +1171,11 @@ class _KarmaRewardRow extends StatelessWidget {
       builder: (context, snap) {
         final balance = snap.data ?? 0;
         return Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: c.warningKarmaBg,
             borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: c.warningKarmaBorder, width: 1.5),
+            border: Border.all(color: c.warningKarmaBorder, width: 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1214,8 +1202,7 @@ class _KarmaRewardRow extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: '0',
                       hintStyle: TextStyle(
-                          color:
-                              c.warningKarma.withValues(alpha: 0.6)),
+                          color: c.warningKarma.withValues(alpha: 0.6)),
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
@@ -1227,8 +1214,7 @@ class _KarmaRewardRow extends StatelessWidget {
               Text(
                 'Your balance: $balance ⚡  · Deducted immediately on post',
                 style: TextStyle(
-                    fontSize: 10,
-                    color: c.warningKarma.withValues(alpha: 0.7)),
+                    fontSize: 10, color: c.warningKarma.withValues(alpha: 0.7)),
               ),
             ],
           ),
@@ -1283,20 +1269,14 @@ class _GradientSubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return GestureDetector(
       onTap: isLoading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: gradient.colors.first.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: c.primary,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1320,6 +1300,112 @@ class _GradientSubmitButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Tag Picker Section ───────────────────────────────────────────────────────
+
+class _TagPickerSection extends StatelessWidget {
+  final Set<String> selectedTags;
+  final void Function(String tag) onToggle;
+
+  const _TagPickerSection({
+    required this.selectedTags,
+    required this.onToggle,
+  });
+
+  static const _tagIcons = <String, IconData>{
+    'tech': Icons.computer_rounded,
+    'art': Icons.palette_rounded,
+    'gaming': Icons.videogame_asset_rounded,
+    'health': Icons.favorite_rounded,
+    'education': Icons.school_rounded,
+    'music': Icons.music_note_rounded,
+    'food': Icons.restaurant_rounded,
+    'travel': Icons.flight_rounded,
+    'sports': Icons.sports_soccer_rounded,
+    'science': Icons.science_rounded,
+    'fashion': Icons.checkroom_rounded,
+    'business': Icons.business_center_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.label_rounded, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text(
+              'Add topic tags',
+              style: TextStyle(
+                color: c.textHi,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '(optional)',
+              style: TextStyle(color: c.textMuted, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Helps the right people discover your post.',
+          style: TextStyle(color: c.textDim, fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: kAllInterestTags.map((tag) {
+            final selected = selectedTags.contains(tag);
+            return GestureDetector(
+              onTap: () => onToggle(tag),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: selected ? c.primary.withValues(alpha: 0.08) : c.field,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: selected ? c.primary : c.border,
+                    width: selected ? 1.2 : 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _tagIcons[tag] ?? Icons.tag_rounded,
+                      size: 13,
+                      color: selected ? c.primary : c.textMuted,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      tag[0].toUpperCase() + tag.substring(1),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? c.primary : c.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -9,24 +10,24 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/nsfw_detection_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  CREATE STORY SCREEN — Instagram-style
+//  CREATE SPARK SCREEN — Instagram-style
 // ═══════════════════════════════════════════════════════════════════════════════
 
-enum _StoryMode { text, photo, video }
+enum _SparkMode { text, photo, video }
 
-class CreateStoryScreen extends StatefulWidget {
-  const CreateStoryScreen({super.key});
+class CreateSparkScreen extends StatefulWidget {
+  const CreateSparkScreen({super.key});
 
   @override
-  State<CreateStoryScreen> createState() => _CreateStoryScreenState();
+  State<CreateSparkScreen> createState() => _CreateSparkScreenState();
 }
 
-class _CreateStoryScreenState extends State<CreateStoryScreen>
+class _CreateSparkScreenState extends State<CreateSparkScreen>
     with TickerProviderStateMixin {
   final _captionController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
-  _StoryMode _mode = _StoryMode.text;
+  _SparkMode _mode = _SparkMode.text;
   File? _selectedMedia;
   bool _isVideo = false;
   bool _isUploading = false;
@@ -67,12 +68,12 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
   }
 
   // ── Mode switching ────────────────────────────────────────────────────────
-  void _switchMode(_StoryMode mode) {
+  void _switchMode(_SparkMode mode) {
     if (mode == _mode) return;
     _modeAnimCtrl.reverse().then((_) {
       setState(() {
         _mode = mode;
-        if (mode == _StoryMode.text) {
+        if (mode == _SparkMode.text) {
           _selectedMedia = null;
           _isVideo = false;
         }
@@ -81,15 +82,30 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
     });
 
     // Auto-open picker for photo/video modes
-    if (mode == _StoryMode.photo) {
+    if (mode == _SparkMode.photo) {
       _pickMedia(false);
-    } else if (mode == _StoryMode.video) {
+    } else if (mode == _SparkMode.video) {
       _pickMedia(true);
     }
   }
 
   // ── Media picker ──────────────────────────────────────────────────────────
   Future<void> _pickMedia(bool pickVideo) async {
+    final cameraStatus = await Permission.camera.status;
+    final photosStatus = await Permission.photos.status;
+    final storageStatus = await Permission.storage.status;
+
+    if (cameraStatus.isDenied || photosStatus.isDenied || storageStatus.isDenied) {
+      final statuses = await [Permission.camera, Permission.photos, Permission.storage].request();
+      final isGranted = statuses[Permission.camera]?.isGranted == true ||
+                        statuses[Permission.photos]?.isGranted == true ||
+                        statuses[Permission.storage]?.isGranted == true;
+      if (!isGranted) {
+        _showSnack('Camera & photo library permissions are required to post photo/video sparks.');
+        return;
+      }
+    }
+
     try {
       final XFile? file = pickVideo
           ? await _picker.pickVideo(
@@ -101,7 +117,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
         setState(() {
           _selectedMedia = File(file.path);
           _isVideo = pickVideo;
-          _mode = pickVideo ? _StoryMode.video : _StoryMode.photo;
+          _mode = pickVideo ? _SparkMode.video : _SparkMode.photo;
         });
       }
     } catch (e) {
@@ -110,13 +126,13 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
   }
 
   // ── Publish ───────────────────────────────────────────────────────────────
-  Future<void> _publishStory() async {
+  Future<void> _publishSpark() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final caption = _captionController.text.trim();
-    if (_mode == _StoryMode.text && caption.isEmpty) {
-      _showSnack('Please write something for your story!');
+    if (_mode == _SparkMode.text && caption.isEmpty) {
+      _showSnack('Please write something for your spark!');
       return;
     }
 
@@ -176,22 +192,106 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
       });
 
       if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Story posted! ✨'),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        _showSuccessDialog();
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isUploading = false);
-        _showSnack('Failed to post story: $e');
+        _showSnack('Failed to post spark: $e');
       }
     }
+  }
+
+  void _showSuccessDialog() {
+    final c = context.appColors;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.75),
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 1800), () {
+          if (ctx.mounted) {
+            Navigator.of(ctx).pop();
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          }
+        });
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1B2E).withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [c.primary, c.primaryDark],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: c.primary.withValues(alpha: 0.4),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 38,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Spark Shared! ✨',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Your followers can now view your new spark.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showSnack(String msg) {
@@ -384,7 +484,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
 
           // Share button
           GestureDetector(
-            onTap: _isUploading ? null : _publishStory,
+            onTap: _isUploading ? null : _publishSpark,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding:
@@ -467,7 +567,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
                           height: 1.35,
                         ),
                         decoration: InputDecoration(
-                          hintText: _mode == _StoryMode.text
+                          hintText: _mode == _SparkMode.text
                               ? 'Type something...'
                               : 'Add a caption',
                           hintStyle: TextStyle(
@@ -499,7 +599,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           // ── Font size selector (text mode only) ───────────────────────
-          if (_mode == _StoryMode.text) ...[
+          if (_mode == _SparkMode.text) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(3, (i) {
@@ -539,7 +639,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
           ],
 
           // ── Gradient palette (text mode or no media) ─────────────────
-          if (_mode == _StoryMode.text || _selectedMedia == null) ...[
+          if (_mode == _SparkMode.text || _selectedMedia == null) ...[
             SizedBox(
               height: 48,
               child: ListView.builder(
@@ -574,7 +674,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
                                   color: g.start.withValues(alpha: 0.5),
                                   blurRadius: 10,
                                   spreadRadius: 1,
-                                ),
+                                )
                               ]
                             : [],
                       ),
@@ -594,7 +694,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
                 onTap: () => setState(() {
                   _selectedMedia = null;
                   _isVideo = false;
-                  _mode = _StoryMode.text;
+                  _mode = _SparkMode.text;
                 }),
                 child: Container(
                   padding:
@@ -636,20 +736,20 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
                 _ModeTab(
                   icon: Icons.text_fields_rounded,
                   label: 'TEXT',
-                  active: _mode == _StoryMode.text,
-                  onTap: () => _switchMode(_StoryMode.text),
+                  active: _mode == _SparkMode.text,
+                  onTap: () => _switchMode(_SparkMode.text),
                 ),
                 _ModeTab(
                   icon: Icons.image_rounded,
                   label: 'PHOTO',
-                  active: _mode == _StoryMode.photo,
-                  onTap: () => _switchMode(_StoryMode.photo),
+                  active: _mode == _SparkMode.photo,
+                  onTap: () => _switchMode(_SparkMode.photo),
                 ),
                 _ModeTab(
                   icon: Icons.videocam_rounded,
                   label: 'VIDEO',
-                  active: _mode == _StoryMode.video,
-                  onTap: () => _switchMode(_StoryMode.video),
+                  active: _mode == _SparkMode.video,
+                  onTap: () => _switchMode(_SparkMode.video),
                 ),
               ],
             ),
@@ -681,7 +781,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen>
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text('Sharing your story...',
+                  Text('Sharing your spark...',
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 15,

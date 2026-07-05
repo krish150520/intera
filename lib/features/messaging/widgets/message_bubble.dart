@@ -17,12 +17,8 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.only(
-      topLeft: const Radius.circular(16),
-      topRight: const Radius.circular(16),
-      bottomLeft: Radius.circular(isMe ? 16 : 4),
-      bottomRight: Radius.circular(isMe ? 4 : 16),
-    );
+    final c = context.appColors;
+    final radius = BorderRadius.circular(12);
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -30,7 +26,7 @@ class MessageBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.72,
         ),
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+        margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 12),
         child: Column(
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -46,10 +42,10 @@ class MessageBubble extends StatelessWidget {
                     return Container(
                       width: 200,
                       height: 200,
-                      color: context.appColors.field,
+                      color: c.field,
                       child: Center(
                         child: CircularProgressIndicator(
-                          color: context.colors.primary,
+                          color: c.primary,
                           strokeWidth: 2,
                         ),
                       ),
@@ -58,9 +54,9 @@ class MessageBubble extends StatelessWidget {
                   errorBuilder: (context, error, stack) => Container(
                     width: 200,
                     height: 200,
-                    color: context.appColors.field,
+                    color: c.field,
                     child: Icon(Icons.broken_image_outlined,
-                        color: context.appColors.textDim),
+                        color: c.textDim),
                   ),
                 ),
               )
@@ -69,15 +65,18 @@ class MessageBubble extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isMe ? context.appColors.primary : context.appColors.field,
+                  color: isMe ? c.primary : c.field,
                   borderRadius: radius,
+                  border: isMe
+                      ? null
+                      : Border.all(color: c.border, width: 0.8),
                 ),
                 child: Text(
                   message.text ?? '',
                   style: TextStyle(
-                    color: isMe ? Colors.white : context.appColors.textPrimary,
-                    fontSize: 15,
-                    height: 1.3,
+                    color: isMe ? Colors.white : c.textPrimary,
+                    fontSize: 14,
+                    height: 1.4,
                   ),
                 ),
               ),
@@ -86,7 +85,7 @@ class MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 _formatTime(message.createdAt),
-                style: TextStyle(fontSize: 10, color: context.appColors.textDim),
+                style: TextStyle(fontSize: 10, color: c.textMuted),
               ),
             ),
           ],
@@ -94,4 +93,4 @@ class MessageBubble extends StatelessWidget {
       ),
     );
   }
-}
+}
