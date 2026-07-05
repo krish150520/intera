@@ -11,6 +11,7 @@ import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/create/screens/create_post_screen.dart';
 import '../../features/create/screens/create_community_screen.dart';
 import '../../features/home/screens/create_spark_screen.dart';
+import '../../features/echos/screens/echo_viewer_screen.dart';
 import '../../shared/models/post_model.dart';
 
 /// Centralized named-route definitions for INTERA.
@@ -28,6 +29,7 @@ class AppRoutes {
   static const String createPost = '/create-post';
   static const String createCommunity = '/create-community';
   static const String createSpark = '/create-spark';
+  static const String echoViewer = '/echo-viewer';
 
   static Map<String, WidgetBuilder> get routes => {
         splash: (context) => const SplashScreen(),
@@ -50,6 +52,13 @@ class AppRoutes {
         final post = settings.arguments as Post?;
         return MaterialPageRoute(
           builder: (context) => PostDetailScreen(post: post),
+        );
+      case echoViewer:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final posts = args?['posts'] as List<Post>? ?? [];
+        final initialIndex = args?['initialIndex'] as int? ?? 0;
+        return MaterialPageRoute(
+          builder: (context) => EchoViewerScreen(posts: posts, initialIndex: initialIndex),
         );
       default:
         return null;

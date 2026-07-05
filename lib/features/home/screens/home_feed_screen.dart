@@ -396,7 +396,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           backgroundColor: _c.surface,
           onRefresh: _refreshProfile,
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
             itemCount: itemCount,
             itemBuilder: (context, index) {
               if (index == 0) return _buildSparkTray();
@@ -418,13 +418,25 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
               final post = ranked[adjustedIndex];
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: PostCard(
                   post: post,
                   onTap: () {
                     FeedAlgorithm.markPostSeen(_myUid, post.id);
-                    Navigator.of(context)
-                        .pushNamed(AppRoutes.postDetail, arguments: post);
+                    if (post.type == PostType.video) {
+                      final videoPosts = ranked.where((p) => p.type == PostType.video).toList();
+                      final initialIdx = videoPosts.indexOf(post);
+                      Navigator.of(context).pushNamed(
+                        AppRoutes.echoViewer,
+                        arguments: {
+                          'posts': videoPosts,
+                          'initialIndex': initialIdx >= 0 ? initialIdx : 0,
+                        },
+                      );
+                    } else {
+                      Navigator.of(context)
+                          .pushNamed(AppRoutes.postDetail, arguments: post);
+                    }
                   },
                   onReact: (type) => _handleReaction(
                       post.id,
@@ -462,7 +474,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Widget _buildDiscoveryDivider() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         children: [
           Expanded(child: Divider(color: _c.border, thickness: 0.8)),
@@ -485,26 +497,22 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Widget _buildSparkTray() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      height: 94,
-      decoration: BoxDecoration(
-        color: _c.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _c.border, width: 0.8),
-      ),
+      margin: const EdgeInsets.only(bottom: 12),
+      height: 80,
+      color: Colors.transparent, // Borderless, seamless tray
       child: _sparksLoading
           ? ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               itemCount: 5,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, __) => const SizedBox(width: 16),
               itemBuilder: (_, __) => _buildShimmerAvatar(),
             )
           : ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               itemCount: _railSparks.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, __) => const SizedBox(width: 16),
               itemBuilder: (context, index) {
                 return _buildSparkAvatar(_railSparks[index]);
               },
@@ -517,8 +525,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 50,
-          height: 50,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
             color: _c.field,
             shape: BoxShape.circle,
@@ -551,8 +559,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             alignment: Alignment.center,
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.transparent,
@@ -568,7 +576,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(2.0),
                   child: CircleAvatar(
-                    radius: 22,
+                    radius: 19,
                     backgroundColor: _c.field,
                     backgroundImage:
                         (spark.avatar != null && spark.avatar!.isNotEmpty)
@@ -619,7 +627,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           SizedBox(
             width: 60,
             child: Text(
@@ -653,15 +661,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       backgroundColor: _c.bg,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleSpacing: 16,
+      toolbarHeight: 56,
+      titleSpacing: 14,
       centerTitle: false,
       title: Text(
         AppStrings.homeFeed,
         style: TextStyle(
-            color: _c.textPrimary,
-            fontSize: 22,
+            color: _c.primary,
+            fontSize: 24,
             fontWeight: FontWeight.w900,
-            letterSpacing: -0.5),
+            letterSpacing: -0.2),
       ),
       actions: [
         StreamBuilder<int>(
@@ -679,14 +688,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 ),
                 if (unreadCount > 0)
                   Positioned(
-                    top: 10,
-                    right: 4,
+                    top: 6,
+                    right: 6,
                     child: Container(
-                      width: 6,
-                      height: 6,
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
                         color: _c.primary,
                         shape: BoxShape.circle,
+                        border: Border.all(color: _c.bg, width: 1.5),
                       ),
                     ),
                   ),
@@ -694,7 +704,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             );
           },
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         _appBarBtn(
           icon: Icons.chat_bubble_outline_rounded,
           onTap: () => Navigator.of(context).push(
@@ -710,14 +720,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 38,
-        height: 38,
+        width: 42,
+        height: 42,
         decoration: BoxDecoration(
           color: _c.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: _c.border, width: 0.8),
+          border: Border.all(color: _c.border.withValues(alpha: 0.5), width: 0.8),
         ),
-        child: Icon(icon, color: _c.textPrimary, size: 18),
+        child: Icon(icon, color: _c.textPrimary, size: 20),
       ),
     );
   }

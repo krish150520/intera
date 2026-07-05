@@ -18,13 +18,83 @@ class KarmaService {
 
   static Stream<int> balanceStream(String uid) {
     return _db.collection('users').doc(uid).snapshots().map(
-      (snap) => (snap.data()?['karmaBalance'] as num?)?.toInt() ?? 0,
+      (snap) => (snap.data()?['karmaBalance'] as num?)?.toInt() ??
+                (snap.data()?['karmaPoints'] as num?)?.toInt() ?? 100,
     );
   }
 
   static Future<int> getBalance(String uid) async {
     final snap = await _db.collection('users').doc(uid).get();
-    return (snap.data()?['karmaBalance'] as num?)?.toInt() ?? 0;
+    return (snap.data()?['karmaBalance'] as num?)?.toInt() ??
+           (snap.data()?['karmaPoints'] as num?)?.toInt() ?? 100;
+  }
+
+  // ── Sync incoming karma (TIPS & BEST ANSWER AWARDS) ──────────────────────
+  // Since clients cannot modify other users' documents, when a user is tipped
+  // or awarded karma, the sender creates the ledger transaction but does not
+  // modify the recipient's user document. The recipient's client will pull
+  // and sync these updates when they launch the app or open their profile.
+  static Future<void> syncKarmaBalance(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final userRef = _db.collection('users').doc(uid);
+      final userSnap = await userRef.get();
+      if (!userSnap.exists) return;
+
+      final userData = userSnap.data() ?? {};
+      final currentBalance = (userData['karmaBalance'] as num?)?.toInt() ??
+                             (userData['karmaPoints'] as num?)?.toInt() ?? 100;
+      final lastSyncTimestamp = userData['lastKarmaSyncTime'] as Timestamp?;
+
+      // Query transactions where we are the recipient
+      Query query = _db.collection('karmaTransactions').where('toUid', isEqualTo: uid);
+      if (lastSyncTimestamp != null) {
+        query = query.where('createdAt', isGreaterThan: lastSyncTimestamp);
+      }
+
+      final snap = await query.get();
+      if (snap.docs.isEmpty) {
+        // Even if no new docs, initialize karmaBalance field if it was missing
+        if (userData['karmaBalance'] == null) {
+          await userRef.update({
+            'karmaBalance': currentBalance,
+            'lastKarmaSyncTime': FieldValue.serverTimestamp(),
+          });
+        }
+        return;
+      }
+
+      int addedKarma = 0;
+      Timestamp? latestTimestamp = lastSyncTimestamp;
+
+      for (final doc in snap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final fromUid = data['fromUid'] as String?;
+        final amount = (data['amount'] as num?)?.toInt() ?? 0;
+        final createdAt = data['createdAt'] as Timestamp?;
+
+        // Only count if it's from another user (i.e. fromUid is not null and not ourselves)
+        // Weekly bonus / refund are claimed by ourselves and already applied
+        if (fromUid != null && fromUid != uid) {
+          addedKarma += amount;
+        }
+
+        if (createdAt != null) {
+          if (latestTimestamp == null || createdAt.compareTo(latestTimestamp) > 0) {
+            latestTimestamp = createdAt;
+          }
+        }
+      }
+
+      final updates = <String, dynamic>{
+        'karmaBalance': currentBalance + addedKarma,
+        if (latestTimestamp != null) 'lastKarmaSyncTime': latestTimestamp,
+      };
+      await userRef.update(updates);
+    } catch (e) {
+      // Fail silently in production
+      print('[KarmaService] Error syncing karma balance: $e');
+    }
   }
 
   // ── Reserve karma on help post creation ───────────────────────────────────
@@ -97,12 +167,7 @@ class KarmaService {
       'bestAnswerUid':      winnerUid,
     });
 
-    // Credit winner
-    batch.update(_db.collection('users').doc(winnerUid), {
-      'karmaBalance': FieldValue.increment(rewardAmount),
-    });
-
-    // Ledger — earn entry for winner
+    // Ledger — earn entry for winner (winner's client will pull/sync this transaction)
     final earnRef = _db.collection('karmaTransactions').doc();
     batch.set(earnRef, {
       'fromUid':   currentUid,
@@ -144,12 +209,7 @@ class KarmaService {
       'karmaBalance': FieldValue.increment(-amount),
     });
 
-    // Credit receiver
-    batch.update(_db.collection('users').doc(toUid), {
-      'karmaBalance': FieldValue.increment(amount),
-    });
-
-    // Ledger — given
+    // Ledger — given (recipient's client will pull/sync this transaction)
     final givenRef = _db.collection('karmaTransactions').doc();
     batch.set(givenRef, {
       'fromUid':   fromUid,

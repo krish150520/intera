@@ -24,11 +24,13 @@ class PostCard extends StatelessWidget {
   });
 
   bool get _hasMedia => post.imageUrl != null && post.imageUrl!.isNotEmpty;
+
   bool get _isMediaType =>
       post.type == PostType.image || post.type == PostType.video;
 
   @override
   Widget build(BuildContext context) {
+    // Image / video posts → full-bleed card (existing style, kept as-is)
     if (_hasMedia || _isMediaType) {
       return _MediaPostCard(
         post: post,
@@ -36,21 +38,23 @@ class PostCard extends StatelessWidget {
         onLike: onLike,
         onSave: onSave,
         onComment: onComment,
-        onShare: onShare,
         onReact: onReact,
       );
     }
+
+    // All other post types → Option C tinted card
     return _TextPostCard(
       post: post,
       onTap: onTap,
       onLike: onLike,
       onSave: onSave,
       onComment: onComment,
-      onShare: onShare,
       onReact: onReact,
     );
   }
 }
+
+// ── Option C: tinted background card (text / question / help / achievement) ──
 
 class _TextPostCard extends StatelessWidget {
   final Post post;
@@ -58,7 +62,6 @@ class _TextPostCard extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onSave;
   final VoidCallback? onComment;
-  final VoidCallback? onShare;
   final void Function(String type)? onReact;
 
   const _TextPostCard({
@@ -67,18 +70,115 @@ class _TextPostCard extends StatelessWidget {
     this.onLike,
     this.onSave,
     this.onComment,
-    this.onShare,
     this.onReact,
   });
 
+  // Per-type colour config (dynamic based on active theme brightness)
+  _TypeStyle _getStyle(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return switch (post.type) {
+      PostType.question => isDark
+          ? const _TypeStyle(
+              bg: Color(0xFF0F261C),
+              border: Color(0xFF1E533C),
+              pillBg: Color(0xFF2E7D32),
+              pillText: Colors.white,
+              titleColor: Color(0xFFE8F5E9),
+              bodyColor: Color(0xFFC8E6C9),
+              label: 'Question',
+              emoji: '❓',
+            )
+          : const _TypeStyle(
+              bg: Color(0xFFF0FFF4),
+              border: Color(0xFFC8E6C9),
+              pillBg: Color(0xFF388E3C),
+              pillText: Colors.white,
+              titleColor: Color(0xFF2D2A6E),
+              bodyColor: Color(0xFF555555),
+              label: 'Question',
+              emoji: '❓',
+            ),
+      PostType.helpRequest => isDark
+          ? const _TypeStyle(
+              bg: Color(0xFF2C210F),
+              border: Color(0xFF5A441B),
+              pillBg: Color(0xFFD84315),
+              pillText: Colors.white,
+              titleColor: Color(0xFFFDF6E2),
+              bodyColor: Color(0xFFF5DCAA),
+              label: 'Help',
+              emoji: '🤝',
+            )
+          : const _TypeStyle(
+              bg: Color(0xFFFFFBF0),
+              border: Color(0xFFF5DCAA),
+              pillBg: Color(0xFFC9830A),
+              pillText: Colors.white,
+              titleColor: Color(0xFF2D2A6E),
+              bodyColor: Color(0xFF555555),
+              label: 'Help',
+              emoji: '🤝',
+            ),
+      PostType.achievement => isDark
+          ? const _TypeStyle(
+              bg: Color(0xFF2C190F),
+              border: Color(0xFF5A311B),
+              pillBg: Color(0xFFEF6C00),
+              pillText: Colors.white,
+              titleColor: Color(0xFFFDF2E9),
+              bodyColor: Color(0xFFFFCC80),
+              label: 'Achievement',
+              emoji: '🏆',
+            )
+          : const _TypeStyle(
+              bg: Color(0xFFFFF8F0),
+              border: Color(0xFFFFCC80),
+              pillBg: Color(0xFFE65100),
+              pillText: Colors.white,
+              titleColor: Color(0xFF2D2A6E),
+              bodyColor: Color(0xFF555555),
+              label: 'Achievement',
+              emoji: '🏆',
+            ),
+      _ => isDark
+          ? const _TypeStyle(
+              bg: Color(0xFF1D1A32), // Fits dark background surface
+              border: Color(0xFF383361),
+              pillBg: Color(0xFF7E69FF),
+              pillText: Colors.white,
+              titleColor: Color(0xFFECEBFF),
+              bodyColor: Color(0xFFC5C2E6),
+              label: 'Text',
+              emoji: '💬',
+            )
+          : const _TypeStyle(
+              bg: Color(0xFFF5F4FF),
+              border: Color(0xFFE4E2F8),
+              pillBg: Color(0xFF6C63D5),
+              pillText: Colors.white,
+              titleColor: Color(0xFF2D2A6E),
+              bodyColor: Color(0xFF555555),
+              label: 'Text',
+              emoji: '💬',
+            ),
+    };
+  }
+
+  String _pillLabel(_TypeStyle style) {
+    if (post.type == PostType.helpRequest && (post.rewardKarma ?? 0) > 0) {
+      return 'Help · ${post.rewardKarma} ⚡';
+    }
+    return style.label;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
-    final typeInfo = _typeInfo(post.type);
-
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = _getStyle(context);
     final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final myReaction = post.reactions[myUid];
     final bool hasReacted = myReaction != null;
+
     final IconData reactionIcon = switch (myReaction) {
       'beauty' => Icons.favorite_rounded,
       'art' => Icons.palette_rounded,
@@ -91,161 +191,152 @@ class _TextPostCard extends StatelessWidget {
       'art' => Colors.orangeAccent,
       'funny' => Colors.amber,
       'like' => const Color(0xFFEF4444),
-      _ => c.textMuted,
+      _ => isDark ? const Color(0xFF8B86B7) : const Color(0xFFB0ADDE),
     };
+
+    final Color footerTextColor =
+        isDark ? const Color(0xFF8B86B7) : const Color(0xFF9E9BD0);
+    final Color iconDefaultColor =
+        isDark ? const Color(0xFF8B86B7) : const Color(0xFFB0ADDE);
 
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 160),
         decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.border, width: 0.8),
+          color: s.bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: s.border),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(16),
+        child: Stack(
           children: [
-            // ── Header ─────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-              child: Row(
-                children: [
-                  _Avatar(
+            // Large faded emoji watermark (top-right)
+            Positioned(
+              top: -4,
+              right: -2,
+              child: Opacity(
+                opacity: 0.15,
+                child: Text(
+                  s.emoji,
+                  style: const TextStyle(fontSize: 52),
+                ),
+              ),
+            ),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Type pill ───────────────────────────────────────────
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: s.pillBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _pillLabel(s),
+                    style: TextStyle(
+                      color: s.pillText,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ── Title ────────────────────────────────────────────────
+                if (post.title.isNotEmpty)
+                  Text(
+                    post.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: s.titleColor,
+                      height: 1.25,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+
+                // ── Body ─────────────────────────────────────────────────
+                if (post.body.isNotEmpty &&
+                    post.body.trim() != post.title.trim()) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    post.body,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: s.bodyColor,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+
+                // ── Footer ────────────────────────────────────────────────
+                Row(children: [
+                  // Avatar
+                  _MiniAvatar(
                     name: post.authorName,
                     imageUrl: post.authorAvatarUrl,
-                    radius: 17,
+                  ),
+                  const SizedBox(width: 7),
+
+                  // Author + time
+                  Expanded(
+                    child: Text(
+                      '${post.authorUsername} · ${_formatTime(post.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: footerTextColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+
+                  // Stats
+                  _FooterStat(
+                    icon: reactionIcon,
+                    iconColor: hasReacted ? reactionColor : iconDefaultColor,
+                    label: _compact(post.likeCount),
+                    labelColor: footerTextColor,
+                    onTap: onReact != null ? () => onReact!('like') : onLike,
+                    onLongPress: onReact != null
+                        ? () => _showReactionSheet(context, onReact!)
+                        : null,
                   ),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.authorName,
-                          style: TextStyle(
-                            color: c.textHi,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                        Text(
-                          '${post.authorUsername} · ${_formatTime(post.createdAt)}',
-                          style: TextStyle(
-                            color: c.textDim,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Type badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: typeInfo.badgeBg(c),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      typeInfo.label,
-                      style: TextStyle(
-                        color: typeInfo.badgeText(c),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Content ────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (post.title.isNotEmpty)
-                    Text(
-                      post.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: c.textHi,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        height: 1.3,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  if (post.body.isNotEmpty) ...[
-                    if (post.title.isNotEmpty) const SizedBox(height: 4),
-                    Text(
-                      post.body,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── Divider ────────────────────────────────────────────────────
-            Divider(height: 1, thickness: 0.8, color: c.border),
-
-            // ── Actions ────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              child: Row(
-                children: [
-                  _ActionBtn(
-                    icon: reactionIcon,
-                    label: _compact(post.likeCount),
-                    active: hasReacted,
-                    activeColor: reactionColor,
-                    inactiveColor: c.textMuted,
-                    onTap: onReact != null ? () => onReact!('like') : onLike,
-                    onLongPress: onReact != null ? () => _showReactionSheet(context, onReact!) : null,
-                  ),
-                  _ActionBtn(
-                    icon: Icons.mode_comment_outlined,
+                  _FooterStat(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    iconColor: iconDefaultColor,
                     label: _compact(post.commentCount),
-                    active: false,
-                    activeColor: c.primary,
-                    inactiveColor: c.textMuted,
+                    labelColor: footerTextColor,
                     onTap: onComment,
                   ),
-                  _ActionBtn(
-                    icon: Icons.share_outlined,
-                    label: '',
-                    active: false,
-                    activeColor: c.primary,
-                    inactiveColor: c.textMuted,
-                    onTap: onShare,
-                  ),
-                  const Spacer(),
-                  _ActionBtn(
-                    icon: post.isSaved
-                        ? Icons.bookmark_rounded
-                        : Icons.bookmark_border_rounded,
-                    label: '',
-                    active: post.isSaved,
-                    activeColor: c.primary,
-                    inactiveColor: c.textMuted,
+                  const SizedBox(width: 10),
+                  GestureDetector(
                     onTap: onSave,
+                    child: Icon(
+                      post.isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      size: 18,
+                      color: post.isSaved
+                          ? (isDark
+                              ? const Color(0xFFA597EC)
+                              : const Color(0xFF6C63D5))
+                          : iconDefaultColor,
+                    ),
                   ),
-                ],
-              ),
+                ]),
+              ],
             ),
           ],
         ),
@@ -254,7 +345,7 @@ class _TextPostCard extends StatelessWidget {
   }
 }
 
-// ── Media Post Card ───────────────────────────────────────────────────────────
+// ── Full-bleed media card (image / video posts) ───────────────────────────────
 
 class _MediaPostCard extends StatelessWidget {
   final Post post;
@@ -262,7 +353,6 @@ class _MediaPostCard extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onSave;
   final VoidCallback? onComment;
-  final VoidCallback? onShare;
   final void Function(String type)? onReact;
 
   const _MediaPostCard({
@@ -271,18 +361,17 @@ class _MediaPostCard extends StatelessWidget {
     this.onLike,
     this.onSave,
     this.onComment,
-    this.onShare,
     this.onReact,
   });
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
     final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final myReaction = post.reactions[myUid];
     final bool hasReacted = myReaction != null;
+
     final IconData reactionIcon = switch (myReaction) {
       'beauty' => Icons.favorite_rounded,
       'art' => Icons.palette_rounded,
@@ -300,241 +389,343 @@ class _MediaPostCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.border, width: 0.8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header ─────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-              child: Row(
-                children: [
-                  _Avatar(
-                    name: post.authorName,
-                    imageUrl: post.authorAvatarUrl,
-                    radius: 17,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.authorName,
-                          style: TextStyle(
-                            color: c.textHi,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          _formatTime(post.createdAt),
-                          style: TextStyle(color: c.textDim, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          height: 360,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image / fallback
+              hasImage
+                  ? Image.network(
+                      post.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const _FallbackBg(),
+                    )
+                  : const _FallbackBg(),
 
-            // ── Media ──────────────────────────────────────────────────────
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+              // Gradient overlay
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.0, 0.30, 1.0],
+                    colors: [
+                      Color(0x00000000),
+                      Color(0x44000000),
+                      Color(0xE0000000),
+                    ],
+                  ),
+                ),
               ),
-              child: SizedBox(
-                height: 280,
-                width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    hasImage
-                        ? Image.network(
-                            post.imageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _FallbackBg(c: c),
-                          )
-                        : _FallbackBg(c: c),
-                    // Bottom gradient for text legibility
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: [0.4, 1.0],
-                          colors: [Colors.transparent, Color(0xCC000000)],
+                    _AuthorRow(post: post),
+                    const Spacer(),
+                    if (post.title.isNotEmpty)
+                      Text(
+                        post.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          letterSpacing: -0.3,
                         ),
                       ),
-                    ),
-                    // Caption overlay
-                    Positioned(
-                      left: 14,
-                      right: 14,
-                      bottom: 52,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (post.title.isNotEmpty)
-                            Text(
-                              post.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                height: 1.2,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          if (post.body.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              post.body,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.75),
-                                fontSize: 13,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ],
+                    if (post.body.isNotEmpty &&
+                        post.body.trim() != post.title.trim()) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        post.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
                       ),
-                    ),
-                    // Action row overlay at bottom
-                    Positioned(
-                      left: 14,
-                      right: 14,
-                      bottom: 12,
-                      child: Row(
-                        children: [
-                          _ActionBtn(
-                            icon: reactionIcon,
-                            label: _compact(post.likeCount),
-                            active: hasReacted,
-                            activeColor: reactionColor,
-                            inactiveColor: Colors.white70,
-                            onTap: onReact != null ? () => onReact!('like') : onLike,
-                            onLongPress: onReact != null ? () => _showReactionSheet(context, onReact!) : null,
-                          ),
-                          _ActionBtn(
-                            icon: Icons.mode_comment_outlined,
-                            label: _compact(post.commentCount),
-                            active: false,
-                            activeColor: Colors.white,
-                            inactiveColor: Colors.white70,
-                            onTap: onComment,
-                          ),
-                          const Spacer(),
-                          _ActionBtn(
-                            icon: post.isSaved
-                                ? Icons.bookmark_rounded
-                                : Icons.bookmark_border_rounded,
-                            label: '',
-                            active: post.isSaved,
-                            activeColor: Colors.white,
-                            inactiveColor: Colors.white70,
-                            onTap: onSave,
-                          ),
-                        ],
-                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    _MediaStatsRow(
+                      post: post,
+                      reactionIcon: reactionIcon,
+                      reactionColor: hasReacted ? reactionColor : Colors.white,
+                      onLike: onLike,
+                      onComment: onComment,
+                      onSave: onSave,
+                      onReact: onReact,
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Shared Widgets ────────────────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
-class _Avatar extends StatelessWidget {
+String _formatTime(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${(diff.inDays / 7).floor()}w ago';
+}
+
+String _compact(int n) {
+  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+  return '$n';
+}
+
+// ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _TypeStyle {
+  final Color bg;
+  final Color border;
+  final Color pillBg;
+  final Color pillText;
+  final Color titleColor;
+  final Color bodyColor;
+  final String label;
+  final String emoji;
+
+  const _TypeStyle({
+    required this.bg,
+    required this.border,
+    required this.pillBg,
+    required this.pillText,
+    required this.titleColor,
+    required this.bodyColor,
+    required this.label,
+    required this.emoji,
+  });
+}
+
+class _MiniAvatar extends StatelessWidget {
   final String name;
   final String? imageUrl;
-  final double radius;
 
-  const _Avatar({required this.name, this.imageUrl, this.radius = 17});
+  const _MiniAvatar({required this.name, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
-    final hasImg = imageUrl != null && imageUrl!.isNotEmpty;
+    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
     return CircleAvatar(
-      radius: radius,
-      backgroundColor: c.primary,
-      backgroundImage: hasImg ? NetworkImage(imageUrl!) : null,
-      child: !hasImg
+      radius: 11,
+      backgroundColor: const Color(0xFF6C63D5),
+      backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
+      child: !hasImage
           ? Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: radius * 0.7,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700),
             )
           : null,
     );
   }
 }
 
-class _ActionBtn extends StatelessWidget {
+class _FooterStat extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
   final String label;
-  final bool active;
-  final Color activeColor;
-  final Color inactiveColor;
+  final Color labelColor;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  const _ActionBtn({
+  const _FooterStat({
     required this.icon,
+    required this.iconColor,
     required this.label,
-    required this.active,
-    required this.activeColor,
-    required this.inactiveColor,
+    required this.labelColor,
     this.onTap,
     this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? activeColor : inactiveColor;
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 15, color: iconColor),
+        const SizedBox(width: 3),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: labelColor)),
+      ]),
+    );
+  }
+}
+
+// Media card author row
+class _AuthorRow extends StatelessWidget {
+  final Post post;
+  const _AuthorRow({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAvatar =
+        post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty;
+
+    return Row(children: [
+      CircleAvatar(
+        radius: 16,
+        backgroundColor: const Color(0xFF6C63D5),
+        backgroundImage: hasAvatar ? NetworkImage(post.authorAvatarUrl!) : null,
+        child: !hasAvatar
+            ? Text(
+                post.authorName.isNotEmpty
+                    ? post.authorName[0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700),
+              )
+            : null,
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 19, color: color),
-            if (label.isNotEmpty) ...[
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+            Text(post.authorName,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
+            Text(
+              _formatTime(post.createdAt),
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6), fontSize: 10),
+            ),
           ],
+        ),
+      ),
+    ]);
+  }
+}
+
+// Media card stats row
+class _MediaStatsRow extends StatelessWidget {
+  final Post post;
+  final IconData reactionIcon;
+  final Color reactionColor;
+  final VoidCallback? onLike;
+  final VoidCallback? onComment;
+  final VoidCallback? onSave;
+  final void Function(String type)? onReact;
+
+  const _MediaStatsRow({
+    required this.post,
+    required this.reactionIcon,
+    required this.reactionColor,
+    this.onLike,
+    this.onComment,
+    this.onSave,
+    this.onReact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      _MediaStatBtn(
+        icon: reactionIcon,
+        iconColor: reactionColor,
+        label: _compact(post.likeCount),
+        onTap: onReact != null ? () => onReact!('like') : onLike,
+        onLongPress: onReact != null
+            ? () => _showReactionSheet(context, onReact!)
+            : null,
+      ),
+      const SizedBox(width: 16),
+      _MediaStatBtn(
+        icon: Icons.chat_bubble_outline_rounded,
+        iconColor: Colors.white,
+        label: _compact(post.commentCount),
+        onTap: onComment,
+      ),
+      const Spacer(),
+      GestureDetector(
+        onTap: onSave,
+        child: Icon(
+          post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          color: post.isSaved ? const Color(0xFF6C63D5) : Colors.white,
+          size: 22,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _MediaStatBtn extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  const _MediaStatBtn({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      behavior: HitTestBehavior.opaque,
+      child: Row(children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 4),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
+// Fallback gradient background for media cards
+class _FallbackBg extends StatelessWidget {
+  const _FallbackBg();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2D1B69), Color(0xFF6C63D5)],
         ),
       ),
     );
@@ -549,11 +740,11 @@ void _showReactionSheet(BuildContext context, void Function(String) onSelect) {
     context: context,
     backgroundColor: c.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (sheetCtx) {
       return SafeArea(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -569,12 +760,12 @@ void _showReactionSheet(BuildContext context, void Function(String) onSelect) {
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
-                'React with points',
+                'React',
                 style: TextStyle(
-                  color: c.textHi,
-                  fontSize: 14,
+                  color: c.textPrimary,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -614,15 +805,15 @@ Widget _reactionItem(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 50,
-          height: 50,
+          width: 54,
+          height: 54,
           decoration: BoxDecoration(
             color: c.field,
             shape: BoxShape.circle,
             border: Border.all(color: c.border, width: 0.8),
           ),
           alignment: Alignment.center,
-          child: Text(emoji, style: const TextStyle(fontSize: 22)),
+          child: Text(emoji, style: const TextStyle(fontSize: 24)),
         ),
         const SizedBox(height: 6),
         Text(
@@ -636,80 +827,4 @@ Widget _reactionItem(
       ],
     ),
   );
-}
-
-
-class _FallbackBg extends StatelessWidget {
-  final AppColorsExtension c;
-  const _FallbackBg({required this.c});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(color: c.field);
-  }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-String _formatTime(DateTime dt) {
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-  if (diff.inHours < 24) return '${diff.inHours}h';
-  if (diff.inDays < 7) return '${diff.inDays}d';
-  return '${(diff.inDays / 7).floor()}w';
-}
-
-String _compact(int n) {
-  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
-  return '$n';
-}
-
-// ── Post type info ────────────────────────────────────────────────────────────
-
-class _TypeInfo {
-  final String label;
-  final Color Function(AppColorsExtension) badgeBg;
-  final Color Function(AppColorsExtension) badgeText;
-  const _TypeInfo({
-    required this.label,
-    required this.badgeBg,
-    required this.badgeText,
-  });
-}
-
-_TypeInfo _typeInfo(PostType type) {
-  return switch (type) {
-    PostType.question => _TypeInfo(
-      label: 'Question',
-      badgeBg: (c) => c.primary.withValues(alpha: 0.12),
-      badgeText: (c) => c.primary,
-    ),
-    PostType.helpRequest => _TypeInfo(
-      label: 'Help',
-      badgeBg: (c) => const Color(0xFFF59E0B).withValues(alpha: 0.12),
-      badgeText: (_) => const Color(0xFFB45309),
-    ),
-    PostType.achievement => _TypeInfo(
-      label: 'Achievement',
-      badgeBg: (c) => const Color(0xFF22C55E).withValues(alpha: 0.12),
-      badgeText: (_) => const Color(0xFF16A34A),
-    ),
-    PostType.image => _TypeInfo(
-      label: 'Photo',
-      badgeBg: (c) => const Color(0xFF3B82F6).withValues(alpha: 0.12),
-      badgeText: (_) => const Color(0xFF2563EB),
-    ),
-    PostType.video => _TypeInfo(
-      label: 'Video',
-      badgeBg: (c) => const Color(0xFFEF4444).withValues(alpha: 0.12),
-      badgeText: (_) => const Color(0xFFDC2626),
-    ),
-    _ => _TypeInfo(
-      label: 'Post',
-      badgeBg: (c) => c.field,
-      badgeText: (c) => c.textMuted,
-    ),
-  };
 }

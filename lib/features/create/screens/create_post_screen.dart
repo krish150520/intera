@@ -318,7 +318,13 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   backgroundColor: c.surface,
                   elevation: 0,
                   leading: GestureDetector(
-                    onTap: () => Navigator.of(context).maybePop(),
+                    onTap: () async {
+                      if (Navigator.of(context).canPop()) {
+                        await Navigator.of(context).maybePop();
+                      } else {
+                        BottomNavScreen.switchToTab(0);
+                      }
+                    },
                     child: Container(
                       margin: const EdgeInsets.all(8),
                       decoration:

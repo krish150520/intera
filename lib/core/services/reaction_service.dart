@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'notification_service.dart';
 
 class ReactionService {
   static final _db = FirebaseFirestore.instance;
-  static final _auth = FirebaseAuth.instance;
 
   /// Map reaction types to their corresponding count and user points fields.
   static const Map<String, String> _postFields = {
@@ -30,6 +29,7 @@ class ReactionService {
 
     final postRef = _db.collection('posts').doc(postId);
     final authorRef = _db.collection('users').doc(postAuthorId);
+    final Map<String, dynamic> authorUpdates = {};
 
     await _db.runTransaction((transaction) async {
       final postSnap = await transaction.get(postRef);
@@ -43,7 +43,6 @@ class ReactionService {
 
       // Prepare updates
       final Map<String, dynamic> postUpdates = {};
-      final Map<String, dynamic> authorUpdates = {};
 
       if (existingReaction == reactionType) {
         // ── Remove Reaction ──────────────────────────────────────────────────
@@ -99,35 +98,79 @@ class ReactionService {
 
       // Commit changes in transaction
       transaction.update(postRef, postUpdates);
-      if (authorUpdates.isNotEmpty) {
-        transaction.update(authorRef, authorUpdates);
-      }
     });
 
-    // Send a notification if a reaction was added or changed (not removed)
-    final postSnap = await postRef.get();
-    final reactions = Map<String, String>.from(postSnap.data()?['reactions'] ?? {});
-    if (reactions[currentUid] == reactionType) {
-      String senderName = 'Someone';
+    // Try to update the author points directly. Under restricted Firestore
+    // security rules, this will fail with permission-denied if currentUid != postAuthorId.
+    // That is fine — we sync the author's points when they open their profile or app.
+    if (authorUpdates.isNotEmpty) {
       try {
-        final userDoc = await _db.collection('users').doc(currentUid).get();
-        if (userDoc.exists) {
-          senderName = userDoc.data()?['name'] ?? 'Someone';
-        }
-      } catch (_) {}
+        await authorRef.update(authorUpdates);
+      } catch (e) {
+        debugPrint('Warning: Could not update author points directly (normal under restricted security rules): $e');
+      }
+    }
 
-      String reactionEmoji = '👍';
-      if (reactionType == 'beauty') reactionEmoji = '💖';
-      if (reactionType == 'art') reactionEmoji = '🎨';
-      if (reactionType == 'funny') reactionEmoji = '😂';
+    // Send a notification if a reaction was added or changed (not removed)
+    try {
+      final postSnap = await postRef.get();
+      final reactions = Map<String, String>.from(postSnap.data()?['reactions'] ?? {});
+      if (reactions[currentUid] == reactionType) {
+        String senderName = 'Someone';
+        try {
+          final userDoc = await _db.collection('users').doc(currentUid).get();
+          if (userDoc.exists) {
+            senderName = userDoc.data()?['name'] ?? 'Someone';
+          }
+        } catch (_) {}
 
-      await NotificationService.sendNotification(
-        recipientId: postAuthorId,
-        type: 'reaction',
-        title: '$senderName reacted with $reactionEmoji to your post',
-        subtitle: postTitle.isNotEmpty ? postTitle : 'View post details',
-        relatedId: postId,
-      );
+        String reactionEmoji = '👍';
+        if (reactionType == 'beauty') reactionEmoji = '💖';
+        if (reactionType == 'art') reactionEmoji = '🎨';
+        if (reactionType == 'funny') reactionEmoji = '😂';
+
+        await NotificationService.sendNotification(
+          recipientId: postAuthorId,
+          type: 'reaction',
+          title: '$senderName reacted with $reactionEmoji to your post',
+          subtitle: postTitle.isNotEmpty ? postTitle : 'View post details',
+          relatedId: postId,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error sending reaction notification: $e');
+    }
+  }
+
+  /// Recalculates and updates the total points earned by a user across all their posts.
+  /// Runs locally as the authenticated user who owns their own document.
+  static Future<void> syncUserPoints(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final postsSnap = await _db
+          .collection('posts')
+          .where('authorId', isEqualTo: uid)
+          .get();
+
+      int totalBeauty = 0;
+      int totalArt = 0;
+      int totalFunny = 0;
+
+      for (var doc in postsSnap.docs) {
+        final data = doc.data();
+        totalBeauty += (data['beautyCount'] as num?)?.toInt() ?? 0;
+        totalArt += (data['artCount'] as num?)?.toInt() ?? 0;
+        totalFunny += (data['funnyCount'] as num?)?.toInt() ?? 0;
+      }
+
+      await _db.collection('users').doc(uid).update({
+        'beautyPoints': totalBeauty,
+        'artPoints': totalArt,
+        'funnyPoints': totalFunny,
+      });
+      debugPrint('Successfully synced points for user $uid: Beauty=$totalBeauty, Art=$totalArt, Funny=$totalFunny');
+    } catch (e) {
+      debugPrint('Error syncing user points for $uid: $e');
     }
   }
 }

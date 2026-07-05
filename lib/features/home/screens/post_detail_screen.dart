@@ -697,7 +697,7 @@ class _PostBodyCard extends StatelessWidget {
                   color: c.textHi)),
           const SizedBox(height: 6),
         ],
-        if (post.body.isNotEmpty)
+        if (post.body.isNotEmpty && post.body.trim() != post.title.trim())
           Text(post.body,
               style: TextStyle(
                   fontSize: 13,

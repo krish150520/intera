@@ -8,9 +8,11 @@ import '../../home/screens/home_feed_screen.dart';
 import '../../search/screens/search_screen.dart';
 import '../../create/screens/create_post_screen.dart';
 import '../../videos/screens/communities_screen.dart';
-import '../../notifications/screens/notifications_screen.dart';
 import '../../profile/screens/my_profile_screen.dart';
 import '../../tasks/screens/task_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../core/services/reaction_service.dart';
+import '../../../core/karma/karma_service.dart';
 
 class BottomNavScreen extends StatefulWidget {
   const BottomNavScreen({super.key});
@@ -37,10 +39,10 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     MyProfileScreen(),
   ];
 
-  static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,          label: AppStrings.home),
-    _NavItem(icon: Icons.search_rounded,         activeIcon: Icons.search_rounded,        label: AppStrings.search),
-    _NavItem(icon: Icons.add_rounded,            activeIcon: Icons.add_rounded,           label: AppStrings.create),
+  final List<_NavItem> _items = [
+    _NavItem(icon: Icons.home_outlined,              activeIcon: Icons.home_rounded,              label: AppStrings.home),
+    _NavItem(icon: Icons.search_rounded,             activeIcon: Icons.search_rounded,            label: AppStrings.search),
+    _NavItem(icon: Icons.add_rounded,                   activeIcon: Icons.add_rounded,                  label: AppStrings.create),
     _NavItem(icon: Icons.group_outlined,         activeIcon: Icons.group_rounded,         label: 'Communities'),
     _NavItem(icon: Icons.task_alt_outlined,      activeIcon: Icons.task_rounded,          label: 'Tasks'),
     _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: AppStrings.profile),
@@ -54,6 +56,27 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkPermissions();
     });
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      ReactionService.syncUserPoints(uid);
+      KarmaService.syncKarmaBalance(uid);
+    }
+    _currentIndex = BottomNavScreen.indexNotifier.value;
+    BottomNavScreen.indexNotifier.addListener(_handleIndexChange);
+  }
+
+  void _handleIndexChange() {
+    if (mounted) {
+      setState(() {
+        _currentIndex = BottomNavScreen.indexNotifier.value;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    BottomNavScreen.indexNotifier.removeListener(_handleIndexChange);
+    super.dispose();
   }
 
   Future<void> _checkPermissions() async {
@@ -244,7 +267,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   void _onTap(int index) {
     if (index == _currentIndex) return;
     HapticFeedback.selectionClick();
-    setState(() => _currentIndex = index);
+    BottomNavScreen.indexNotifier.value = index;
   }
 
   @override
@@ -256,42 +279,62 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          border: Border(top: BorderSide(color: c.border, width: 0.8)),
+          border: Border(top: BorderSide(color: c.border.withValues(alpha: 0.5), width: 0.6)),
         ),
         child: SafeArea(
           top: false,
           child: SizedBox(
-            height: 60,
+            height: 64,
             child: Row(
               children: List.generate(_items.length, (i) {
                 final selected = i == _currentIndex;
                 final item = _items[i];
 
-                // ── Create button ──────────────────────────────────────────
+                // ── Create button — lifted pill ──────────────────────────
                 if (i == _createIndex) {
                   return Expanded(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => _onTap(i),
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: selected ? c.primary : c.field,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: selected ? Colors.transparent : c.border,
-                              width: 0.8,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Transform.translate(
+                            offset: const Offset(0, -6),
+                            child: AnimatedScale(
+                              scale: selected ? 1.05 : 1.0,
+                              duration: const Duration(milliseconds: 150),
+                              curve: Curves.easeOut,
+                              child: Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFA597EC), // Beautiful light lavender/lilac color
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFA597EC).withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    )
+                                  ]
+                                ),
+                                child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                              ),
                             ),
                           ),
-                          child: Icon(
-                            Icons.add_rounded,
-                            color: selected ? Colors.white : c.textPrimary,
-                            size: 24,
+                          Transform.translate(
+                            offset: const Offset(0, -4),
+                            child: Text(
+                              item.label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: selected ? c.primary : c.inactive,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   );
@@ -302,21 +345,45 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => _onTap(i),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedScale(
-                            scale: selected ? 1.08 : 1.0,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedScale(
+                          scale: selected ? 1.05 : 1.0,
+                          duration: const Duration(milliseconds: 150),
+                          curve: Curves.easeOut,
+                          child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
-                            child: Icon(
-                              selected ? item.activeIcon : item.icon,
-                              size: 24,
-                              color: selected ? c.primary : c.textMuted,
+                            width: 52,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: selected ? const Color(0xFF2C2754) : Colors.transparent, // Rich dark purple oval highlight
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Center(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 150),
+                                child: Icon(
+                                  selected ? item.activeIcon : item.icon,
+                                  key: ValueKey(selected),
+                                  size: 22,
+                                  color: selected ? Colors.white : c.inactive,
+                                ),
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 4),
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 150),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                            color: selected ? c.primary : c.inactive,
+                          ),
+                          child: Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
                     ),
                   ),
                 );

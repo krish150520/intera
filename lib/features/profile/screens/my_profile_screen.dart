@@ -13,6 +13,7 @@ import 'user_profile_screen.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
 import 'setting_screen.dart';
+import '../../../core/karma/karma_service.dart';
 import '../../../core/services/reaction_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
@@ -35,6 +36,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _checkWeeklyBonus();
+    if (_currentUid.isNotEmpty) {
+      ReactionService.syncUserPoints(_currentUid);
+      KarmaService.syncKarmaBalance(_currentUid);
+    }
   }
 
   @override
@@ -658,7 +663,24 @@ class _ProfileContentList extends StatelessWidget {
                 onLongPress: () => _confirmAndPurgePost(context, doc.id, data['mediaUrl']),
                 child: PostCard(
                   post: post,
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post),
+                  onTap: () {
+                    if (post.type == PostType.video) {
+                      final videoPosts = filtered
+                          .map((d) => Post.fromFirestore(d, authorId))
+                          .where((p) => p.type == PostType.video)
+                          .toList();
+                      final initialIdx = videoPosts.indexWhere((p) => p.id == post.id);
+                      Navigator.of(context).pushNamed(
+                        AppRoutes.echoViewer,
+                        arguments: {
+                          'posts': videoPosts,
+                          'initialIndex': initialIdx >= 0 ? initialIdx : 0,
+                        },
+                      );
+                    } else {
+                      Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post);
+                    }
+                  },
                   onReact: (type) {
                     ReactionService.toggleReaction(
                       postId: doc.id,

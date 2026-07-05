@@ -22,10 +22,33 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _identifierController.addListener(_onEmailChanged);
+  }
+
+  @override
   void dispose() {
+    _identifierController.removeListener(_onEmailChanged);
     _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _onEmailChanged() {
+    final email = _identifierController.text.trim();
+    if (email.isNotEmpty && email.contains('@')) {
+      SharedPreferences.getInstance().then((prefs) {
+        final pass = prefs.getString('pass_for_$email');
+        if (pass != null && pass.isNotEmpty && mounted) {
+          if (_passwordController.text.isEmpty) {
+            setState(() {
+              _passwordController.text = pass;
+            });
+          }
+        }
+      });
+    }
   }
 
   @override
@@ -33,7 +56,18 @@ class _LoginScreenState extends State<LoginScreen> {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     if (args != null && args.containsKey('prefillEmail')) {
-      _identifierController.text = args['prefillEmail'] ?? '';
+      final email = args['prefillEmail'] ?? '';
+      _identifierController.text = email;
+      if (email.isNotEmpty) {
+        SharedPreferences.getInstance().then((prefs) {
+          final pass = prefs.getString('pass_for_$email');
+          if (pass != null && pass.isNotEmpty && mounted) {
+            setState(() {
+              _passwordController.text = pass;
+            });
+          }
+        });
+      }
     }
   }
 
