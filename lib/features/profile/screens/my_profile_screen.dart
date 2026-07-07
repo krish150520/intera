@@ -256,7 +256,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                           shape: BoxShape.circle,
                           border: Border.all(color: c.primary, width: 1.5),
                         ),
-                        child: CustomAvatar(name: displayName, imageUrl: avatarUrl, radius: 36),
+                        child: CustomAvatar(name: displayName, imageUrl: avatarUrl, userId: _currentUid, radius: 36),
                       ),
                       const SizedBox(width: 20),
                       Expanded(
@@ -754,7 +754,7 @@ class _ConnectionsListScreen extends StatelessWidget {
                   final String username = data['username'] ?? 'user';
                   final String avatar   = data['avatarUrl'] ?? '';
                   return ListTile(
-                    leading: CustomAvatar(name: name, imageUrl: avatar.isNotEmpty ? avatar : null, radius: 20),
+                    leading: CustomAvatar(name: name, imageUrl: avatar.isNotEmpty ? avatar : null, userId: targetUid, radius: 20),
                     title: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: c.textHi)),
                     subtitle: Text(username.startsWith('@') ? username : '@$username', style: TextStyle(fontSize: 12, color: c.textMuted)),
                     trailing: Icon(Icons.chevron_right_rounded, color: c.chipBorder),

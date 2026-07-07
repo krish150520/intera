@@ -7,6 +7,7 @@ import '../../home/screens/post_detail_screen.dart';
 import '../../../core/karma/karma_badge.dart';
 import '../../../core/karma/karma_ledger_screen.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/services/notification_service.dart';
 
 class HelpRequestScreen extends StatefulWidget {
@@ -519,6 +520,7 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                     name: name,
                     username: username,
                     avatar: avatar,
+                    userId: doc.id,
                     karma: points,
                     isMe: isMe,
                     icon: icon,
@@ -541,6 +543,7 @@ class _LeaderRow extends StatelessWidget {
   final String name;
   final String username;
   final String? avatar;
+  final String userId;
   final int karma;
   final bool isMe;
   final IconData icon;
@@ -551,6 +554,7 @@ class _LeaderRow extends StatelessWidget {
     required this.name,
     required this.username,
     required this.avatar,
+    required this.userId,
     required this.karma,
     required this.isMe,
     required this.icon,
@@ -588,22 +592,11 @@ class _LeaderRow extends StatelessWidget {
               ),
             ),
           ),
-          CircleAvatar(
+          CustomAvatar(
+            name: name,
+            imageUrl: avatar,
+            userId: userId,
             radius: 18,
-            backgroundColor: context.colors.surfaceContainerHighest,
-            backgroundImage: avatar != null && avatar!.isNotEmpty
-                ? NetworkImage(avatar!)
-                : null,
-            child: (avatar == null || avatar!.isEmpty)
-                ? Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: context.colors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  )
-                : null,
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -679,7 +679,7 @@ class _AuthorStrip extends StatelessWidget {
             border: Border(bottom: BorderSide(color: c.divider, width: 0.5)),
           ),
           child: Row(children: [
-            CustomAvatar(name: name, radius: 16, imageUrl: avatar),
+            CustomAvatar(name: name, radius: 16, imageUrl: avatar, userId: uid),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

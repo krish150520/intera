@@ -5,6 +5,7 @@ import '../../features/auth/screens/welcome_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/auth/screens/email_verification_screen.dart';
+import '../../features/auth/screens/setup_username_screen.dart';
 import '../../features/navigation/screens/bottom_nav_screen.dart';
 import '../../features/home/screens/post_detail_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
@@ -23,6 +24,7 @@ class AppRoutes {
   static const String login = '/login';
   static const String signup = '/signup';
   static const String verifyEmail = '/verify-email';
+  static const String setupUsername = '/setup-username';
   static const String main = '/main';
   static const String postDetail = '/post-detail';
   static const String editProfile = '/edit-profile';
@@ -37,6 +39,7 @@ class AppRoutes {
         login: (context) => const LoginScreen(),
         signup: (context) => const SignUpScreen(),
         verifyEmail: (context) => const EmailVerificationScreen(),
+        setupUsername: (context) => const SetupUsernameScreen(),
         main: (context) => const BottomNavScreen(),
         editProfile: (context) => const EditProfileScreen(),
         createPost: (context) => const CreatePostScreen(),

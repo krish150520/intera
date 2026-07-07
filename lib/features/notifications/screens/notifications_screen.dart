@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:ui';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
@@ -11,27 +12,39 @@ import '../../videos/screens/community_detail_screen.dart';
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
-  // ─── Visual Helpers ─────────────────────────────────────────────────────────
+  // ─── Visual Helpers ────────────────────────────────────────────────────────
   IconData _iconFor(String type) {
     switch (type) {
-      case 'like': return Icons.favorite_rounded;
-      case 'comment': return Icons.mode_comment_rounded;
-      case 'follow': return Icons.person_add_rounded;
-      case 'community': return Icons.groups_rounded;
-      case 'karma': return Icons.bolt_rounded;
-      default: return Icons.notifications_rounded;
+      case 'like':
+        return Icons.favorite_rounded;
+      case 'comment':
+        return Icons.mode_comment_rounded;
+      case 'follow':
+        return Icons.person_add_rounded;
+      case 'community':
+        return Icons.groups_rounded;
+      case 'karma':
+        return Icons.bolt_rounded;
+      default:
+        return Icons.notifications_rounded;
     }
   }
 
   Color _colorFor(String type, BuildContext context) {
     final c = context.appColors;
     switch (type) {
-      case 'like': return c.error;
-      case 'comment': return c.info;
-      case 'follow': return c.primary;
-      case 'community': return Colors.teal;
-      case 'karma': return c.warningKarma;
-      default: return c.textMuted;
+      case 'like':
+        return c.error;
+      case 'comment':
+        return c.info;
+      case 'follow':
+        return c.primary;
+      case 'community':
+        return Colors.teal;
+      case 'karma':
+        return c.warningKarma;
+      default:
+        return c.textMuted;
     }
   }
 
@@ -44,9 +57,13 @@ class NotificationsScreen extends StatelessWidget {
     return '${diff.inDays}d';
   }
 
-  // ─── Routing Logic ──────────────────────────────────────────────────────────
-  Future<void> _handleTap(BuildContext context, Map<String, dynamic> data, String docId, String currentUid) async {
-    await FirebaseFirestore.instance.collection('notifications').doc(docId).update({'isRead': true});
+  // ─── Routing Logic ─────────────────────────────────────────────────────────
+  Future<void> _handleTap(BuildContext context, Map<String, dynamic> data,
+      String docId, String currentUid) async {
+    await FirebaseFirestore.instance
+        .collection('notifications')
+        .doc(docId)
+        .update({'isRead': true});
 
     final String type = data['type'] ?? '';
     final String relatedId = data['relatedId'] ?? '';
@@ -57,14 +74,21 @@ class NotificationsScreen extends StatelessWidget {
       case 'like':
       case 'comment':
       case 'karma':
-        final doc = await FirebaseFirestore.instance.collection('posts').doc(relatedId).get();
+        final doc = await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(relatedId)
+            .get();
         if (doc.exists && context.mounted) {
           final post = Post.fromFirestore(doc, currentUid);
-          Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post);
+          Navigator.of(context)
+              .pushNamed(AppRoutes.postDetail, arguments: post);
         }
         break;
       case 'follow':
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(relatedId).get();
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(relatedId)
+            .get();
         if (userDoc.exists && context.mounted) {
           final userData = userDoc.data() as Map<String, dynamic>;
           Navigator.of(context).push(MaterialPageRoute(
@@ -77,14 +101,17 @@ class NotificationsScreen extends StatelessWidget {
         }
         break;
       case 'community':
-        final commDoc = await FirebaseFirestore.instance.collection('communities').doc(relatedId).get();
+        final commDoc = await FirebaseFirestore.instance
+            .collection('communities')
+            .doc(relatedId)
+            .get();
         if (commDoc.exists && context.mounted) {
-          final data = commDoc.data() as Map<String, dynamic>;
+          final commData = commDoc.data() as Map<String, dynamic>;
           Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => CommunityDetailScreen(
               communityId: relatedId,
-              communityName: data['name'] ?? 'Community',
-              communityDescription: data['description'] ?? '',
+              communityName: commData['name'] ?? 'Community',
+              communityDescription: commData['description'] ?? '',
             ),
           ));
         }
@@ -96,79 +123,189 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: c.bg,
-      appBar: AppBar(
-        title: Text('Notifications', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: c.textHi)),
-        backgroundColor: c.surface,
-        foregroundColor: c.textHi,
-        elevation: 0,
-      ),
-      body: currentUid.isEmpty
-          ? Center(child: Text('Please log in to view notifications.', style: TextStyle(color: c.textSecondary)))
-          : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('notifications')
-                  .where('recipientId', isEqualTo: currentUid)
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.notifications_none_rounded, size: 48, color: c.textMuted),
-                        const SizedBox(height: 12),
-                        Text('No notifications yet', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                  );
-                }
-                
-                final docs = snapshot.data?.docs ?? [];
+    // Bare widget — no Scaffold/AppBar. Inherits sidebar glass background.
+    if (currentUid.isEmpty) {
+      return Center(
+        child: Text('Please log in to view notifications.',
+            style: TextStyle(color: c.textSecondary, fontSize: 12)),
+      );
+    }
 
-                // Single, consolidated empty state
-                if (docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.notifications_none_rounded, size: 48, color: c.textMuted),
-                        const SizedBox(height: 12),
-                        Text('No notifications yet', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                  );
-                }
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('recipientId', isEqualTo: currentUid)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.notifications_none_rounded,
+                  size: 40, color: c.textMuted),
+              const SizedBox(height: 10),
+              Text('Loading…',
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12)),
+            ]),
+          );
+        }
 
-                return ListView.separated(
-                  itemCount: docs.length,
-                  separatorBuilder: (_, __) => Divider(height: 1, color: c.divider),
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final bool isRead = data['isRead'] ?? false;
-                    final type = data['type'] ?? '';
-                    final iconColor = _colorFor(type, context);
+        final docs = snapshot.data?.docs ?? [];
 
-                    return Container(
-                      color: isRead ? Colors.transparent : c.primary.withValues(alpha: 0.05),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: iconColor.withValues(alpha: 0.12),
-                          child: Icon(_iconFor(type), color: iconColor, size: 18),
-                        ),
-                        title: Text(data['title'] ?? '', style: TextStyle(fontSize: 14, color: c.textHi, fontWeight: isRead ? FontWeight.w400 : FontWeight.w600)),
-                        subtitle: Text(data['subtitle'] ?? '', style: TextStyle(fontSize: 12, color: c.textSecondary)),
-                        trailing: Text(_formatTime(data['createdAt']), style: TextStyle(fontSize: 11, color: c.textDim)),
-                        onTap: () => _handleTap(context, data, docs[index].id, currentUid),
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : Colors.white.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white
+                            .withValues(alpha: isDark ? 0.18 : 0.6),
+                        width: 0.8,
                       ),
-                    );
-                  },
-                );
-              },
-            ),
+                    ),
+                    child: Icon(Icons.notifications_none_rounded,
+                        size: 24, color: c.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('No notifications yet',
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13)),
+            ]),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.only(bottom: 16),
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final bool isRead = data['isRead'] ?? false;
+            final type = data['type'] ?? '';
+            final iconColor = _colorFor(type, context);
+
+            return GestureDetector(
+              onTap: () =>
+                  _handleTap(context, data, docs[index].id, currentUid),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      // Unread rows get a subtle primary tint on top of glass
+                      color: isRead
+                          ? (isDark
+                              ? Colors.white.withValues(alpha: 0.07)
+                              : Colors.white.withValues(alpha: 0.40))
+                          : (isDark
+                              ? c.primary.withValues(alpha: 0.15)
+                              : c.primary.withValues(alpha: 0.08)),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isRead
+                            ? Colors.white.withValues(
+                                alpha: isDark ? 0.12 : 0.50)
+                            : c.primary.withValues(alpha: 0.35),
+                        width: isRead ? 0.5 : 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Icon avatar
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: iconColor.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(_iconFor(type),
+                              color: iconColor, size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        // Text content
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                data['title'] ?? '',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: c.textHi,
+                                  fontWeight: isRead
+                                      ? FontWeight.w400
+                                      : FontWeight.w700,
+                                ),
+                              ),
+                              if ((data['subtitle'] ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  data['subtitle'] ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: c.textSecondary),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Timestamp + unread dot
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              _formatTime(data['createdAt']),
+                              style: TextStyle(
+                                  fontSize: 10, color: c.textDim),
+                            ),
+                            if (!isRead) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: c.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

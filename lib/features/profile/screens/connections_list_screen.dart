@@ -80,7 +80,7 @@ class ConnectionsListScreen extends StatelessWidget {
                   final String avatar = data['avatarUrl'] ?? '';
 
                   return ListTile(
-                    leading: CustomAvatar(name: name, imageUrl: avatar, radius: 18),
+                    leading: CustomAvatar(name: name, imageUrl: avatar, userId: targetUid, radius: 18),
                     title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                     subtitle: Text(
                       username.startsWith('@') ? username : '@$username',

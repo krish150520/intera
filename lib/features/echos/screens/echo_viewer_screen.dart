@@ -419,6 +419,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                   CustomAvatar(
                     name: widget.post.authorName,
                     imageUrl: widget.post.authorAvatarUrl,
+                    userId: widget.post.authorId,
                     radius: 18,
                   ),
                   const SizedBox(width: 10),
@@ -648,7 +649,12 @@ class _SpinningDiscState extends State<_SpinningDisc>
         ),
         child: ClipOval(
           child: widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty
-              ? Image.network(widget.avatarUrl!, fit: BoxFit.cover)
+              ? Image.network(
+                  widget.avatarUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
+                )
               : const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
         ),
       ),
@@ -824,11 +830,17 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                       final authorUsername = data['authorUsername'] ?? '@user';
                       final content = data['content'] ?? '';
                       final avatar = data['authorAvatar'] as String?;
+                      final authorId = data['authorId'] as String?;
 
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CustomAvatar(name: authorName, imageUrl: avatar, radius: 15),
+                          CustomAvatar(
+                            name: authorName,
+                            imageUrl: avatar,
+                            userId: authorId,
+                            radius: 15,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(

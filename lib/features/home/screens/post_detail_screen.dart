@@ -244,9 +244,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   // ── Open fullscreen viewer ─────────────────────────────────────────────────
 
-  void _openFullscreen() {
-    final post = widget.post;
-    if (post == null) return;
+  void _openFullscreen(Post post) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
@@ -257,6 +255,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           authorName:  post.authorName,
           authorUsername: post.authorUsername,
           avatarUrl:   post.authorAvatarUrl,
+          authorId:    post.authorId,
           caption:     post.body,
         ),
         transitionsBuilder: (_, anim, __, child) =>
@@ -356,7 +355,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               child: _MediaHero(
                                 mediaUrl: realTimePost.imageUrl ?? '',
                                 isVideo:  _isVideo,
-                                onExpand: _openFullscreen,
+                                onExpand: () => _openFullscreen(realTimePost),
                               ),
                             ),
 
@@ -669,6 +668,7 @@ class _PostBodyCard extends StatelessWidget {
             name: post.authorName,
             radius: 17,
             imageUrl: post.authorAvatarUrl,
+            userId: post.authorId,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -717,6 +717,7 @@ class _FullscreenMediaViewer extends StatefulWidget {
   final String authorName;
   final String authorUsername;
   final String? avatarUrl;
+  final String? authorId;
   final String caption;
 
   const _FullscreenMediaViewer({
@@ -725,6 +726,7 @@ class _FullscreenMediaViewer extends StatefulWidget {
     required this.authorName,
     required this.authorUsername,
     this.avatarUrl,
+    this.authorId,
     required this.caption,
   });
 
@@ -919,6 +921,7 @@ class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
                           name: widget.authorName,
                           radius: 16,
                           imageUrl: widget.avatarUrl,
+                          userId: widget.authorId,
                         ),
                         const SizedBox(width: 10),
                         Column(
@@ -1074,7 +1077,8 @@ class _CommentTile extends StatelessWidget {
           CustomAvatar(
               name: name,
               radius: 16,
-              imageUrl: avatar.isNotEmpty ? avatar : null),
+              imageUrl: avatar.isNotEmpty ? avatar : null,
+              userId: authorId),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1372,7 +1376,12 @@ class _CommentInput extends StatelessWidget {
         border: Border(top: BorderSide(color: c.border)),
       ),
       child: Row(children: [
-        CustomAvatar(name: 'You', radius: 16, imageUrl: userAvatarUrl),
+        CustomAvatar(
+          name: 'You',
+          radius: 16,
+          imageUrl: userAvatarUrl,
+          userId: FirebaseAuth.instance.currentUser?.uid,
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Container(

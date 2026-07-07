@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/message_model.dart';
 import '../services/messaging_service.dart';
@@ -293,6 +294,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 _ChatHeader(
                   name: widget.otherName,
                   avatar: widget.otherAvatar,
+                  otherUid: widget.otherUid,
                   isPending: isPending,
                   isIncomingRequest: isIncomingRequest,
                   onActionsTap: () => _showChatActions(myUid),
@@ -336,6 +338,7 @@ class _ChatScreenState extends State<ChatScreen> {
 class _ChatHeader extends StatelessWidget {
   final String name;
   final String? avatar;
+  final String otherUid;
   final bool isPending;
   final bool isIncomingRequest;
   final VoidCallback onActionsTap;
@@ -343,6 +346,7 @@ class _ChatHeader extends StatelessWidget {
   const _ChatHeader({
     required this.name,
     required this.avatar,
+    required this.otherUid,
     required this.isPending,
     required this.isIncomingRequest,
     required this.onActionsTap,
@@ -351,7 +355,6 @@ class _ChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final hasAvatar = avatar != null && avatar!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 16, 12),
@@ -372,20 +375,11 @@ class _ChatHeader extends StatelessWidget {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
+              CustomAvatar(
+                name: name,
+                imageUrl: avatar,
+                userId: otherUid,
                 radius: 20,
-                backgroundColor: c.field,
-                backgroundImage: hasAvatar ? NetworkImage(avatar!) : null,
-                child: !hasAvatar
-                    ? Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : null,
               ),
               Positioned(
                 right: -1,

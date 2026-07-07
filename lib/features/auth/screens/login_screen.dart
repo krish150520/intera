@@ -95,11 +95,14 @@ class _LoginScreenState extends State<LoginScreen> {
         list.insert(0, emailVal);
         if (list.length > 5) list.removeRange(5, list.length);
         await prefs.setStringList('recent_accounts', list);
-      }
 
-      if (!mounted) return;
-      final route = AuthService.instance.isVerified ? AppRoutes.main : AppRoutes.verifyEmail;
-      Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
+        final hasUser = await AuthService.instance.hasUsername(credentials.user!.uid);
+        if (!mounted) return;
+        final route = AuthService.instance.isVerified
+            ? (hasUser ? AppRoutes.main : AppRoutes.setupUsername)
+            : AppRoutes.verifyEmail;
+        Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
+      }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,9 +119,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final credentials = await AuthService.instance.signInWithGoogle();
       if (credentials.user != null) {
         await AuthService.instance.ensureUserProfileExists(credentials.user!);
+        final hasUser = await AuthService.instance.hasUsername(credentials.user!.uid);
+        if (!mounted) return;
+        if (hasUser) {
+          Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
+        } else {
+          Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.setupUsername, (route) => false);
+        }
       }
-      if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'sign-in-cancelled') return; // user backed out, no error needed
       if (!mounted) return;

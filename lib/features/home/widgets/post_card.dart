@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 
 class PostCard extends StatelessWidget {
   final Post post;
@@ -283,9 +284,11 @@ class _TextPostCard extends StatelessWidget {
                 // ── Footer ────────────────────────────────────────────────
                 Row(children: [
                   // Avatar
-                  _MiniAvatar(
+                  CustomAvatar(
                     name: post.authorName,
                     imageUrl: post.authorAvatarUrl,
+                    userId: post.authorId,
+                    radius: 11,
                   ),
                   const SizedBox(width: 7),
 
@@ -518,31 +521,7 @@ class _TypeStyle {
   });
 }
 
-class _MiniAvatar extends StatelessWidget {
-  final String name;
-  final String? imageUrl;
 
-  const _MiniAvatar({required this.name, this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
-    return CircleAvatar(
-      radius: 11,
-      backgroundColor: const Color(0xFF6C63D5),
-      backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
-      child: !hasImage
-          ? Text(
-              name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700),
-            )
-          : null,
-    );
-  }
-}
 
 class _FooterStat extends StatelessWidget {
   final IconData icon;
@@ -585,25 +564,12 @@ class _AuthorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasAvatar =
-        post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty;
-
     return Row(children: [
-      CircleAvatar(
+      CustomAvatar(
+        name: post.authorName,
+        imageUrl: post.authorAvatarUrl,
+        userId: post.authorId,
         radius: 16,
-        backgroundColor: const Color(0xFF6C63D5),
-        backgroundImage: hasAvatar ? NetworkImage(post.authorAvatarUrl!) : null,
-        child: !hasAvatar
-            ? Text(
-                post.authorName.isNotEmpty
-                    ? post.authorName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700),
-              )
-            : null,
       ),
       const SizedBox(width: 8),
       Expanded(

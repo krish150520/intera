@@ -5,10 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../home/screens/home_feed_screen.dart';
-import '../../search/screens/search_screen.dart';
 import '../../create/screens/create_post_screen.dart';
 import '../../videos/screens/communities_screen.dart';
-import '../../profile/screens/my_profile_screen.dart';
 import '../../tasks/screens/task_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/services/reaction_service.dart';
@@ -30,25 +28,23 @@ class BottomNavScreen extends StatefulWidget {
 class _BottomNavScreenState extends State<BottomNavScreen> {
   int _currentIndex = 0;
 
+  // Search and Profile now live inside the home feed sidebar instead of
+  // as standalone tabs — see HomeFeedScreen's sidebar drawer.
   static const List<Widget> _screens = [
     HomeFeedScreen(),
-    SearchScreen(),
     CreatePostScreen(),
     CommunitiesScreen(),
     HelpRequestScreen(),
-    MyProfileScreen(),
   ];
 
   final List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_outlined,              activeIcon: Icons.home_rounded,              label: AppStrings.home),
-    _NavItem(icon: Icons.search_rounded,             activeIcon: Icons.search_rounded,            label: AppStrings.search),
-    _NavItem(icon: Icons.add_rounded,                   activeIcon: Icons.add_rounded,                  label: AppStrings.create),
-    _NavItem(icon: Icons.group_outlined,         activeIcon: Icons.group_rounded,         label: 'Communities'),
-    _NavItem(icon: Icons.task_alt_outlined,      activeIcon: Icons.task_rounded,          label: 'Tasks'),
-    _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: AppStrings.profile),
+    _NavItem(icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,          label: AppStrings.home),
+    _NavItem(icon: Icons.add_rounded,             activeIcon: Icons.add_rounded,           label: AppStrings.create),
+    _NavItem(icon: Icons.group_outlined,          activeIcon: Icons.group_rounded,         label: 'Communities'),
+    _NavItem(icon: Icons.task_alt_outlined,       activeIcon: Icons.task_rounded,          label: 'Tasks'),
   ];
 
-  static const int _createIndex = 2;
+  static const int _createIndex = 1;
 
   @override
   void initState() {
@@ -116,7 +112,6 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Drag handle simulator
                     Center(
                       child: Container(
                         width: 36,
@@ -128,8 +123,6 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
-                    // Title
                     Text(
                       'Enable Notifications',
                       textAlign: TextAlign.center,
@@ -140,8 +133,6 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    
-                    // Subtitle
                     Text(
                       'Allow notification permissions to get the best experience on INTERA, like receiving chat messages and replies in real-time.',
                       textAlign: TextAlign.center,
@@ -152,8 +143,6 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
-                    // Notification item
                     _buildPermissionRow(
                       icon: Icons.notifications_active_rounded,
                       color: Colors.orangeAccent,
@@ -165,8 +154,6 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                       },
                     ),
                     const SizedBox(height: 28),
-                    
-                    // Action button
                     ElevatedButton(
                       onPressed: () async {
                         await prefs.setBool('has_prompted_notifications', true);
@@ -309,7 +296,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                                 width: 46,
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFA597EC), // Beautiful light lavender/lilac color
+                                  color: const Color(0xFFA597EC),
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
@@ -357,7 +344,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                             width: 52,
                             height: 28,
                             decoration: BoxDecoration(
-                              color: selected ? const Color(0xFF2C2754) : Colors.transparent, // Rich dark purple oval highlight
+                              color: selected ? const Color(0xFF2C2754) : Colors.transparent,
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Center(

@@ -56,7 +56,12 @@ class _SplashScreenState extends State<SplashScreen>
       final auth = AuthService.instance;
       if (auth.isLoggedIn) {
         await auth.reloadUser();
-        route = auth.isVerified ? AppRoutes.main : AppRoutes.verifyEmail;
+        if (auth.isVerified) {
+          final hasUser = await auth.hasUsername(auth.currentUser!.uid);
+          route = hasUser ? AppRoutes.main : AppRoutes.setupUsername;
+        } else {
+          route = AppRoutes.verifyEmail;
+        }
       }
     } catch (e, st) {
       debugPrint('Splash navigation error: $e\n$st');

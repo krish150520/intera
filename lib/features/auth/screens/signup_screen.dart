@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
@@ -73,9 +74,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       final firebaseUser = credential.user;
-      String downloadUrl = '';
-
       if (firebaseUser != null) {
+        // Validate username uniqueness (authorized read since we are signed in now)
+        final usernameVal = _usernameController.text.trim().replaceAll('@', '');
+        final taken = await FirebaseFirestore.instance
+            .collection('users')
+            .where('usernameLower', isEqualTo: usernameVal.toLowerCase())
+            .limit(1)
+            .get();
+
+        if (taken.docs.isNotEmpty) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Your selected username is already taken. Please choose a new handle.'),
+                backgroundColor: Colors.amber,
+              ),
+            );
+            Navigator.of(context).pushNamedAndRemoveUntil(
+                AppRoutes.setupUsername, (route) => false);
+          }
+          return;
+        }
+
+        String downloadUrl = '';
         if (_profileImageFile != null) {
           final storageRef = FirebaseStorage.instance
               .ref()
@@ -91,9 +115,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         await AuthService.instance.ensureUserProfileExists(
           firebaseUser,
           name: _nameController.text.trim(),
-          username: _usernameController.text.trim().startsWith('@')
-              ? _usernameController.text.trim()
-              : '@${_usernameController.text.trim()}',
+          username: '@$usernameVal',
           avatarUrl: downloadUrl,
         );
 
@@ -113,16 +135,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       if (!mounted) return;
       // Email/password users land here unverified, not in main.
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.verifyEmail, (route) => false);
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.verifyEmail, (route) => false);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Registration rejected.'), backgroundColor: Colors.redAccent),
+        SnackBar(
+            content: Text(e.message ?? 'Registration rejected.'),
+            backgroundColor: Colors.redAccent),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pipeline registration error: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(
+            content: Text('Pipeline registration error: $e'),
+            backgroundColor: Colors.redAccent),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -135,15 +162,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final credentials = await AuthService.instance.signInWithGoogle();
       if (credentials.user != null) {
         await AuthService.instance.ensureUserProfileExists(credentials.user!);
+        final hasUser =
+            await AuthService.instance.hasUsername(credentials.user!.uid);
+        if (!mounted) return;
+        if (hasUser) {
+          Navigator.of(context)
+              .pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
+        } else {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+              AppRoutes.setupUsername, (route) => false);
+        }
       }
-      if (!mounted) return;
-      // Google accounts are pre-verified — straight into main.
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'sign-in-cancelled') return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Google sign-in failed.'), backgroundColor: Colors.redAccent),
+        SnackBar(
+            content: Text(e.message ?? 'Google sign-in failed.'),
+            backgroundColor: Colors.redAccent),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -155,7 +191,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(AppStrings.signUp, style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(AppStrings.signUp,
+            style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -176,10 +213,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         children: [
                           CircleAvatar(
                             radius: 46,
-                            backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                            backgroundImage: _profileImageFile != null ? FileImage(_profileImageFile!) : null,
+                            backgroundColor:
+                                AppColors.primary.withValues(alpha: 0.15),
+                            backgroundImage: _profileImageFile != null
+                                ? FileImage(_profileImageFile!)
+                                : null,
                             child: _profileImageFile == null
-                                ? const Icon(Icons.person_add_alt_1_outlined, size: 40, color: AppColors.primary)
+                                ? const Icon(Icons.person_add_alt_1_outlined,
+                                    size: 40, color: AppColors.primary)
                                 : null,
                           ),
                           Positioned(
@@ -187,8 +228,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             right: 0,
                             child: Container(
                               padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                              child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                              decoration: const BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.camera_alt_rounded,
+                                  size: 14, color: Colors.white),
                             ),
                           ),
                         ],
@@ -201,7 +245,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     controller: _nameController,
                     prefixIcon: Icons.badge_outlined,
                     validator: (value) =>
-                        (value == null || value.trim().isEmpty) ? 'Please enter your identity label name.' : null,
+                        (value == null || value.trim().isEmpty)
+                            ? 'Please enter your identity label name.'
+                            : null,
                   ),
                   const SizedBox(height: 16),
                   CustomTextField(
@@ -251,14 +297,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     },
                   ),
                   const SizedBox(height: 32),
-                  CustomButton(label: AppStrings.createAccount, isLoading: _isLoading, onPressed: _handleSignUp),
+                  CustomButton(
+                      label: AppStrings.createAccount,
+                      isLoading: _isLoading,
+                      onPressed: _handleSignUp),
                   const SizedBox(height: 20),
                   Row(
                     children: [
                       Expanded(child: Divider(color: Colors.grey.shade300)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('or', style: TextStyle(color: Colors.grey.shade500)),
+                        child: Text('or',
+                            style: TextStyle(color: Colors.grey.shade500)),
                       ),
                       Expanded(child: Divider(color: Colors.grey.shade300)),
                     ],
@@ -276,8 +326,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   const SizedBox(height: 16),
                   Center(
                     child: TextButton(
-                      onPressed: () => Navigator.of(context).pushNamed(AppRoutes.login),
-                      child: const Text(AppStrings.alreadyHaveAccount, style: TextStyle(color: Colors.black54)),
+                      onPressed: () =>
+                          Navigator.of(context).pushNamed(AppRoutes.login),
+                      child: const Text(AppStrings.alreadyHaveAccount,
+                          style: TextStyle(color: Colors.black54)),
                     ),
                   ),
                 ],

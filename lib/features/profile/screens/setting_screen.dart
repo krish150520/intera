@@ -6,6 +6,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'feedback_screen.dart';
 import '../../../core/services/notification_service.dart';
@@ -440,7 +441,6 @@ class _AccountInfoCard extends StatelessWidget {
     final primary  = Theme.of(context).colorScheme.primary;
     final surface  = Theme.of(context).colorScheme.surface;
     final border   = isDark ? AppColors.darkBorder   : AppColors.lightBorder;
-    final field    = isDark ? AppColors.darkField     : AppColors.lightField;
     final textDark = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
     final textMuted= isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
     final authUser = FirebaseAuth.instance.currentUser;
@@ -451,7 +451,7 @@ class _AccountInfoCard extends StatelessWidget {
         final data     = snap.data?.data() as Map<String, dynamic>? ?? {};
         final name     = data['name']     ?? authUser?.displayName ?? 'User';
         final email    = authUser?.email  ?? 'No email';
-        final avatar   = data['avatarUrl'] ?? data['profileImageUrl'] ?? authUser?.photoURL;
+        final String? avatar = data['avatarUrl'] ?? data['profileImageUrl'] ?? authUser?.photoURL;
         final username = data['username'] ?? 'user';
 
         return Container(
@@ -467,19 +467,11 @@ class _AccountInfoCard extends StatelessWidget {
               decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: primary, width: 2)),
-              child: CircleAvatar(
+              child: CustomAvatar(
+                name: name,
+                imageUrl: (avatar != null && avatar.isNotEmpty) ? avatar : null,
+                userId: authUser?.uid,
                 radius: 28,
-                backgroundColor: field,
-                backgroundImage: (avatar != null && (avatar as String).isNotEmpty)
-                    ? NetworkImage(avatar)
-                    : null,
-                child: (avatar == null || (avatar as String).isEmpty)
-                    ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: TextStyle(
-                            color: primary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20))
-                    : null,
               ),
             ),
             const SizedBox(width: 14),

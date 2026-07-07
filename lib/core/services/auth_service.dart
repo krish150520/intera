@@ -105,9 +105,10 @@ class AuthService {
     final snapshot = await docRef.get();
 
     if (!snapshot.exists) {
-      // Resolve the username once so both the display field and the
-      // lowercase search index field are always consistent with each other.
-      final resolvedUsername = username ?? '@${(user.email ?? 'user').split('@')[0]}';
+      final resolvedUsername = username ?? '';
+      final usernameLower = resolvedUsername.isNotEmpty
+          ? resolvedUsername.replaceFirst('@', '').toLowerCase()
+          : '';
 
       await docRef.set({
         'id': user.uid,
@@ -115,7 +116,7 @@ class AuthService {
         'username': resolvedUsername,
         // Stripped of '@' and lowercased — this is what search_screen.dart
         // queries against via orderBy('usernameLower').startAt([query]).
-        'usernameLower': resolvedUsername.replaceFirst('@', '').toLowerCase(),
+        'usernameLower': usernameLower,
         'bio': 'Welcome to my INTERA workspace profile!',
         'avatarUrl': avatarUrl ?? user.photoURL ?? '',
         'karmaPoints': 100,
@@ -125,6 +126,17 @@ class AuthService {
         'isAnonymous': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    }
+  }
+
+  Future<bool> hasUsername(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (!doc.exists) return false;
+      final username = doc.data()?['username'] as String? ?? '';
+      return username.isNotEmpty && username != '@';
+    } catch (_) {
+      return false;
     }
   }
 }

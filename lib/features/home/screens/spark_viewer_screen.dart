@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/services/notification_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -554,26 +555,11 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                                     shape: BoxShape.circle,
                                     color: Colors.black,
                                   ),
-                                  child: CircleAvatar(
+                                  child: CustomAvatar(
+                                    name: spark.authorName,
+                                    imageUrl: spark.authorAvatar,
+                                    userId: spark.authorId,
                                     radius: 17,
-                                    backgroundColor: const Color(0xFF1C1B2E),
-                                    backgroundImage: (spark.authorAvatar !=
-                                                null &&
-                                            spark.authorAvatar!.isNotEmpty)
-                                        ? NetworkImage(spark.authorAvatar!)
-                                        : null,
-                                    child: (spark.authorAvatar == null ||
-                                            spark.authorAvatar!.isEmpty)
-                                        ? Text(
-                                            spark.authorName.isNotEmpty
-                                                ? spark.authorName[0]
-                                                    .toUpperCase()
-                                                : '?',
-                                            style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 13))
-                                        : null,
                                   ),
                                 ),
                               ),
@@ -1047,21 +1033,11 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                     final avatar = v['avatar'] as String? ?? '';
                     final name = v['name'] as String;
                     return ListTile(
-                      leading: CircleAvatar(
+                      leading: CustomAvatar(
+                        name: name,
+                        imageUrl: avatar.isNotEmpty ? avatar : null,
+                        userId: v['uid'],
                         radius: 20,
-                        backgroundColor: const Color(0xFF2D2B45),
-                        backgroundImage: avatar.isNotEmpty
-                            ? NetworkImage(avatar)
-                            : null,
-                        child: avatar.isEmpty
-                            ? Text(
-                                name.isNotEmpty
-                                    ? name[0].toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                    color: context.appColors.primary,
-                                    fontWeight: FontWeight.w700))
-                            : null,
                       ),
                       title: Text(name,
                           style: const TextStyle(

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../core/services/reaction_service.dart';
 import '../../../shared/models/post_model.dart';
@@ -164,25 +165,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            CircleAvatar(
+                            CustomAvatar(
+                              name: widget.userName,
+                              imageUrl: widget.userAvatar.isNotEmpty ? widget.userAvatar : null,
+                              userId: widget.userId,
                               radius: 40,
-                              backgroundColor: context.colors.primary
-                                  .withOpacity(0.1),
-                              backgroundImage: widget.userAvatar.isNotEmpty
-                                  ? NetworkImage(widget.userAvatar)
-                                  : null,
-                              child: widget.userAvatar.isEmpty
-                                  ? Text(
-                                      widget.userName.isNotEmpty
-                                          ? widget.userName[0].toUpperCase()
-                                          : 'U',
-                                      style: TextStyle(
-                                        color: context.colors.primary,
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    )
-                                  : null,
                             ),
                             if (!isMe)
                               Positioned(
