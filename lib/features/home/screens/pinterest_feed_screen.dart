@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../profile/screens/my_profile_screen.dart';
+import '../../../shared/widgets/shimmer.dart';
 import '../../../core/services/feed_algorithm.dart';
 import '../widgets/pinterest_post_card.dart';
 
@@ -115,12 +116,7 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
               builder: (context, snapshot) {
                 if (snapshot.hasError) return _buildError(snapshot.error.toString());
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(
-                      color: _c.primary,
-                      strokeWidth: 2,
-                    ),
-                  );
+                  return _buildPinterestGridShimmer();
                 }
 
                 final docs = snapshot.data?.docs ?? [];
@@ -176,6 +172,55 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
                   child: _buildPinterestGrid(filteredPosts),
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPinterestGridShimmer() {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: StaggeredCardShimmer(height: 220),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: StaggeredCardShimmer(height: 180),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: StaggeredCardShimmer(height: 250),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: StaggeredCardShimmer(height: 170),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: StaggeredCardShimmer(height: 240),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: StaggeredCardShimmer(height: 200),
+                ),
+              ],
             ),
           ),
         ],

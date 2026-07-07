@@ -7,6 +7,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../../../shared/widgets/shimmer.dart';
 import '../../home/screens/post_detail_screen.dart';
 import '../../videos/screens/community_detail_screen.dart';
 import '../../../core/services/notification_service.dart';
@@ -237,9 +238,12 @@ class _UserResultsList extends StatelessWidget {
               .get(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(
-                  child: CircularProgressIndicator(
-                      color: c.primary, strokeWidth: 2));
+              return ListView.separated(
+                padding: const EdgeInsets.only(bottom: 16),
+                itemCount: 5,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, __) => const UserRowShimmer(),
+              );
             }
             if (snapshot.hasError) {
               return Center(child: Text('Error: ${snapshot.error}'));
@@ -373,7 +377,6 @@ class _PostResultsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
     if (searchQuery.isEmpty) {
       return _GlassEmptyPlaceholder(
         icon: searchVideos
@@ -393,9 +396,53 @@ class _PostResultsList extends StatelessWidget {
           .get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-              child: CircularProgressIndicator(
-                  color: c.primary, strokeWidth: 2));
+          if (searchVideos) {
+            return SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: StaggeredCardShimmer(height: 190),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: StaggeredCardShimmer(height: 220),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: StaggeredCardShimmer(height: 240),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: StaggeredCardShimmer(height: 170),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            return ListView.separated(
+              padding: const EdgeInsets.only(bottom: 16),
+              itemCount: 3,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, __) => const PostCardShimmer(),
+            );
+          }
         }
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -441,8 +488,12 @@ class _PostResultsList extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: PostCard(
                 post: post,
+                heroTag: 'search_post_${post.id}',
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PostDetailScreen(post: post))),
+                    builder: (_) => PostDetailScreen(
+                          post: post,
+                          heroTag: 'search_post_${post.id}',
+                        ))),
                 onLike: () {
                   NotificationService.toggleLike(
                     postId: post.id,
@@ -454,7 +505,10 @@ class _PostResultsList extends StatelessWidget {
                 },
                 onComment: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                        builder: (_) => PostDetailScreen(post: post))),
+                        builder: (_) => PostDetailScreen(
+                              post: post,
+                              heroTag: 'search_post_${post.id}',
+                            ))),
               ),
             );
           },
@@ -486,9 +540,12 @@ class _CommunityResultsList extends StatelessWidget {
           .get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-              child: CircularProgressIndicator(
-                  color: c.primary, strokeWidth: 2));
+          return ListView.separated(
+            padding: const EdgeInsets.only(bottom: 16),
+            itemCount: 4,
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            itemBuilder: (_, __) => const MiniCommunityRowShimmer(),
+          );
         }
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));

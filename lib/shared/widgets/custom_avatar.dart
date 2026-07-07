@@ -16,6 +16,8 @@ class CustomAvatar extends StatelessWidget {
   final String? imageUrl;
   final String? userId;
   final double radius;
+  final String? heroTag;
+  final bool clickable;
 
   const CustomAvatar({
     super.key,
@@ -23,6 +25,8 @@ class CustomAvatar extends StatelessWidget {
     this.imageUrl,
     this.userId,
     this.radius = 22,
+    this.heroTag,
+    this.clickable = true,
   });
 
   String _getInitials(String nameText) {
@@ -111,13 +115,21 @@ class CustomAvatar extends StatelessWidget {
       avatarWidget = _buildAvatar(context, name, imageUrl);
     }
 
+    final String passedTag = heroTag ?? 'avatar_${userId ?? 'default'}_${identityHashCode(avatarWidget)}';
+
+    if (!clickable || userId == null || userId!.isEmpty) {
+      return heroTag != null
+          ? Hero(tag: heroTag!, child: avatarWidget)
+          : avatarWidget;
+    }
+
     return GestureDetector(
       onTap: () {
         if (userId != null && userId!.isNotEmpty) {
           if (userId == currentUid) {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const MyProfileScreen(),
+                builder: (_) => MyProfileScreen(heroTag: passedTag),
               ),
             );
           } else {
@@ -127,13 +139,16 @@ class CustomAvatar extends StatelessWidget {
                   userId: userId!,
                   userName: name,
                   userAvatar: imageUrl ?? '',
+                  heroTag: passedTag,
                 ),
               ),
             );
           }
         }
       },
-      child: avatarWidget,
+      child: heroTag != null
+          ? Hero(tag: heroTag!, child: avatarWidget)
+          : avatarWidget,
     );
   }
 }

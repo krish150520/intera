@@ -8,38 +8,38 @@ class AppColors {
   AppColors._();
 
   // ── Brand ──────────────────────────────────────────────────────────────────
-  static const Color primary       = Color(0xFF7E69FF); // Bright violet-purple
-  static const Color primaryDark   = Color(0xFF6552E6); // pressed/hover state
-  static const Color primaryLight  = Color(0xFF9E8FFF); // gradients, highlights
-  static const Color accent        = Color(0xFFB06EE8); // secondary gradient stop
+  static const Color primary       = Color(0xFF6374E8); // Twilight Indigo
+  static const Color primaryDark   = Color(0xFF4C5BB2); // Deep Twilight Indigo
+  static const Color primaryLight  = Color(0xFF8E9DF6); // Soft Twilight Lilac
+  static const Color accent        = Color(0xFF9EA7EC); // Twilight Accent Blue
 
   // ── Light theme surfaces ──────────────────────────────────────────────────
-  static const Color lightBg       = Color(0xFFEEF0FB);
-  static const Color lightSurface  = Color(0xFFFFFFFF);
-  static const Color lightField    = Color(0xFFF5F4FF);
-  static const Color lightBorder   = Color(0xFFE4E2F8);
-  static const Color lightChipBorder = Color(0xFFD8D5F8);
-  static const Color lightDivider  = Color(0xFFEAE8FB);
+  static const Color lightBg       = Color(0xFFD8E2FF); // Twilight Haze Start
+  static const Color lightSurface  = Color(0xFFF3F6FF); // Twilight Soft White
+  static const Color lightField    = Color(0xFFE2E9FF); // Twilight Field Fill
+  static const Color lightBorder   = Color(0xFFC5D1F6); // Twilight Border
+  static const Color lightChipBorder = Color(0xFFB5C2EB);
+  static const Color lightDivider  = Color(0xFFCDD7F5);
 
   // ── Light theme text ──────────────────────────────────────────────────────
-  static const Color lightTextPrimary   = Color(0xFF2D1B69); // headings / hi-emphasis
-  static const Color lightTextSecondary = Color(0xFF5A587A); // body text
-  static const Color lightTextMuted     = Color(0xFF8884BB); // labels / captions
-  static const Color lightTextDim       = Color(0xFF9E9BD0); // placeholders / icons
+  static const Color lightTextPrimary   = Color(0xFF1F2445); // Deep Indigo text
+  static const Color lightTextSecondary = Color(0xFF454C75); // Dark blue-gray
+  static const Color lightTextMuted     = Color(0xFF7079A3); // Muted twilight blue-gray
+  static const Color lightTextDim       = Color(0xFF949EB8); // Placeholders
 
   // ── Dark theme surfaces ───────────────────────────────────────────────────
-  static const Color darkBg        = Color(0xFF131124); // Rich deep navy-purple
-  static const Color darkSurface   = Color(0xFF1D1A32); // Premium dark purple-grey surface
-  static const Color darkField     = Color(0xFF24203F);
-  static const Color darkBorder    = Color(0xFF282542); // Subtle dark outline
-  static const Color darkChipBorder= Color(0xFF322E54);
-  static const Color darkDivider   = Color(0xFF201D38);
+  static const Color darkBg        = Color(0xFF171A30); // Deep Twilight Space
+  static const Color darkSurface   = Color(0xFF202340); // Twilight Space Surface
+  static const Color darkField     = Color(0xFF26294C); // Twilight Space Field
+  static const Color darkBorder    = Color(0xFF343968); // Twilight Border Line
+  static const Color darkChipBorder= Color(0xFF3D437A);
+  static const Color darkDivider   = Color(0xFF282B4E);
 
   // ── Dark theme text ───────────────────────────────────────────────────────
-  static const Color darkTextPrimary   = Color(0xFFFFFFFF); // Crisp white
-  static const Color darkTextSecondary = Color(0xFFC5C2E6); // Soft purple-gray
-  static const Color darkTextMuted     = Color(0xFF8B86B7); // Muted purple-gray
-  static const Color darkTextDim       = Color(0xFF655F94);
+  static const Color darkTextPrimary   = Color(0xFFFFFFFF); // Crisp White
+  static const Color darkTextSecondary = Color(0xFFD8E2FF); // Soft Twilight Haze Blue
+  static const Color darkTextMuted     = Color(0xFFA7B7E7); // Muted Lavender Blue
+  static const Color darkTextDim       = Color(0xFF707B9E); // Dimmed slate
 
   // ── Semantic (same in both themes — kept vivid for visibility) ────────────
   static const Color success      = Color(0xFF388E3C);

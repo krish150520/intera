@@ -4,7 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import 'create_community_screen.dart';
 import 'community_detail_screen.dart';
-import '../../search/screens/search_screen.dart';
+import 'search_communities_screen.dart';
+import '../../../shared/widgets/shimmer.dart';
 
 class CommunitiesScreen extends StatelessWidget {
   const CommunitiesScreen({super.key});
@@ -52,18 +53,26 @@ class CommunitiesScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               icon: Icon(Icons.search_rounded, size: 18, color: c.primary),
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SearchScreen()),
+                MaterialPageRoute(builder: (_) => const SearchCommunitiesScreen()),
               ),
             ),
           ),
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('communities').snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('communities')
+            .orderBy('memberCount', descending: true)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: c.primary));
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 80),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (_, __) => const CommunityCardShimmer(),
+            );
           }
           final docs = snapshot.data?.docs ?? [];
           if (docs.isEmpty) {

@@ -49,12 +49,12 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: cs,
-      scaffoldBackgroundColor: AppColors.lightBg,
+      scaffoldBackgroundColor: Colors.transparent,
       fontFamily: _fontFamily,
       dividerColor: AppColors.lightDivider,
 
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.lightSurface,
+        backgroundColor: Colors.transparent,
         foregroundColor: AppColors.lightTextSecondary,
         elevation: 0,
         centerTitle: false,
@@ -263,12 +263,12 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: cs,
-      scaffoldBackgroundColor: AppColors.darkBg,
+      scaffoldBackgroundColor: Colors.transparent,
       fontFamily: _fontFamily,
       dividerColor: AppColors.darkDivider,
 
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.darkSurface,
+        backgroundColor: Colors.transparent,
         foregroundColor: AppColors.darkTextSecondary,
         elevation: 0,
         centerTitle: false,

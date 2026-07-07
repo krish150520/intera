@@ -38,9 +38,9 @@ class MessagingService {
     if (myUid == null) return false;
     final doc = await _db
         .collection('users')
-        .doc(otherUid)
-        .collection('following')
         .doc(myUid)
+        .collection('followers')
+        .doc(otherUid)
         .get();
     return doc.exists;
   }
@@ -70,7 +70,7 @@ class MessagingService {
     final snapshot = await docRef.get();
 
     if (snapshot.exists) {
-      final status = (snapshot.data()?['status'] as String?) ?? 'active';
+      final status = (snapshot.data() as Map<String, dynamic>?)?['status'] as String? ?? 'active';
       return (
         conversationId: convoId,
         access: status == 'pending'

@@ -17,7 +17,8 @@ import '../../../core/karma/karma_service.dart';
 import '../../../core/services/reaction_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
-  const MyProfileScreen({super.key});
+  final String? heroTag;
+  const MyProfileScreen({super.key, this.heroTag});
   @override
   State<MyProfileScreen> createState() => _MyProfileScreenState();
 }
@@ -256,7 +257,14 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                           shape: BoxShape.circle,
                           border: Border.all(color: c.primary, width: 1.5),
                         ),
-                        child: CustomAvatar(name: displayName, imageUrl: avatarUrl, userId: _currentUid, radius: 36),
+                        child: CustomAvatar(
+                          name: displayName,
+                          imageUrl: avatarUrl,
+                          userId: _currentUid,
+                          radius: 36,
+                          heroTag: widget.heroTag,
+                          clickable: false,
+                        ),
                       ),
                       const SizedBox(width: 20),
                       Expanded(
@@ -663,6 +671,7 @@ class _ProfileContentList extends StatelessWidget {
                 onLongPress: () => _confirmAndPurgePost(context, doc.id, data['mediaUrl']),
                 child: PostCard(
                   post: post,
+                  heroTag: 'my_profile_post_${post.id}',
                   onTap: () {
                     if (post.type == PostType.video) {
                       final videoPosts = filtered
@@ -678,7 +687,13 @@ class _ProfileContentList extends StatelessWidget {
                         },
                       );
                     } else {
-                      Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post);
+                      Navigator.of(context).pushNamed(
+                        AppRoutes.postDetail,
+                        arguments: {
+                          'post': post,
+                          'heroTag': 'my_profile_post_${post.id}',
+                        },
+                      );
                     }
                   },
                   onReact: (type) {
@@ -690,7 +705,13 @@ class _ProfileContentList extends StatelessWidget {
                       reactionType: type,
                     );
                   },
-                  onComment: () => Navigator.of(context).pushNamed(AppRoutes.postDetail, arguments: post),
+                  onComment: () => Navigator.of(context).pushNamed(
+                    AppRoutes.postDetail,
+                    arguments: {
+                      'post': post,
+                      'heroTag': 'my_profile_post_${post.id}',
+                    },
+                  ),
                 ),
               ),
             );

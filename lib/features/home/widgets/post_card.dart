@@ -14,6 +14,8 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onShare;
   final void Function(String type)? onReact;
 
+  final String? heroTag;
+
   const PostCard({
     super.key,
     required this.post,
@@ -23,6 +25,7 @@ class PostCard extends StatelessWidget {
     this.onComment,
     this.onShare,
     this.onReact,
+    this.heroTag,
   });
 
   bool get _hasMedia => post.imageUrl != null && post.imageUrl!.isNotEmpty;
@@ -32,7 +35,6 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Image / video posts → full-bleed card (existing style, kept as-is)
     if (_hasMedia || _isMediaType) {
       return _MediaPostCard(
         post: post,
@@ -41,18 +43,19 @@ class PostCard extends StatelessWidget {
         onSave: onSave,
         onComment: onComment,
         onReact: onReact,
+        heroTag: heroTag,
+      );
+    } else {
+      return _TextPostCard(
+        post: post,
+        onTap: onTap,
+        onLike: onLike,
+        onSave: onSave,
+        onComment: onComment,
+        onReact: onReact,
+        heroTag: heroTag,
       );
     }
-
-    // All other post types → Option C tinted card
-    return _TextPostCard(
-      post: post,
-      onTap: onTap,
-      onLike: onLike,
-      onSave: onSave,
-      onComment: onComment,
-      onReact: onReact,
-    );
   }
 }
 
@@ -65,6 +68,7 @@ class _TextPostCard extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onComment;
   final void Function(String type)? onReact;
+  final String? heroTag;
 
   const _TextPostCard({
     required this.post,
@@ -73,6 +77,7 @@ class _TextPostCard extends StatelessWidget {
     this.onSave,
     this.onComment,
     this.onReact,
+    this.heroTag,
   });
 
   // Per-type colour config (dynamic based on active theme brightness)
@@ -144,7 +149,7 @@ class _TextPostCard extends StatelessWidget {
             ),
       _ => isDark
           ? const _TypeStyle(
-              bg: Color(0xFF1D1A32), // Fits dark background surface
+              bg: Color(0xFF1D1A32),
               border: Color(0xFF383361),
               pillBg: Color(0xFF7E69FF),
               pillText: Colors.white,
@@ -152,6 +157,11 @@ class _TextPostCard extends StatelessWidget {
               bodyColor: Color(0xFFC5C2E6),
               label: 'Text',
               emoji: '💬',
+              gradient: LinearGradient(
+                colors: [Color(0xFF2A2F55), Color(0xFF171A30)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             )
           : const _TypeStyle(
               bg: Color(0xFFF5F4FF),
@@ -162,6 +172,11 @@ class _TextPostCard extends StatelessWidget {
               bodyColor: Color(0xFF555555),
               label: 'Text',
               emoji: '💬',
+              gradient: LinearGradient(
+                colors: [Color(0xFFD8E2FF), Color(0xFFA7B7E7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
     };
   }
@@ -201,14 +216,27 @@ class _TextPostCard extends StatelessWidget {
     final Color iconDefaultColor =
         isDark ? const Color(0xFF8B86B7) : const Color(0xFFB0ADDE);
 
-    return GestureDetector(
+    final cardWidget = GestureDetector(
       onTap: onTap,
       child: Container(
         height: 176, // fixed height keeps every text-type card visually balanced
         decoration: BoxDecoration(
-          color: s.bg,
+          color: s.gradient == null ? s.bg : null,
+          gradient: s.gradient,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: s.border),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05),
+            width: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         padding: const EdgeInsets.all(16),
         child: Stack(
@@ -359,6 +387,8 @@ class _TextPostCard extends StatelessWidget {
         ),
       ),
     );
+
+    return cardWidget;
   }
 }
 
@@ -371,6 +401,7 @@ class _MediaPostCard extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onComment;
   final void Function(String type)? onReact;
+  final String? heroTag;
 
   const _MediaPostCard({
     required this.post,
@@ -379,6 +410,7 @@ class _MediaPostCard extends StatelessWidget {
     this.onSave,
     this.onComment,
     this.onReact,
+    this.heroTag,
   });
 
   @override
@@ -417,7 +449,6 @@ class _MediaPostCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background image / fallback
               hasDisplayImage
                   ? Image.network(
                       displayUrl!,
@@ -526,6 +557,7 @@ class _TypeStyle {
   final Color bodyColor;
   final String label;
   final String emoji;
+  final Gradient? gradient;
 
   const _TypeStyle({
     required this.bg,
@@ -536,6 +568,7 @@ class _TypeStyle {
     required this.bodyColor,
     required this.label,
     required this.emoji,
+    this.gradient,
   });
 }
 
@@ -588,6 +621,7 @@ class _AuthorRow extends StatelessWidget {
         imageUrl: post.authorAvatarUrl,
         userId: post.authorId,
         radius: 16,
+        heroTag: 'avatar_${post.authorId}_${post.id}',
       ),
       const SizedBox(width: 8),
       Expanded(

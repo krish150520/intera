@@ -52,9 +52,21 @@ class AppRoutes {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case postDetail:
-        final post = settings.arguments as Post?;
+        if (settings.arguments is Post) {
+          final post = settings.arguments as Post;
+          return MaterialPageRoute(
+            builder: (context) => PostDetailScreen(post: post),
+          );
+        } else if (settings.arguments is Map<String, dynamic>) {
+          final args = settings.arguments as Map<String, dynamic>;
+          final post = args['post'] as Post?;
+          final heroTag = args['heroTag'] as String?;
+          return MaterialPageRoute(
+            builder: (context) => PostDetailScreen(post: post, heroTag: heroTag),
+          );
+        }
         return MaterialPageRoute(
-          builder: (context) => PostDetailScreen(post: post),
+          builder: (context) => const PostDetailScreen(),
         );
       case echoViewer:
         final args = settings.arguments as Map<String, dynamic>?;

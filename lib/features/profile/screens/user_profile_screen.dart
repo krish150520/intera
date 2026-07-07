@@ -17,12 +17,14 @@ class UserProfileScreen extends StatefulWidget {
   final String userId;
   final String userName;
   final String userAvatar;
+  final String? heroTag;
 
   const UserProfileScreen({
     super.key,
     required this.userId,
     required this.userName,
     required this.userAvatar,
+    this.heroTag,
   });
 
   @override
@@ -170,6 +172,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               imageUrl: widget.userAvatar.isNotEmpty ? widget.userAvatar : null,
                               userId: widget.userId,
                               radius: 40,
+                              heroTag: widget.heroTag,
+                              clickable: false,
                             ),
                             if (!isMe)
                               Positioned(
@@ -470,8 +474,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                         return PostCard(
                           post: postItem,
-                          onTap: () => Navigator.of(context)
-                              .pushNamed(AppRoutes.postDetail, arguments: postItem),
+                          heroTag: 'user_profile_post_${postItem.id}',
+                          onTap: () => Navigator.of(context).pushNamed(
+                            AppRoutes.postDetail,
+                            arguments: {
+                              'post': postItem,
+                              'heroTag': 'user_profile_post_${postItem.id}',
+                            },
+                          ),
                           onReact: (type) {
                             ReactionService.toggleReaction(
                               postId: doc.id,
@@ -481,8 +491,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               reactionType: type,
                             );
                           },
-                          onComment: () => Navigator.of(context)
-                              .pushNamed(AppRoutes.postDetail, arguments: postItem),
+                          onComment: () => Navigator.of(context).pushNamed(
+                            AppRoutes.postDetail,
+                            arguments: {
+                              'post': postItem,
+                              'heroTag': 'user_profile_post_${postItem.id}',
+                            },
+                          ),
                         );
                       },
                     );

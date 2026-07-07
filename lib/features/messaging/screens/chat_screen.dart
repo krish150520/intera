@@ -40,6 +40,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   bool _isUploadingImage = false;
   bool _isResponding = false;
+  final Set<String> _animatedMessageIds = {};
 
   @override
   void initState() {
@@ -310,6 +311,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     conversationId: widget.conversationId,
                     myUid: myUid,
                     otherName: widget.otherName,
+                    animatedMessageIds: _animatedMessageIds,
                   ),
                 ),
                 if (isIncomingRequest)
@@ -653,12 +655,14 @@ class _MessagesPanel extends StatelessWidget {
   final String conversationId;
   final String myUid;
   final String otherName;
+  final Set<String> animatedMessageIds;
 
   const _MessagesPanel({
     required this.messagingService,
     required this.conversationId,
     required this.myUid,
     required this.otherName,
+    required this.animatedMessageIds,
   });
 
   void _showMessageActions(BuildContext context, String messageId, MessageModel message, bool isMe) {
@@ -773,13 +777,24 @@ class _MessagesPanel extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final doc = docs[index];
-              final message = MessageModel.fromFirestore(doc);
+               final message = MessageModel.fromFirestore(doc);
               final isMe = message.senderId == myUid;
+              
+              final bool shouldAnimate = !animatedMessageIds.contains(message.id);
+              if (shouldAnimate) {
+                animatedMessageIds.add(message.id);
+              }
+
               return Padding(
+                key: ValueKey(message.id),
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: GestureDetector(
                   onLongPress: () => _showMessageActions(context, doc.id, message, isMe),
-                  child: MessageBubble(message: message, isMe: isMe),
+                  child: MessageBubble(
+                    message: message,
+                    isMe: isMe,
+                    animate: shouldAnimate,
+                  ),
                 ),
               );
             },

@@ -15,7 +15,8 @@ import '../../../core/services/reaction_service.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post? post;
-  const PostDetailScreen({super.key, this.post});
+  final String? heroTag;
+  const PostDetailScreen({super.key, this.post, this.heroTag});
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -354,9 +355,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           if (_hasMedia)
                             SliverToBoxAdapter(
                               child: _MediaHero(
+                                postId: realTimePost.id,
                                 mediaUrl: realTimePost.imageUrl ?? '',
                                 isVideo:  _isVideo,
                                 onExpand: () => _openFullscreen(realTimePost),
+                                heroTag: widget.heroTag,
                               ),
                             ),
 
@@ -487,14 +490,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 // ── Full-width media hero ─────────────────────────────────────────────────────
 
 class _MediaHero extends StatelessWidget {
+  final String postId;
   final String mediaUrl;
   final bool isVideo;
   final VoidCallback onExpand;
+  final String? heroTag;
 
   const _MediaHero({
+    required this.postId,
     required this.mediaUrl,
     required this.isVideo,
     required this.onExpand,
+    this.heroTag,
   });
 
   @override

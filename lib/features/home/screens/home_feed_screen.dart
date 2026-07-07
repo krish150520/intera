@@ -8,6 +8,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../shared/models/post_model.dart';
+import '../../../shared/widgets/shimmer.dart';
 import '../widgets/post_card.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../messaging/screens/messages_list_screen.dart';
@@ -800,9 +801,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       builder: (context, snapshot) {
         if (snapshot.hasError) return _buildError(snapshot.error.toString());
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-              child: CircularProgressIndicator(
-                  color: _c.primary, strokeWidth: 2));
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            itemCount: 4,
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
+            itemBuilder: (_, __) => const PostCardShimmer(),
+          );
         }
 
         final docs = snapshot.data?.docs ?? [];
@@ -872,6 +876,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                 padding: const EdgeInsets.only(bottom: 8),
                 child: PostCard(
                   post: post,
+                  heroTag: 'home_post_${post.id}',
                   onTap: () {
                     FeedAlgorithm.markPostSeen(_myUid, post.id);
                     if (post.type == PostType.video) {
@@ -890,7 +895,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                     } else {
                       Navigator.of(context).pushNamed(
                           AppRoutes.postDetail,
-                          arguments: post);
+                          arguments: {
+                            'post': post,
+                            'heroTag': 'home_post_${post.id}',
+                          });
                     }
                   },
                   onReact: (type) => _handleReaction(
@@ -901,7 +909,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                     FeedAlgorithm.markPostSeen(_myUid, post.id);
                     Navigator.of(context).pushNamed(
                         AppRoutes.postDetail,
-                        arguments: post);
+                        arguments: {
+                          'post': post,
+                          'heroTag': 'home_post_${post.id}',
+                        });
                   },
                   onShare: () {
                     Clipboard.setData(ClipboardData(

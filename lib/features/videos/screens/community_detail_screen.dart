@@ -5,9 +5,11 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../create/screens/create_post_screen.dart';
+import '../../../shared/widgets/shimmer.dart';
 import 'edit_community_screen.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/routes/app_routes.dart';
+import 'community_search_screen.dart';
 
 class CommunityDetailScreen extends StatefulWidget {
   final String communityId;
@@ -26,14 +28,6 @@ class CommunityDetailScreen extends StatefulWidget {
 }
 
 class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -82,6 +76,15 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
             ),
             centerTitle: true,
             actions: [
+              IconButton(
+                icon: Icon(Icons.search_rounded, size: 20, color: context.appColors.primary),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => CommunitySearchScreen(
+                    communityId: widget.communityId,
+                    communityName: name,
+                  ),
+                )),
+              ),
               if (isAdmin)
                 Container(
                   margin: const EdgeInsets.only(right: 10),
@@ -116,39 +119,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                 communityId: widget.communityId,
               ),
 
-              // Search Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (val) {
-                    setState(() {});
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Search posts in community...',
-                    hintStyle: TextStyle(color: context.appColors.textDim, fontSize: 13),
-                    prefixIcon: Icon(Icons.search_rounded, color: context.appColors.primary, size: 18),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? GestureDetector(
-                            onTap: () {
-                              _searchController.clear();
-                              setState(() {});
-                            },
-                            child: Icon(Icons.clear_rounded, color: context.appColors.textDim, size: 18),
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: context.appColors.field,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  style: TextStyle(color: context.appColors.textPrimary, fontSize: 14),
-                ),
-              ),
-
               // ── Posts feed ───────────────────────────────────────────────
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
@@ -164,21 +134,16 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                               style: const TextStyle(fontSize: 12)));
                     }
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(
-                          child: CircularProgressIndicator(color: context.appColors.primary));
+                      return ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: 3,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (_, __) => const PostCardShimmer(),
+                      );
                     }
 
                     final docs = snapshot.data?.docs ?? [];
                     final allPosts = docs.map((d) => Post.fromFirestore(d, currentUid)).toList();
-                    final query = _searchController.text.trim().toLowerCase();
-
-                    final filteredPosts = allPosts.where((p) {
-                      if (query.isEmpty) return true;
-                      final matchTitle = p.title.toLowerCase().contains(query);
-                      final matchBody = p.body.toLowerCase().contains(query);
-                      final matchTags = p.tags.any((t) => t.toLowerCase().contains(query));
-                      return matchTitle || matchBody || matchTags;
-                    }).toList();
 
                     if (allPosts.isEmpty) {
                       return Center(
@@ -201,54 +166,44 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                       );
                     }
 
-                    if (filteredPosts.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.search_off_rounded,
-                                size: 44, color: context.appColors.chipBorder),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No posts matching "$query"',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  color: context.appColors.textDim,
-                                  fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
                     return ListView.builder(
                       padding:
                           const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                      itemCount: filteredPosts.length,
+                      itemCount: allPosts.length,
                       itemBuilder: (context, index) {
-                        final postItem = filteredPosts[index];
-                        // Find matching document for action handlers
+                        final postItem = allPosts[index];
                         final doc = docs.firstWhere((d) => d.id == postItem.id);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: PostCard(
                             post: postItem,
-                             onTap: () => Navigator.of(context)
-                                 .pushNamed(AppRoutes.postDetail, arguments: postItem),
-                             onLike: () {
-                               final dataMap = doc.data() as Map<String, dynamic>?;
-                               final List likedBy = dataMap?['likedBy'] ?? [];
-                               NotificationService.toggleLike(
-                                 postId: doc.id,
-                                 postAuthorId: postItem.authorId,
-                                 postTitle: postItem.title,
-                                 currentUid: currentUid,
-                                 likedBy: likedBy,
-                               );
-                             },
-                             onComment: () => Navigator.of(context)
-                                 .pushNamed(AppRoutes.postDetail, arguments: postItem),
+                            heroTag: 'community_post_${postItem.id}',
+                            onTap: () => Navigator.of(context).pushNamed(
+                              AppRoutes.postDetail,
+                              arguments: {
+                                'post': postItem,
+                                'heroTag': 'community_post_${postItem.id}',
+                              },
+                            ),
+                            onLike: () {
+                              final dataMap = doc.data() as Map<String, dynamic>?;
+                              final List likedBy = dataMap?['likedBy'] ?? [];
+                              NotificationService.toggleLike(
+                                postId: doc.id,
+                                postAuthorId: postItem.authorId,
+                                postTitle: postItem.title,
+                                currentUid: currentUid,
+                                likedBy: likedBy,
+                              );
+                            },
+                            onComment: () => Navigator.of(context).pushNamed(
+                              AppRoutes.postDetail,
+                              arguments: {
+                                'post': postItem,
+                                'heroTag': 'community_post_${postItem.id}',
+                              },
+                            ),
                           ),
                         );
                       },
