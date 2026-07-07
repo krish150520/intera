@@ -13,6 +13,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/nsfw_detection_service.dart';
 import '../../../core/services/feed_algorithm.dart';
 import '../../navigation/screens/bottom_nav_screen.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String? communityId;
@@ -34,6 +36,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   VideoPlayerController? _videoPreviewController;
   bool _isLoading = false;
   bool _isVideoMedia = false; // tracks whether picked media is video
+  File? _videoThumbnailFile;
+  bool _isCustomThumbnail = false;
   final Set<String> _selectedTags = {};
 
   late final AnimationController _animCtrl;
@@ -69,6 +73,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     setState(() {
       _selectedMediaFile = File(pickedFile.path);
       _isVideoMedia = isVideo;
+      _videoThumbnailFile = null;
+      _isCustomThumbnail = false;
     });
     if (isVideo) {
       _videoPreviewController = VideoPlayerController.file(_selectedMediaFile!)
@@ -77,6 +83,25 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           _videoPreviewController!.setLooping(true);
           _videoPreviewController!.play();
         });
+
+      // Generate automatic thumbnail
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final path = await VideoThumbnail.thumbnailFile(
+          video: pickedFile.path,
+          thumbnailPath: tempDir.path,
+          imageFormat: ImageFormat.JPEG,
+          maxWidth: 360,
+          quality: 75,
+        );
+        if (path != null) {
+          setState(() {
+            _videoThumbnailFile = File(path);
+          });
+        }
+      } catch (e) {
+        debugPrint('Error generating automatic thumbnail: $e');
+      }
     }
   }
 
@@ -87,7 +112,19 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     setState(() {
       _selectedMediaFile = null;
       _isVideoMedia = false;
+      _videoThumbnailFile = null;
+      _isCustomThumbnail = false;
     });
+  }
+
+  Future<void> _pickCustomThumbnail() async {
+    final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
+    if (file != null) {
+      setState(() {
+        _videoThumbnailFile = File(file.path);
+        _isCustomThumbnail = true;
+      });
+    }
   }
 
   String _labelFor(PostType t) => switch (t) {
@@ -175,8 +212,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     try {
       // ── Upload media ───────────────────────────────────────────────────
       String? mediaUrl;
+      String? videoThumbnailUrl;
+      final ts = DateTime.now().millisecondsSinceEpoch;
+
       if (_selectedMediaFile != null) {
-        final ts = DateTime.now().millisecondsSinceEpoch;
         final isVid = _isVideoMedia ||
             _selectedType == PostType.video ||
             _selectedMediaFile!.path.toLowerCase().endsWith('.mp4');
@@ -187,6 +226,16 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         final task = await ref.putFile(_selectedMediaFile!).whenComplete(() {});
         if (task.state != TaskState.success) throw Exception('Upload failed');
         mediaUrl = await ref.getDownloadURL();
+
+        // Upload generated or custom thumbnail if video
+        if (isVid && _videoThumbnailFile != null) {
+          final thumbRef = FirebaseStorage.instance
+              .ref('posts/thumbnails/${user.uid}_$ts.jpg');
+          final thumbTask = await thumbRef.putFile(_videoThumbnailFile!).whenComplete(() {});
+          if (thumbTask.state == TaskState.success) {
+            videoThumbnailUrl = await thumbRef.getDownloadURL();
+          }
+        }
       }
 
       // ── Fetch verified user data ───────────────────────────────────────
@@ -218,6 +267,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         body: body,
         content: isHelp ? '$title\n$body' : body,
         imageUrl: mediaUrl,
+        videoThumbnailUrl: videoThumbnailUrl,
         likeCount: 0,
         commentCount: 0,
         shareCount: 0,
@@ -560,40 +610,118 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   Widget _buildMediaPicker(BuildContext context, {required bool isVideo}) {
     final c = context.appColors;
     if (_selectedMediaFile != null) {
-      return Stack(
-        alignment: Alignment.topRight,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: isVideo &&
-                    _videoPreviewController != null &&
-                    _videoPreviewController!.value.isInitialized
-                ? SizedBox(
-                    height: 200,
-                    width: double.infinity,
-                    child: AspectRatio(
-                      aspectRatio: _videoPreviewController!.value.aspectRatio,
-                      child: VideoPlayer(_videoPreviewController!),
+          Stack(
+            alignment: Alignment.topRight,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: isVideo &&
+                        _videoPreviewController != null &&
+                        _videoPreviewController!.value.isInitialized
+                    ? SizedBox(
+                        height: 200,
+                        width: double.infinity,
+                        child: AspectRatio(
+                          aspectRatio: _videoPreviewController!.value.aspectRatio,
+                          child: VideoPlayer(_videoPreviewController!),
+                        ),
+                      )
+                    : Image.file(_selectedMediaFile!,
+                        height: 200, width: double.infinity, fit: BoxFit.cover),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: GestureDetector(
+                  onTap: _removeMedia,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
                     ),
-                  )
-                : Image.file(_selectedMediaFile!,
-                    height: 200, width: double.infinity, fit: BoxFit.cover),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: GestureDetector(
-              onTap: _removeMedia,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  shape: BoxShape.circle,
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
                 ),
-                child: const Icon(Icons.close, color: Colors.white, size: 16),
+              ),
+            ],
+          ),
+          if (isVideo) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.border.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: c.field,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: _videoThumbnailFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(_videoThumbnailFile!,
+                                fit: BoxFit.cover),
+                          )
+                        : const Center(
+                            child: Icon(Icons.movie_creation_outlined, size: 20),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isCustomThumbnail ? 'Custom Thumbnail' : 'Auto Thumbnail',
+                          style: TextStyle(
+                            color: c.textHi,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _isCustomThumbnail
+                              ? 'Picked custom image'
+                              : 'Automatically extracted from video',
+                          style: TextStyle(
+                            color: c.textMuted,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _pickCustomThumbnail,
+                    icon: const Icon(Icons.photo_library_outlined, size: 14),
+                    label: const Text('Change', style: TextStyle(fontSize: 11)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: c.primary,
+                      backgroundColor: c.primary.withValues(alpha: 0.1),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
+          ],
         ],
       );
     }

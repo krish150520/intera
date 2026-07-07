@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
+import '../../../shared/widgets/live_username.dart';
 
 class PostCard extends StatelessWidget {
   final Post post;
@@ -203,7 +204,7 @@ class _TextPostCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 160),
+        height: 176, // fixed height keeps every text-type card visually balanced
         decoration: BoxDecoration(
           color: s.bg,
           borderRadius: BorderRadius.circular(20),
@@ -225,121 +226,134 @@ class _TextPostCard extends StatelessWidget {
               ),
             ),
 
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Type pill ───────────────────────────────────────────
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: s.pillBg,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _pillLabel(s),
-                    style: TextStyle(
-                      color: s.pillText,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+            Positioned.fill(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Type pill ───────────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: s.pillBg,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Title ────────────────────────────────────────────────
-                if (post.title.isNotEmpty)
-                  Text(
-                    post.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: s.titleColor,
-                      height: 1.25,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-
-                // ── Body ─────────────────────────────────────────────────
-                if (post.body.isNotEmpty &&
-                    post.body.trim() != post.title.trim()) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    post.body,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: s.bodyColor,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 14),
-
-                // ── Footer ────────────────────────────────────────────────
-                Row(children: [
-                  // Avatar
-                  CustomAvatar(
-                    name: post.authorName,
-                    imageUrl: post.authorAvatarUrl,
-                    userId: post.authorId,
-                    radius: 11,
-                  ),
-                  const SizedBox(width: 7),
-
-                  // Author + time
-                  Expanded(
                     child: Text(
-                      '${post.authorUsername} · ${_formatTime(post.createdAt)}',
+                      _pillLabel(s),
                       style: TextStyle(
-                        fontSize: 11,
-                        color: footerTextColor,
+                        color: s.pillText,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
 
-                  // Stats
-                  _FooterStat(
-                    icon: reactionIcon,
-                    iconColor: hasReacted ? reactionColor : iconDefaultColor,
-                    label: _compact(post.likeCount),
-                    labelColor: footerTextColor,
-                    onTap: onReact != null ? () => onReact!('like') : onLike,
-                    onLongPress: onReact != null
-                        ? () => _showReactionSheet(context, onReact!)
-                        : null,
-                  ),
-                  const SizedBox(width: 10),
-                  _FooterStat(
-                    icon: Icons.chat_bubble_outline_rounded,
-                    iconColor: iconDefaultColor,
-                    label: _compact(post.commentCount),
-                    labelColor: footerTextColor,
-                    onTap: onComment,
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: onSave,
-                    child: Icon(
-                      post.isSaved
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                      size: 18,
-                      color: post.isSaved
-                          ? (isDark
-                              ? const Color(0xFFA597EC)
-                              : const Color(0xFF6C63D5))
-                          : iconDefaultColor,
+                  const SizedBox(height: 10),
+
+                  // ── Title + body ─────────────────────────────────────────
+                  // Wrapped in Expanded so it fills whatever space is left
+                  // above the footer, regardless of whether body text exists.
+                  // This is what keeps every card the same size and the
+                  // footer pinned to the bottom.
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        if (post.title.isNotEmpty)
+                          Text(
+                            post.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: s.titleColor,
+                              height: 1.25,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+
+                        if (post.body.isNotEmpty &&
+                            post.body.trim() != post.title.trim()) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            post.body,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: s.bodyColor,
+                              height: 1.45,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ]),
-              ],
+
+                  // ── Footer ────────────────────────────────────────────────
+                  Row(children: [
+                    // Avatar
+                    CustomAvatar(
+                      name: post.authorName,
+                      imageUrl: post.authorAvatarUrl,
+                      userId: post.authorId,
+                      radius: 11,
+                    ),
+                    const SizedBox(width: 7),
+
+                    // Author + time
+                    Expanded(
+                      child: LiveUsername(
+                        userId: post.authorId,
+                        fallback: post.authorUsername,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: footerTextColor,
+                        ),
+                        suffix: ' · ${_formatTime(post.createdAt)}',
+                      ),
+                    ),
+
+                    // Stats
+                    _FooterStat(
+                      icon: reactionIcon,
+                      iconColor: hasReacted ? reactionColor : iconDefaultColor,
+                      label: _compact(post.likeCount),
+                      labelColor: footerTextColor,
+                      onTap:
+                          onReact != null ? () => onReact!('like') : onLike,
+                      onLongPress: onReact != null
+                          ? () => _showReactionSheet(context, onReact!)
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    _FooterStat(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      iconColor: iconDefaultColor,
+                      label: _compact(post.commentCount),
+                      labelColor: footerTextColor,
+                      onTap: onComment,
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: onSave,
+                      child: Icon(
+                        post.isSaved
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_border_rounded,
+                        size: 18,
+                        color: post.isSaved
+                            ? (isDark
+                                ? const Color(0xFFA597EC)
+                                : const Color(0xFF6C63D5))
+                            : iconDefaultColor,
+                      ),
+                    ),
+                  ]),
+                ],
+              ),
             ),
           ],
         ),
@@ -369,7 +383,11 @@ class _MediaPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
+    final isVideo = post.type == PostType.video;
+    final displayUrl = (isVideo && post.videoThumbnailUrl != null && post.videoThumbnailUrl!.isNotEmpty)
+        ? post.videoThumbnailUrl!
+        : post.imageUrl;
+    final hasDisplayImage = displayUrl != null && displayUrl.isNotEmpty;
 
     final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final myReaction = post.reactions[myUid];
@@ -400,9 +418,9 @@ class _MediaPostCard extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               // Background image / fallback
-              hasImage
+              hasDisplayImage
                   ? Image.network(
-                      post.imageUrl!,
+                      displayUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const _FallbackBg(),
                     )

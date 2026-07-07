@@ -9,7 +9,7 @@ import 'edit_community_screen.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/routes/app_routes.dart';
 
-class CommunityDetailScreen extends StatelessWidget {
+class CommunityDetailScreen extends StatefulWidget {
   final String communityId;
   final String communityName;
   final String communityDescription;
@@ -22,20 +22,33 @@ class CommunityDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<CommunityDetailScreen> createState() => _CommunityDetailScreenState();
+}
+
+class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('communities')
-          .doc(communityId)
+          .doc(widget.communityId)
           .snapshots(),
       builder: (context, communitySnapshot) {
         final communityData =
             communitySnapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-        final String name        = communityData['name'] ?? communityName;
-        final String description = communityData['description'] ?? communityDescription;
+        final String name        = communityData['name'] ?? widget.communityName;
+        final String description = communityData['description'] ?? widget.communityDescription;
         final String bannerUrl   = communityData['bannerUrl'] ?? '';
         final String avatarUrl   = communityData['avatarUrl'] ?? '';
         final List admins        = communityData['admins'] ?? [];
@@ -83,7 +96,7 @@ class CommunityDetailScreen extends StatelessWidget {
                     icon: Icon(Icons.edit_rounded, size: 17, color: context.appColors.primary),
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => EditCommunityScreen(
-                        communityId: communityId,
+                        communityId: widget.communityId,
                         currentData: communityData,
                       ),
                     )),
@@ -100,7 +113,40 @@ class CommunityDetailScreen extends StatelessWidget {
                 bannerUrl: bannerUrl,
                 avatarUrl: avatarUrl,
                 isAdmin: isAdmin,
-                communityId: communityId,
+                communityId: widget.communityId,
+              ),
+
+              // Search Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (val) {
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search posts in community...',
+                    hintStyle: TextStyle(color: context.appColors.textDim, fontSize: 13),
+                    prefixIcon: Icon(Icons.search_rounded, color: context.appColors.primary, size: 18),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                            child: Icon(Icons.clear_rounded, color: context.appColors.textDim, size: 18),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: context.appColors.field,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  style: TextStyle(color: context.appColors.textPrimary, fontSize: 14),
+                ),
               ),
 
               // ── Posts feed ───────────────────────────────────────────────
@@ -108,7 +154,7 @@ class CommunityDetailScreen extends StatelessWidget {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('posts')
-                      .where('communityId', isEqualTo: communityId)
+                      .where('communityId', isEqualTo: widget.communityId)
                       .orderBy('createdAt', descending: true)
                       .snapshots(),
                   builder: (context, snapshot) {
@@ -123,8 +169,18 @@ class CommunityDetailScreen extends StatelessWidget {
                     }
 
                     final docs = snapshot.data?.docs ?? [];
+                    final allPosts = docs.map((d) => Post.fromFirestore(d, currentUid)).toList();
+                    final query = _searchController.text.trim().toLowerCase();
 
-                    if (docs.isEmpty) {
+                    final filteredPosts = allPosts.where((p) {
+                      if (query.isEmpty) return true;
+                      final matchTitle = p.title.toLowerCase().contains(query);
+                      final matchBody = p.body.toLowerCase().contains(query);
+                      final matchTags = p.tags.any((t) => t.toLowerCase().contains(query));
+                      return matchTitle || matchBody || matchTags;
+                    }).toList();
+
+                    if (allPosts.isEmpty) {
                       return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -145,13 +201,34 @@ class CommunityDetailScreen extends StatelessWidget {
                       );
                     }
 
+                    if (filteredPosts.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off_rounded,
+                                size: 44, color: context.appColors.chipBorder),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No posts matching "$query"',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: context.appColors.textDim,
+                                  fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
                     return ListView.builder(
                       padding:
-                          const EdgeInsets.fromLTRB(12, 12, 12, 90),
-                      itemCount: docs.length,
+                          const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                      itemCount: filteredPosts.length,
                       itemBuilder: (context, index) {
-                        final doc      = docs[index];
-                        final postItem = Post.fromFirestore(doc, currentUid);
+                        final postItem = filteredPosts[index];
+                        // Find matching document for action handlers
+                        final doc = docs.firstWhere((d) => d.id == postItem.id);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
@@ -192,7 +269,7 @@ class CommunityDetailScreen extends StatelessWidget {
             label: const Text('Post here',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => CreatePostScreen(communityId: communityId),
+              builder: (_) => CreatePostScreen(communityId: widget.communityId),
             )),
           ),
         );

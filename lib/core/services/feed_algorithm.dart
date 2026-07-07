@@ -15,6 +15,7 @@ class UserFeedProfile {
   final Set<String> savedPostIds;
   final Set<String> interestTags;
   final Set<String> seenPostIds;
+  final Set<PostType> likedPostTypes;
 
   const UserFeedProfile({
     required this.uid,
@@ -23,6 +24,7 @@ class UserFeedProfile {
     required this.savedPostIds,
     required this.interestTags,
     required this.seenPostIds,
+    required this.likedPostTypes,
   });
 
   static UserFeedProfile empty(String uid) => UserFeedProfile(
@@ -32,6 +34,7 @@ class UserFeedProfile {
         savedPostIds: {},
         interestTags: {},
         seenPostIds: {},
+        likedPostTypes: {},
       );
 }
 
@@ -115,6 +118,13 @@ class FeedAlgorithm {
       final rawSeen = (userData['seenPosts'] as List<dynamic>?)?.cast<String>() ?? [];
       final seenPostIds = rawSeen.toSet();
 
+      final likedPostTypes = likedSnap.docs.map((d) {
+        final dData = d.data() as Map<String, dynamic>? ?? {};
+        String rawType = dData['type']?.toString() ?? 'text';
+        if (rawType.contains('.')) rawType = rawType.split('.').last;
+        return PostType.values.asNameMap()[rawType] ?? PostType.text;
+      }).toSet();
+
       return UserFeedProfile(
         uid: uid,
         followingIds: followingIds,
@@ -122,6 +132,7 @@ class FeedAlgorithm {
         savedPostIds: savedPostIds,
         interestTags: interestTags,
         seenPostIds: seenPostIds,
+        likedPostTypes: likedPostTypes,
       );
     } catch (_) {
       return UserFeedProfile.empty(uid);
@@ -150,6 +161,7 @@ class FeedAlgorithm {
     if (profile.followingIds.contains(post.authorId)) s += _wFollowing;
     if (profile.likedPostIds.contains(post.id)) s += _wLiked;
     if (profile.savedPostIds.contains(post.id)) s += _wSaved;
+    if (profile.likedPostTypes.contains(post.type)) s += 35.0; // Preference boost
 
     // Tags are purely additive — posts without tags are NOT penalised
     if (post.tags.isNotEmpty) {

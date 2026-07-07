@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
+import '../../../shared/widgets/live_username.dart';
 import '../../../core/services/reaction_service.dart';
 import '../../../core/services/notification_service.dart';
 
@@ -435,8 +436,9 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        Text(
-                          widget.post.authorUsername,
+                        LiveUsername(
+                          userId: widget.post.authorId,
+                          fallback: widget.post.authorUsername,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.75),
                             fontSize: 12,
@@ -857,8 +859,9 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                                       ),
                                     ),
                                     const SizedBox(width: 4),
-                                    Text(
-                                      authorUsername,
+                                    LiveUsername(
+                                      userId: authorId,
+                                      fallback: authorUsername,
                                       style: TextStyle(
                                         color: c.textMuted,
                                         fontSize: 10,

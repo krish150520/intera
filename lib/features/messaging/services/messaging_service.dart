@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import '../../../core/services/notification_service.dart';
+
 /// Who can message whom, and what state a new thread starts in:
 /// - If [otherUid] already follows me -> they've opted into hearing from
 ///   me, so the thread opens 'active' immediately, like a normal DM.
@@ -95,6 +97,16 @@ class MessagingService {
       'status': access == ConversationAccess.active ? 'active' : 'pending',
       'requestedBy': myUid,
     });
+
+    if (access == ConversationAccess.pending) {
+      await NotificationService.sendNotification(
+        recipientId: otherUid,
+        type: 'messageRequest',
+        title: '$myName sent you a message request',
+        subtitle: 'Tap to accept and reply',
+        relatedId: convoId,
+      );
+    }
 
     return (conversationId: convoId, access: access);
   }
@@ -191,6 +203,23 @@ class MessagingService {
     });
 
     await batch.commit();
+
+    // Trigger mobile system tray notification via database
+    String senderName = 'Someone';
+    try {
+      final userDoc = await _db.collection('users').doc(myUid).get();
+      if (userDoc.exists) {
+        senderName = userDoc.data()?['name'] ?? 'Someone';
+      }
+    } catch (_) {}
+
+    await NotificationService.sendNotification(
+      recipientId: otherUid,
+      type: isPending ? 'messageRequest' : 'message',
+      title: isPending ? 'Message request from $senderName' : 'New message from $senderName',
+      subtitle: text.trim(),
+      relatedId: conversationId,
+    );
   }
 
   Future<void> sendImageMessage({
@@ -238,6 +267,23 @@ class MessagingService {
     });
 
     await batch.commit();
+
+    // Trigger mobile system tray notification via database
+    String senderName = 'Someone';
+    try {
+      final userDoc = await _db.collection('users').doc(myUid).get();
+      if (userDoc.exists) {
+        senderName = userDoc.data()?['name'] ?? 'Someone';
+      }
+    } catch (_) {}
+
+    await NotificationService.sendNotification(
+      recipientId: otherUid,
+      type: isPending ? 'messageRequest' : 'message',
+      title: isPending ? 'Message request from $senderName' : 'New photo from $senderName',
+      subtitle: '📷 Photo',
+      relatedId: conversationId,
+    );
   }
 
   /// Resets the current user's unread counter for a conversation - call

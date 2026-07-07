@@ -28,6 +28,8 @@ class Post {
   final DateTime createdAt;
   static const String typeHelpRequest = 'helpRequest';
   final int? rewardKarma;
+  final String? communityId;
+  final String? videoThumbnailUrl;
 
   const Post({
     required this.id,
@@ -52,6 +54,8 @@ class Post {
     this.reactions = const {},
     required this.createdAt,
     this.rewardKarma,
+    this.communityId,
+    this.videoThumbnailUrl,
   });
 
   factory Post.fromFirestore(DocumentSnapshot doc, String currentUid) {
@@ -106,6 +110,8 @@ class Post {
       reactions: Map<String, String>.from(data['reactions'] ?? {}),
       createdAt: parsedDate,
       rewardKarma: data['karmaReward'] ?? data['rewardKarma'],
+      communityId: data['communityId'] as String?,
+      videoThumbnailUrl: data['videoThumbnailUrl'] as String?,
     );
   }
 
@@ -133,6 +139,8 @@ class Post {
       'reactions': reactions,
       'createdAt': FieldValue.serverTimestamp(),
       if (rewardKarma != null) 'rewardKarma': rewardKarma,
+      if (communityId != null) 'communityId': communityId,
+      if (videoThumbnailUrl != null) 'videoThumbnailUrl': videoThumbnailUrl,
     };
   }
 }

@@ -806,8 +806,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
         }
 
         final docs = snapshot.data?.docs ?? [];
-        final rawPosts =
-            docs.map((d) => Post.fromFirestore(d, currentUid)).toList();
+        final rawPosts = docs
+            .map((d) => Post.fromFirestore(d, currentUid))
+            .where((p) => p.communityId == null || p.communityId!.isEmpty)
+            .toList();
         final ranked = FeedAlgorithm.rankPosts(rawPosts, _feedProfile);
         final discoveryIdx =
             FeedAlgorithm.discoveryStartIndex(ranked, _feedProfile);

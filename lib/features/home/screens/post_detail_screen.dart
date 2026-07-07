@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
+import '../../../shared/widgets/live_username.dart';
 import '../widgets/post_card.dart';
 import '../../../core/karma/karma_service.dart';
 import '../../../core/karma/karma_badge.dart';
@@ -680,9 +681,12 @@ class _PostBodyCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                         color: c.textHi)),
-                Text(post.authorUsername,
-                    style: TextStyle(
-                        fontSize: 11, color: c.textMuted)),
+                LiveUsername(
+                  userId: post.authorId,
+                  fallback: post.authorUsername,
+                  style: TextStyle(
+                      fontSize: 11, color: c.textMuted),
+                ),
               ],
             ),
           ),
@@ -932,10 +936,13 @@ class _FullscreenMediaViewerState extends State<_FullscreenMediaViewer> {
                                     color: Colors.white,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700)),
-                            Text(widget.authorUsername,
-                                style: const TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 11)),
+                            LiveUsername(
+                              userId: widget.authorId,
+                              fallback: widget.authorUsername,
+                              style: const TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 11),
+                            ),
                           ],
                         ),
                       ]),
@@ -1091,9 +1098,12 @@ class _CommentTile extends StatelessWidget {
                           fontSize: 13,
                           color: c.textHi)),
                   const SizedBox(width: 6),
-                  Text(username,
-                      style: TextStyle(
-                          fontSize: 11, color: c.textMuted)),
+                  LiveUsername(
+                    userId: authorId,
+                    fallback: username,
+                    style: TextStyle(
+                        fontSize: 11, color: c.textMuted),
+                  ),
                   if (isBestAnswer) ...[
                     const SizedBox(width: 8),
                     Container(

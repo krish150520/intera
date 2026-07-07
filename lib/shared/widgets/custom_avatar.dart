@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/profile/screens/my_profile_screen.dart';
+import '../../features/profile/screens/user_profile_screen.dart';
 
 /// A circular user avatar with image fallback to initials.
 ///
@@ -82,29 +84,56 @@ class CustomAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
 
+    Widget avatarWidget;
     if (userId != null && userId!.isNotEmpty) {
       if (userId == currentUid) {
         final user = FirebaseAuth.instance.currentUser;
-        return _buildAvatar(
+        avatarWidget = _buildAvatar(
           context,
           user?.displayName ?? name,
           user?.photoURL ?? imageUrl,
         );
+      } else {
+        avatarWidget = FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+              final liveUrl = data['avatarUrl'] as String?;
+              final liveName = data['name'] as String? ?? name;
+              return _buildAvatar(context, liveName, liveUrl);
+            }
+            return _buildAvatar(context, name, imageUrl);
+          },
+        );
       }
-      return FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData && snapshot.data!.exists) {
-            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-            final liveUrl = data['avatarUrl'] as String?;
-            final liveName = data['name'] as String? ?? name;
-            return _buildAvatar(context, liveName, liveUrl);
-          }
-          return _buildAvatar(context, name, imageUrl);
-        },
-      );
+    } else {
+      avatarWidget = _buildAvatar(context, name, imageUrl);
     }
 
-    return _buildAvatar(context, name, imageUrl);
+    return GestureDetector(
+      onTap: () {
+        if (userId != null && userId!.isNotEmpty) {
+          if (userId == currentUid) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const MyProfileScreen(),
+              ),
+            );
+          } else {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => UserProfileScreen(
+                  userId: userId!,
+                  userName: name,
+                  userAvatar: imageUrl ?? '',
+                ),
+              ),
+            );
+          }
+        }
+      },
+      child: avatarWidget,
+    );
   }
 }

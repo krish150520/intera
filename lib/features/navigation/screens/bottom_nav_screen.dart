@@ -5,12 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../home/screens/home_feed_screen.dart';
+import '../../home/screens/pinterest_feed_screen.dart';
 import '../../create/screens/create_post_screen.dart';
 import '../../videos/screens/communities_screen.dart';
 import '../../tasks/screens/task_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/services/reaction_service.dart';
 import '../../../core/karma/karma_service.dart';
+
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BottomNavScreen extends StatefulWidget {
   const BottomNavScreen({super.key});
@@ -27,11 +31,13 @@ class BottomNavScreen extends StatefulWidget {
 
 class _BottomNavScreenState extends State<BottomNavScreen> {
   int _currentIndex = 0;
+  final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  bool _notificationsListenerInitialized = false;
 
-  // Search and Profile now live inside the home feed sidebar instead of
-  // as standalone tabs — see HomeFeedScreen's sidebar drawer.
-  static const List<Widget> _screens = [
+  static final List<Widget> _screens = [
     HomeFeedScreen(),
+    PinterestFeedScreen(),
     CreatePostScreen(),
     CommunitiesScreen(),
     HelpRequestScreen(),
@@ -39,12 +45,13 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   final List<_NavItem> _items = [
     _NavItem(icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,          label: AppStrings.home),
+    _NavItem(icon: Icons.explore_outlined,       activeIcon: Icons.explore_rounded,       label: 'Discover'),
     _NavItem(icon: Icons.add_rounded,             activeIcon: Icons.add_rounded,           label: AppStrings.create),
     _NavItem(icon: Icons.group_outlined,          activeIcon: Icons.group_rounded,         label: 'Communities'),
     _NavItem(icon: Icons.task_alt_outlined,       activeIcon: Icons.task_rounded,          label: 'Tasks'),
   ];
 
-  static const int _createIndex = 1;
+  static const int _createIndex = 2;
 
   @override
   void initState() {
@@ -56,9 +63,62 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     if (uid != null && uid.isNotEmpty) {
       ReactionService.syncUserPoints(uid);
       KarmaService.syncKarmaBalance(uid);
+      _initLocalNotificationsAndListen(uid);
     }
     _currentIndex = BottomNavScreen.indexNotifier.value;
     BottomNavScreen.indexNotifier.addListener(_handleIndexChange);
+  }
+
+  Future<void> _initLocalNotificationsAndListen(String uid) async {
+    if (_notificationsListenerInitialized) return;
+    _notificationsListenerInitialized = true;
+
+    try {
+      final androidInit = const AndroidInitializationSettings('@mipmap/ic_launcher');
+      final iosInit = const DarwinInitializationSettings();
+      final initSettings = InitializationSettings(android: androidInit, iOS: iosInit);
+      await _localNotificationsPlugin.initialize(
+        settings: initSettings,
+      );
+
+      final launchTime = Timestamp.now();
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('recipientId', isEqualTo: uid)
+          .where('createdAt', isGreaterThan: launchTime)
+          .snapshots()
+          .listen((snap) {
+            for (final change in snap.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                final data = change.doc.data() as Map<String, dynamic>? ?? {};
+                final title = data['title'] ?? 'New Notification';
+                final subtitle = data['subtitle'] ?? '';
+                _showLocalNotification(title, subtitle);
+              }
+            }
+          });
+    } catch (e) {
+      debugPrint('Error initializing local notifications: $e');
+    }
+  }
+
+  void _showLocalNotification(String title, String body) async {
+    final androidDetails = const AndroidNotificationDetails(
+      'intera_channel_id',
+      'INTERA Notifications',
+      channelDescription: 'Real-time notifications for INTERA DMs, comments, and activities',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+    );
+    final iosDetails = const DarwinNotificationDetails();
+    final platformDetails = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    await _localNotificationsPlugin.show(
+      id: DateTime.now().millisecond,
+      title: title,
+      body: body,
+      notificationDetails: platformDetails,
+    );
   }
 
   void _handleIndexChange() {
@@ -149,7 +209,11 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                       title: 'Push Notifications',
                       subtitle: 'Stay updated on replies, likes, and sparks.',
                       onTap: () async {
-                        await Permission.notification.request();
+                        final status = await Permission.notification.request();
+                        final uid = FirebaseAuth.instance.currentUser?.uid;
+                        if (status.isGranted && uid != null && uid.isNotEmpty) {
+                          _initLocalNotificationsAndListen(uid);
+                        }
                         setSheetState(() {});
                       },
                     ),
