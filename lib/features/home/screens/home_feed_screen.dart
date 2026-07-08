@@ -26,6 +26,7 @@ class _RailSpark {
   final String sparkId;
   final bool isMe;
   bool viewed;
+  final int sparksCount;
 
   _RailSpark({
     required this.uid,
@@ -34,6 +35,7 @@ class _RailSpark {
     required this.sparkId,
     required this.isMe,
     this.viewed = false,
+    this.sparksCount = 0,
   });
 
   bool get hasActiveSpark => sparkId.isNotEmpty;
@@ -51,7 +53,7 @@ class HomeFeedScreen extends StatefulWidget {
 class _HomeFeedScreenState extends State<HomeFeedScreen>
     with SingleTickerProviderStateMixin {
   List<_RailSpark> _railSparks = [];
-  List<SparkItem> _sparkItems = [];
+  List<SparkUserGroup> _sparkGroups = [];
   bool _sparksLoading = true;
 
   _SidebarTab _sidebarTab = _SidebarTab.sparks;
@@ -142,7 +144,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       }
     } catch (_) {}
   }
-
   Future<void> _loadSparks() async {
     final myUid = _myUid;
     if (myUid.isEmpty) return;
@@ -152,7 +153,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     try {
       final now = DateTime.now();
       final List<_RailSpark> rail = [];
-      final List<SparkItem> items = [];
+      final List<SparkUserGroup> groups = [];
 
       String myName = FirebaseAuth.instance.currentUser?.displayName ?? 'Me';
       String? myAvatar = FirebaseAuth.instance.currentUser?.photoURL;
@@ -163,14 +164,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
             .doc(myUid)
             .get();
         if (meDoc.exists) {
-          myName =
-              meDoc.data()?['name'] ?? meDoc.data()?['username'] ?? myName;
-          myAvatar = meDoc.data()?['avatarUrl'] ??
-              meDoc.data()?['photoURL'] ??
-              myAvatar;
+          myName = meDoc.data()?['name'] ?? meDoc.data()?['username'] ?? myName;
+          myAvatar = meDoc.data()?['avatarUrl'] ?? meDoc.data()?['photoURL'] ?? myAvatar;
         }
       } catch (_) {}
 
+      // 1. Get MY active sparks
       final mySnap = await FirebaseFirestore.instance
           .collection('stories')
           .where('authorId', isEqualTo: myUid)
@@ -178,31 +177,38 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
 
       final myValidDocs = mySnap.docs
           .where((doc) {
-            final exp =
-                (doc.data()['expiresAt'] as Timestamp?)?.toDate();
+            final exp = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
             return exp != null && exp.isAfter(now);
           })
           .toList()
         ..sort((a, b) {
-          final aT =
-              (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
-          final bT =
-              (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
-          return bT.compareTo(aT);
+          final aT = (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
+          final bT = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(0);
+          return aT.compareTo(bT);
         });
 
-      final myDoc = myValidDocs.isNotEmpty ? myValidDocs.first : null;
+      final List<SparkItem> mySparks = myValidDocs.map((doc) => SparkItem.fromFirestore(doc)).toList();
 
       rail.add(_RailSpark(
         uid: myUid,
         name: myName,
         avatar: myAvatar,
-        sparkId: myDoc?.id ?? '',
+        sparkId: mySparks.isNotEmpty ? mySparks.first.sparkId : '',
         isMe: true,
         viewed: true,
+        sparksCount: mySparks.length,
       ));
-      if (myDoc != null) items.add(SparkItem.fromFirestore(myDoc));
 
+      if (mySparks.isNotEmpty) {
+        groups.add(SparkUserGroup(
+          authorId: myUid,
+          authorName: myName,
+          authorAvatar: myAvatar,
+          sparks: mySparks,
+        ));
+      }
+
+      // 2. Get FOLLOWING active sparks
       final followingSnap = await FirebaseFirestore.instance
           .collection('users')
           .doc(myUid)
@@ -211,6 +217,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       final followingUids = followingSnap.docs.map((d) => d.id).toList();
 
       if (followingUids.isNotEmpty) {
+        final List<DocumentSnapshot> allFollowingDocs = [];
         for (var i = 0; i < followingUids.length; i += 30) {
           final chunk = followingUids.sublist(
               i,
@@ -222,46 +229,66 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
               .collection('stories')
               .where('authorId', whereIn: chunk)
               .get();
+          allFollowingDocs.addAll(snap.docs);
+        }
 
-          final validDocs = snap.docs
-              .where((doc) {
-                final exp =
-                    (doc.data()['expiresAt'] as Timestamp?)?.toDate();
-                return exp != null && exp.isAfter(now);
-              })
-              .toList()
-            ..sort((a, b) {
-              final aT = (a.data()['createdAt'] as Timestamp?)?.toDate() ??
-                  DateTime(0);
-              final bT = (b.data()['createdAt'] as Timestamp?)?.toDate() ??
-                  DateTime(0);
-              return bT.compareTo(aT);
-            });
+        final validFollowingDocs = allFollowingDocs
+            .where((doc) {
+              final data = doc.data() as Map<String, dynamic>? ?? {};
+              final exp = (data['expiresAt'] as Timestamp?)?.toDate();
+              return exp != null && exp.isAfter(now);
+            })
+            .toList();
 
-          final seenAuthors = <String>{};
-          for (final doc in validDocs) {
-            final data = doc.data();
-            final aid = data['authorId'] as String? ?? '';
-            if (aid.isEmpty || seenAuthors.contains(aid)) continue;
-            seenAuthors.add(aid);
-            final viewedBy = List<String>.from(data['viewedBy'] ?? []);
-            rail.add(_RailSpark(
-              uid: aid,
-              name: data['authorName'] ?? data['name'] ?? 'User',
-              avatar: data['authorAvatar'] ?? data['avatarUrl'],
-              sparkId: doc.id,
-              isMe: false,
-              viewed: viewedBy.contains(myUid),
-            ));
-            items.add(SparkItem.fromFirestore(doc));
+        final Map<String, List<SparkItem>> groupedSparks = {};
+        for (final doc in validFollowingDocs) {
+          final item = SparkItem.fromFirestore(doc);
+          groupedSparks.putIfAbsent(item.authorId, () => []).add(item);
+        }
+
+        for (final authorId in groupedSparks.keys) {
+          groupedSparks[authorId]!.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        }
+
+        for (final authorId in groupedSparks.keys) {
+          final userSparks = groupedSparks[authorId]!;
+          if (userSparks.isEmpty) continue;
+
+          final firstSpark = userSparks.first;
+
+          bool allViewed = true;
+          for (final spark in userSparks) {
+            final snapDoc = validFollowingDocs.firstWhere((d) => d.id == spark.sparkId);
+            final viewedBy = List<String>.from((snapDoc.data() as Map<String, dynamic>?)?['viewedBy'] ?? []);
+            if (!viewedBy.contains(myUid)) {
+              allViewed = false;
+              break;
+            }
           }
+
+          rail.add(_RailSpark(
+            uid: authorId,
+            name: firstSpark.authorName,
+            avatar: firstSpark.authorAvatar,
+            sparkId: firstSpark.sparkId,
+            isMe: false,
+            viewed: allViewed,
+            sparksCount: userSparks.length,
+          ));
+
+          groups.add(SparkUserGroup(
+            authorId: authorId,
+            authorName: firstSpark.authorName,
+            authorAvatar: firstSpark.authorAvatar,
+            sparks: userSparks,
+          ));
         }
       }
 
       if (mounted) {
         setState(() {
           _railSparks = rail;
-          _sparkItems = items;
+          _sparkGroups = groups;
           _sparksLoading = false;
         });
       }
@@ -282,20 +309,23 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       Navigator.of(context).pushNamed(AppRoutes.createSpark);
       return;
     }
-    final idx = _sparkItems.indexWhere((s) => s.sparkId == rail.sparkId);
+    final idx = _sparkGroups.indexWhere((g) => g.authorId == rail.uid);
     if (idx < 0) { _loadSparks(); return; }
     if (!rail.isMe) {
       setState(() => rail.viewed = true);
-      FirebaseFirestore.instance
-          .collection('stories')
-          .doc(rail.sparkId)
-          .update({'viewedBy': FieldValue.arrayUnion([_myUid])});
+      final group = _sparkGroups[idx];
+      for (final spark in group.sparks) {
+        FirebaseFirestore.instance
+            .collection('stories')
+            .doc(spark.sparkId)
+            .update({'viewedBy': FieldValue.arrayUnion([_myUid])});
+      }
     }
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.transparent,
       pageBuilder: (_, __, ___) => SparkViewerScreen(
-        args: SparkViewerArgs(sparks: _sparkItems, initialIndex: idx),
+        args: SparkViewerArgs(groups: _sparkGroups, initialUserIndex: idx),
       ),
       transitionsBuilder: (_, anim, __, child) =>
           FadeTransition(opacity: anim, child: child),
@@ -632,6 +662,151 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
+  Widget _buildSparksTab() {
+    if (_sparksLoading) {
+      return Center(
+        child: CircularProgressIndicator(
+            color: _c.primary, strokeWidth: 2),
+      );
+    }
+    return GridView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 20,
+        childAspectRatio: 0.82,
+      ),
+      itemCount: _railSparks.length,
+      itemBuilder: (context, index) => _buildSidebarSparkRow(_railSparks[index]),
+    );
+  }
+
+  Widget _buildSidebarSparkRow(_RailSpark spark) {
+    final hasUnread = !spark.viewed && !spark.isMe;
+    final isViewMySpark = spark.isMe && spark.hasActiveSpark;
+
+    final avatarChild = CustomAvatar(
+      name: spark.name,
+      imageUrl: spark.avatar,
+      userId: spark.uid,
+      radius: 28,
+      clickable: false,
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () {
+            _closeSidebar();
+            _onSparkTap(spark);
+          },
+          child: _buildStackedRings(avatarChild, hasUnread, spark.isMe, spark.sparksCount),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          spark.isMe ? 'My Spark' : spark.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _c.textHi,
+            fontSize: 11,
+            fontWeight: (hasUnread || isViewMySpark) ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStackedRings(Widget avatarChild, bool hasUnread, bool isMe, int sparksCount) {
+    final showStack = sparksCount > 1;
+    final ringColor = hasUnread ? _c.primary : Colors.grey.shade400;
+
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        if (showStack) ...[
+          Positioned(
+            right: -3,
+            bottom: -3,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: ringColor.withValues(alpha: 0.4), width: 1.5),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -1.5,
+            bottom: -1.5,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: ringColor.withValues(alpha: 0.7), width: 1.5),
+              ),
+            ),
+          ),
+        ],
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: hasUnread
+                ? LinearGradient(
+                    colors: [_c.primary, Colors.purpleAccent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: hasUnread ? null : Colors.grey.withValues(alpha: 0.3),
+            border: hasUnread ? null : Border.all(color: Colors.grey.shade400, width: 1.5),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(2.0),
+            child: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(1.5),
+                child: ClipOval(child: avatarChild),
+              ),
+            ),
+          ),
+        ),
+        if (isMe)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: GestureDetector(
+              onTap: () {
+                _closeSidebar();
+                Navigator.of(context).pushNamed(AppRoutes.createSpark);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: _c.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black, width: 1.5),
+                ),
+                child: const Icon(Icons.add_rounded, size: 10, color: Colors.white),
+              ),
+            ),
+          ),
+      ],
+    );
+    }
+
   // ── Tab body ───────────────────────────────────────────────────────────────
   Widget _buildSidebarTabBody() {
     switch (_sidebarTab) {
@@ -644,153 +819,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
       case _SidebarTab.chats:
         return const MessagesListScreen();
     }
-  }
-
-  Widget _buildSparksTab() {
-    return _sparksLoading
-        ? Center(
-            child: CircularProgressIndicator(
-                color: _c.primary, strokeWidth: 2))
-        : ListView.separated(
-            physics: const BouncingScrollPhysics(),
-            itemCount: _railSparks.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 4),
-            itemBuilder: (context, index) =>
-                _buildSidebarSparkRow(_railSparks[index]),
-          );
-  }
-
-  Widget _buildSidebarSparkRow(_RailSpark spark) {
-    final hasUnread = !spark.viewed && !spark.isMe;
-    final isAddSpark = spark.isMe && !spark.hasActiveSpark;
-    final isViewMySpark = spark.isMe && spark.hasActiveSpark;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () {
-          _closeSidebar();
-          _onSparkTap(spark);
-        },
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
-              decoration: BoxDecoration(
-                color: (hasUnread || isViewMySpark)
-                    ? _c.primary.withValues(alpha: isDark ? 0.18 : 0.07)
-                    : Colors.white.withValues(alpha: isDark ? 0.06 : 0.35),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: (hasUnread || isViewMySpark)
-                      ? _c.primary.withValues(alpha: 0.30)
-                      : Colors.white
-                          .withValues(alpha: isDark ? 0.10 : 0.50),
-                  width: 0.8,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: (hasUnread || isViewMySpark)
-                            ? _c.primary
-                            : Colors.white.withValues(alpha: 0.35),
-                        width: (hasUnread || isViewMySpark) ? 2 : 0.8,
-                      ),
-                      boxShadow: (hasUnread || isViewMySpark)
-                          ? [
-                              BoxShadow(
-                                color: _c.primary.withValues(alpha: 0.30),
-                                blurRadius: 8,
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(2.0),
-                      child: CustomAvatar(
-                        name: spark.name,
-                        imageUrl: spark.avatar,
-                        userId: spark.uid,
-                        radius: 16,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isAddSpark
-                              ? 'Your spark'
-                              : isViewMySpark
-                                  ? 'My spark'
-                                  : spark.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _c.textHi,
-                            fontSize: 13,
-                            fontWeight: (hasUnread ||
-                                    isAddSpark ||
-                                    isViewMySpark)
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isAddSpark
-                              ? 'Tap to add'
-                              : hasUnread
-                                  ? 'New spark'
-                                  : 'Viewed',
-                          style: TextStyle(
-                            color: hasUnread
-                                ? _c.primary.withValues(alpha: 0.8)
-                                : _c.textMuted,
-                            fontSize: 10.5,
-                            fontWeight: hasUnread
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isAddSpark)
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: _c.primary.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _c.primary.withValues(alpha: 0.30),
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Icon(Icons.add_rounded,
-                          color: _c.primary, size: 16),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   // ── Feed ───────────────────────────────────────────────────────────────────
@@ -811,8 +839,27 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
 
         final docs = snapshot.data?.docs ?? [];
         final rawPosts = docs
-            .map((d) => Post.fromFirestore(d, currentUid))
-            .where((p) => p.communityId == null || p.communityId!.isEmpty)
+            .map((d) {
+              final post = Post.fromFirestore(d, currentUid);
+              final data = d.data() as Map<String, dynamic>? ?? {};
+              final visibility = data['visibility'] ?? 'Public';
+              final scheduledAt = data['scheduledAt'] as Timestamp?;
+              return _FeedFilterWrapper(post: post, visibility: visibility, scheduledAt: scheduledAt);
+            })
+            .where((w) {
+              if (w.post.communityId != null && w.post.communityId!.isNotEmpty) return false;
+              if (w.scheduledAt != null && w.scheduledAt!.toDate().isAfter(DateTime.now())) {
+                if (w.post.authorId != currentUid) return false;
+              }
+              if (w.visibility == 'Only Me' && w.post.authorId != currentUid) return false;
+              if (w.visibility == 'Followers' && 
+                  w.post.authorId != currentUid && 
+                  !_feedProfile.followingIds.contains(w.post.authorId)) {
+                return false;
+              }
+              return true;
+            })
+            .map((w) => w.post)
             .toList();
         final ranked = FeedAlgorithm.rankPosts(rawPosts, _feedProfile);
         final discoveryIdx =
@@ -1109,4 +1156,17 @@ class _GlassIconButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Feed filter wrapper helper ────────────────────────────────────────────────
+
+class _FeedFilterWrapper {
+  final Post post;
+  final String visibility;
+  final Timestamp? scheduledAt;
+  const _FeedFilterWrapper({
+    required this.post,
+    required this.visibility,
+    required this.scheduledAt,
+  });
 }

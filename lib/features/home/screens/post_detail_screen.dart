@@ -475,12 +475,44 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 ),
               ),
 
-              // ── Comment input ──────────────────────────────────────────────
-              _CommentInput(
-                controller:    _commentController,
-                isSending:     _isSending,
-                userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
-                onSend:        _submitComment,
+              // ── Comment input (reactive to allowComments field) ────────────
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('posts')
+                    .doc(post.id)
+                    .snapshots(),
+                builder: (context, postSnap) {
+                  final postData = postSnap.data?.data() as Map<String, dynamic>? ?? {};
+                  final allowComments = postData['allowComments'] ?? true;
+
+                  if (!allowComments) {
+                    return Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.only(
+                        top: 16,
+                        bottom: MediaQuery.of(context).padding.bottom + 16,
+                      ),
+                      color: c.surface,
+                      child: Center(
+                        child: Text(
+                          'Comments are disabled for this post.',
+                          style: TextStyle(
+                            color: c.textMuted,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return _CommentInput(
+                    controller:    _commentController,
+                    isSending:     _isSending,
+                    userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
+                    onSend:        _submitComment,
+                  );
+                },
               ),
             ]),
     );
@@ -714,6 +746,31 @@ class _PostBodyCard extends StatelessWidget {
                   fontSize: 13,
                   height: 1.5,
                   color: c.textSecondary)),
+        if (post.tags.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: post.tags.map((tag) {
+              final displayTag = tag.startsWith('#') ? tag : '#$tag';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  displayTag,
+                  style: TextStyle(
+                    color: c.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
         const SizedBox(height: 12),
       ]),
     );

@@ -123,9 +123,29 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
 
                 // 1. Map to Post models and filter out posts created inside communities, and only select image/video posts
                 final List<Post> mediaPosts = docs
-                    .map((d) => Post.fromFirestore(d, _myUid))
-                    .where((p) => p.communityId == null || p.communityId!.isEmpty)
-                    .where((p) => p.type == PostType.image || p.type == PostType.video)
+                    .map((d) {
+                      final post = Post.fromFirestore(d, _myUid);
+                      final data = d.data() as Map<String, dynamic>? ?? {};
+                      final visibility = data['visibility'] ?? 'Public';
+                      final scheduledAt = data['scheduledAt'] as Timestamp?;
+                      return _FeedFilterWrapper(post: post, visibility: visibility, scheduledAt: scheduledAt);
+                    })
+                    .where((w) {
+                      if (w.post.communityId != null && w.post.communityId!.isNotEmpty) return false;
+                      if (w.post.type != PostType.image && w.post.type != PostType.video) return false;
+                      
+                      if (w.scheduledAt != null && w.scheduledAt!.toDate().isAfter(DateTime.now())) {
+                        if (w.post.authorId != _myUid) return false;
+                      }
+                      if (w.visibility == 'Only Me' && w.post.authorId != _myUid) return false;
+                      if (w.visibility == 'Followers' && 
+                          w.post.authorId != _myUid && 
+                          !_feedProfile.followingIds.contains(w.post.authorId)) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map((w) => w.post)
                     .toList();
 
                 // 2. Rank using recommendation score (with user interest boosting)
@@ -286,4 +306,17 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
       ),
     );
   }
+}
+
+// ── Feed filter wrapper helper ────────────────────────────────────────────────
+
+class _FeedFilterWrapper {
+  final Post post;
+  final String visibility;
+  final Timestamp? scheduledAt;
+  const _FeedFilterWrapper({
+    required this.post,
+    required this.visibility,
+    required this.scheduledAt,
+  });
 }

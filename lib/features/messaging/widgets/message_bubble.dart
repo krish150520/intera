@@ -52,13 +52,7 @@ class _MessageBubbleState extends State<MessageBubble>
     }
   }
 
-  @override
-  void didUpdateWidget(covariant MessageBubble oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.animate) {
-      _controller.value = 1.0;
-    }
-  }
+
 
   @override
   void dispose() {

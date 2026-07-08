@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,10 +13,24 @@ import '../../../core/services/notification_service.dart';
 //  DATA MODELS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class SparkViewerArgs {
+class SparkUserGroup {
+  final String authorId;
+  final String authorName;
+  final String? authorAvatar;
   final List<SparkItem> sparks;
-  final int initialIndex;
-  const SparkViewerArgs({required this.sparks, required this.initialIndex});
+
+  const SparkUserGroup({
+    required this.authorId,
+    required this.authorName,
+    this.authorAvatar,
+    required this.sparks,
+  });
+}
+
+class SparkViewerArgs {
+  final List<SparkUserGroup> groups;
+  final int initialUserIndex;
+  const SparkViewerArgs({required this.groups, required this.initialUserIndex});
 }
 
 class SparkItem {
@@ -73,8 +88,12 @@ class SparkViewerScreen extends StatefulWidget {
 
 class _SparkViewerScreenState extends State<SparkViewerScreen>
     with TickerProviderStateMixin {
-  late int _currentIndex;
-  SparkItem get _current => widget.args.sparks[_currentIndex];
+  late int _currentUserIndex;
+  late int _currentSparkIndex;
+
+  SparkUserGroup get _currentGroup => widget.args.groups[_currentUserIndex];
+  SparkItem get _currentSpark => _currentGroup.sparks[_currentSparkIndex];
+
   final String _myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   AnimationController? _progressCtrl;
@@ -91,6 +110,9 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   double _dragOffset = 0;
   bool _isDragging = false;
 
+  // ── Floating hearts ──────────────────────────────────────────────────────
+  final List<_FloatingHeart> _floatingHearts = [];
+
   // ── Reply ───────────────────────────────────────────────────────────────
   final _replyController = TextEditingController();
   bool _showReplyField = false;
@@ -99,7 +121,8 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.args.initialIndex;
+    _currentUserIndex = widget.args.initialUserIndex;
+    _currentSparkIndex = 0;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initSpark();
   }
@@ -115,7 +138,7 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   // ── Spark lifecycle ─────────────────────────────────────────────────────
   void _initSpark() {
     _progressCtrl?.dispose();
-    _mediaReady = _current.mediaUrl == null || _current.mediaUrl!.isEmpty;
+    _mediaReady = _currentSpark.mediaUrl == null || _currentSpark.mediaUrl!.isEmpty;
 
     _progressCtrl = AnimationController(vsync: this, duration: _sparkDuration)
       ..addStatusListener((s) {
@@ -128,10 +151,10 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   }
 
   void _markViewed() {
-    if (_current.authorId == _myUid) return;
+    if (_currentSpark.authorId == _myUid) return;
     FirebaseFirestore.instance
         .collection('stories')
-        .doc(_current.sparkId)
+        .doc(_currentSpark.sparkId)
         .update({
       'viewedBy': FieldValue.arrayUnion([_myUid])
     }).catchError((_) {});
@@ -145,29 +168,51 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   }
 
   void _nextSpark() {
-    if (_currentIndex < widget.args.sparks.length - 1) {
+    if (_currentSparkIndex < _currentGroup.sparks.length - 1) {
       setState(() {
-        _currentIndex++;
+        _currentSparkIndex++;
         _showViewers = false;
         _showReplyField = false;
       });
       _initSpark();
     } else {
-      if (mounted) Navigator.of(context).pop();
+      // Move to next user
+      if (_currentUserIndex < widget.args.groups.length - 1) {
+        setState(() {
+          _currentUserIndex++;
+          _currentSparkIndex = 0;
+          _showViewers = false;
+          _showReplyField = false;
+        });
+        _initSpark();
+      } else {
+        if (mounted) Navigator.of(context).pop();
+      }
     }
   }
 
   void _prevSpark() {
-    if (_currentIndex > 0) {
+    if (_currentSparkIndex > 0) {
       setState(() {
-        _currentIndex--;
+        _currentSparkIndex--;
         _showViewers = false;
         _showReplyField = false;
       });
       _initSpark();
     } else {
-      _progressCtrl?.reset();
-      _progressCtrl?.forward();
+      // Move to previous user
+      if (_currentUserIndex > 0) {
+        setState(() {
+          _currentUserIndex--;
+          _currentSparkIndex = widget.args.groups[_currentUserIndex].sparks.length - 1;
+          _showViewers = false;
+          _showReplyField = false;
+        });
+        _initSpark();
+      } else {
+        _progressCtrl?.reset();
+        _progressCtrl?.forward();
+      }
     }
   }
 
@@ -185,34 +230,44 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   Future<void> _deleteSpark() async {
     _pause();
 
-    final confirm = await showDialog<bool>(
+    final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1B2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete spark?',
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        content: const Text(
-            'This will remove your spark for everyone immediately.',
-            style: TextStyle(color: Colors.white60, fontSize: 13)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete',
-                style: TextStyle(
-                    color: Colors.redAccent, fontWeight: FontWeight.w700)),
-          ),
-        ],
+      backgroundColor: const Color(0xFF1C1B2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              title: const Text('Delete current spark', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, 'current'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
+              title: const Text('Delete all sparks', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, 'all'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.close_rounded, color: Colors.white54),
+              title: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              onTap: () => Navigator.pop(ctx, 'cancel'),
+            ),
+          ],
+        ),
       ),
     );
 
-    if (confirm != true) {
+    if (action == null || action == 'cancel') {
       _resume();
       return;
     }
@@ -221,53 +276,73 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     setState(() => _isDeleting = true);
 
     try {
-      final sparkId = _current.sparkId;
-      final mediaUrl = _current.mediaUrl;
+      if (action == 'current') {
+        final sparkId = _currentSpark.sparkId;
+        final mediaUrl = _currentSpark.mediaUrl;
 
-      await FirebaseFirestore.instance
-          .collection('stories')
-          .doc(sparkId)
-          .delete();
+        await FirebaseFirestore.instance
+            .collection('stories')
+            .doc(sparkId)
+            .delete();
 
-      if (mediaUrl != null && mediaUrl.isNotEmpty) {
-        try {
-          final uri = Uri.parse(mediaUrl);
-          final pathMatch = RegExp(r'/o/(.+?)(\?|$)').firstMatch(uri.path);
-          if (pathMatch != null) {
-            final storagePath = Uri.decodeComponent(pathMatch.group(1)!);
-            await FirebaseStorage.instance.ref(storagePath).delete();
-          }
-        } catch (e) {
-          debugPrint('Storage delete failed: $e');
+        if (mediaUrl != null && mediaUrl.isNotEmpty) {
+          try {
+            final uri = Uri.parse(mediaUrl);
+            final pathMatch = RegExp(r'/o/(.+?)(\?|$)').firstMatch(uri.path);
+            if (pathMatch != null) {
+              final storagePath = Uri.decodeComponent(pathMatch.group(1)!);
+              await FirebaseStorage.instance.ref(storagePath).delete();
+            }
+          } catch (_) {}
         }
-      }
 
-      if (!mounted) return;
-
-      if (_currentIndex < widget.args.sparks.length - 1) {
-        setState(() {
-          _currentIndex++;
-          _showViewers = false;
-          _isDeleting = false;
-        });
+        if (!mounted) return;
+        if (_currentGroup.sparks.length > 1) {
+          _currentGroup.sparks.removeAt(_currentSparkIndex);
+          if (_currentSparkIndex >= _currentGroup.sparks.length) {
+            _currentSparkIndex = _currentGroup.sparks.length - 1;
+          }
+          setState(() => _isDeleting = false);
           _initSpark();
-      } else {
+        } else {
+          Navigator.of(context).pop();
+        }
+      } else if (action == 'all') {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final spark in _currentGroup.sparks) {
+          final ref = FirebaseFirestore.instance.collection('stories').doc(spark.sparkId);
+          batch.delete(ref);
+          if (spark.mediaUrl != null && spark.mediaUrl!.isNotEmpty) {
+            try {
+              final uri = Uri.parse(spark.mediaUrl!);
+              final pathMatch = RegExp(r'/o/(.+?)(\?|$)').firstMatch(uri.path);
+              if (pathMatch != null) {
+                final storagePath = Uri.decodeComponent(pathMatch.group(1)!);
+                await FirebaseStorage.instance.ref(storagePath).delete();
+              }
+            } catch (_) {}
+          }
+        }
+        await batch.commit();
+        if (!mounted) return;
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Could not delete spark: $e'),
-            backgroundColor: Colors.redAccent),
-      );
+      _snack('Could not delete: $e');
     }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+    );
   }
 
   // ── Viewers sheet ───────────────────────────────────────────────────────
   Future<void> _openViewers() async {
-    if (_current.authorId != _myUid) return;
+    if (_currentSpark.authorId != _myUid) return;
     _pause();
     setState(() {
       _showViewers = true;
@@ -278,7 +353,7 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     try {
       final doc = await FirebaseFirestore.instance
           .collection('stories')
-          .doc(_current.sparkId)
+          .doc(_currentSpark.sparkId)
           .get();
       final viewedBy = List<String>.from(doc.data()?['viewedBy'] ?? []);
 
@@ -328,10 +403,9 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     setState(() => _sendingReply = true);
 
     try {
-      // Save reply to subcollection
       await FirebaseFirestore.instance
           .collection('stories')
-          .doc(_current.sparkId)
+          .doc(_currentSpark.sparkId)
           .collection('replies')
           .add({
         'senderId': _myUid,
@@ -339,13 +413,12 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Send notification to spark author
       NotificationService.sendNotification(
-        recipientId: _current.authorId,
+        recipientId: _currentSpark.authorId,
         type: 'spark_reply',
         title: 'replied to your spark',
         subtitle: text,
-        relatedId: _current.sparkId,
+        relatedId: _currentSpark.sparkId,
       );
 
       _replyController.clear();
@@ -375,6 +448,27 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     }
   }
 
+  void _showHeartPopEffect() {
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
+    setState(() {
+      _floatingHearts.add(_FloatingHeart(
+        x: width - 80,
+        y: height - 120,
+      ));
+    });
+
+    if (_currentSpark.authorId != _myUid) {
+      NotificationService.sendNotification(
+        recipientId: _currentSpark.authorId,
+        type: 'spark_like',
+        title: 'liked your spark',
+        subtitle: '❤️',
+        relatedId: _currentSpark.sparkId,
+      );
+    }
+  }
+
   String _timeAgo(DateTime dt) {
     final d = DateTime.now().difference(dt);
     if (d.inMinutes < 1) return 'just now';
@@ -383,19 +477,14 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     return '${d.inDays}d ago';
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  BUILD
-  // ═══════════════════════════════════════════════════════════════════════════
-
   @override
   Widget build(BuildContext context) {
-    final spark = _current;
+    final spark = _currentSpark;
     final isOwn = spark.authorId == _myUid;
     final size = MediaQuery.of(context).size;
     final topPad = MediaQuery.of(context).padding.top;
     final botPad = MediaQuery.of(context).padding.bottom;
 
-    // ── Swipe-to-dismiss transform ────────────────────────────────────────
     final dismissProgress = (_dragOffset / (size.height * 0.4)).clamp(0.0, 1.0);
     final scale = 1.0 - (dismissProgress * 0.15);
     final radius = dismissProgress * 24.0;
@@ -403,7 +492,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
-        // ── Vertical drag for dismiss ──────────────────────────────────
         onVerticalDragStart: (_) {
           if (_showViewers || _isDeleting || _showReplyField) return;
           _isDragging = true;
@@ -425,6 +513,35 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
             _resume();
           }
         },
+        onHorizontalDragEnd: (details) {
+          if (_showViewers || _isDeleting || _showReplyField) return;
+          final velocity = details.primaryVelocity ?? 0.0;
+          if (velocity < -300) {
+            // Swipe Left -> Next User Group
+            if (_currentUserIndex < widget.args.groups.length - 1) {
+              setState(() {
+                _currentUserIndex++;
+                _currentSparkIndex = 0;
+                _showViewers = false;
+                _showReplyField = false;
+              });
+              _initSpark();
+            } else {
+              Navigator.of(context).pop();
+            }
+          } else if (velocity > 300) {
+            // Swipe Right -> Prev User Group
+            if (_currentUserIndex > 0) {
+              setState(() {
+                _currentUserIndex--;
+                _currentSparkIndex = 0;
+                _showViewers = false;
+                _showReplyField = false;
+              });
+              _initSpark();
+            }
+          }
+        },
         child: Transform.translate(
           offset: Offset(0, _dragOffset),
           child: Transform.scale(
@@ -434,10 +551,7 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // ── 1. Background ─────────────────────────────────────────
                   _buildBackground(spark),
-
-                  // ── 2. Top scrim ──────────────────────────────────────────
                   Positioned(
                     top: 0,
                     left: 0,
@@ -458,8 +572,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                       ),
                     ),
                   ),
-
-                  // ── 3. Bottom scrim ───────────────────────────────────────
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -477,8 +589,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                       ),
                     ),
                   ),
-
-                  // ── 4. Tap / hold gesture ─────────────────────────────────
                   Positioned.fill(
                     child: GestureDetector(
                       behavior: HitTestBehavior.translucent,
@@ -493,8 +603,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                       child: const SizedBox.expand(),
                     ),
                   ),
-
-                  // ── 5. Progress bars + header ─────────────────────────────
                   Positioned(
                     top: topPad + 8,
                     left: 0,
@@ -502,23 +610,22 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Progress bars
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: Row(
                             children: List.generate(
-                                widget.args.sparks.length, (i) {
+                                _currentGroup.sparks.length, (i) {
                               return Expanded(
                                 child: Padding(
                                   padding: EdgeInsets.only(
                                       right:
-                                          i < widget.args.sparks.length - 1
+                                          i < _currentGroup.sparks.length - 1
                                               ? 3
                                               : 0),
                                   child: _ProgressBar(
-                                    filled: i < _currentIndex,
-                                    active: i == _currentIndex,
-                                    controller: i == _currentIndex
+                                    filled: i < _currentSparkIndex,
+                                    active: i == _currentSparkIndex,
+                                    controller: i == _currentSparkIndex
                                         ? _progressCtrl
                                         : null,
                                   ),
@@ -527,45 +634,42 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                             }),
                           ),
                         ),
-
                         const SizedBox(height: 12),
-
-                        // Header row
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: Row(
                             children: [
-                              // Avatar with gradient ring
-                              Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      context.appColors.primary,
-                                      context.appColors.primaryDark,
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                ),
+                              Hero(
+                                tag: 'spark_avatar_${spark.authorId}',
                                 child: Container(
                                   padding: const EdgeInsets.all(2),
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: Colors.black,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        context.appColors.primary,
+                                        context.appColors.primaryDark,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
                                   ),
-                                  child: CustomAvatar(
-                                    name: spark.authorName,
-                                    imageUrl: spark.authorAvatar,
-                                    userId: spark.authorId,
-                                    radius: 17,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.black,
+                                    ),
+                                    child: CustomAvatar(
+                                      name: spark.authorName,
+                                      imageUrl: spark.authorAvatar,
+                                      userId: spark.authorId,
+                                      radius: 17,
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 10),
-
-                              // Name + time
                               Expanded(
                                 child: Row(
                                   children: [
@@ -583,8 +687,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                                   ],
                                 ),
                               ),
-
-                              // Paused pill
                               if (_paused &&
                                   !_isDeleting &&
                                   !_showReplyField)
@@ -603,8 +705,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                                           fontWeight: FontWeight.w700,
                                           letterSpacing: 1)),
                                 ),
-
-                              // Delete button (own sparks)
                               if (isOwn)
                                 GestureDetector(
                                   onTap: _isDeleting ? null : _deleteSpark,
@@ -628,8 +728,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                                             size: 17),
                                   ),
                                 ),
-
-                              // Close
                               GestureDetector(
                                 onTap: () => Navigator.of(context).pop(),
                                 child: Container(
@@ -648,8 +746,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                       ],
                     ),
                   ),
-
-                  // ── 6. Caption ────────────────────────────────────────────
                   if (spark.caption != null && spark.caption!.isNotEmpty)
                     Positioned(
                       left: 24,
@@ -676,8 +772,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                         ),
                       ),
                     ),
-
-                  // ── 7. Bottom bar ─────────────────────────────────────────
                   if (!_showViewers && !_isDeleting)
                     Positioned(
                       left: 0,
@@ -687,8 +781,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                           ? _buildSeenByBar()
                           : _buildReplyBar(),
                     ),
-
-                  // ── 8. Reply text field ───────────────────────────────────
                   if (_showReplyField)
                     Positioned(
                       left: 0,
@@ -696,8 +788,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                       bottom: botPad + 12,
                       child: _buildReplyInput(),
                     ),
-
-                  // ── 9. Viewers sheet ──────────────────────────────────────
                   if (_showViewers) ...[
                     Positioned.fill(
                       child: GestureDetector(
@@ -712,8 +802,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                       child: _buildViewersSheet(),
                     ),
                   ],
-
-                  // ── 10. Deleting overlay ──────────────────────────────────
                   if (_isDeleting)
                     Positioned.fill(
                       child: ColoredBox(
@@ -735,6 +823,17 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                         ),
                       ),
                     ),
+                  ..._floatingHearts.map((heart) {
+                    return _AnimatedHeart(
+                      initialX: heart.x,
+                      initialY: heart.y,
+                      onFinished: () {
+                        setState(() {
+                          _floatingHearts.remove(heart);
+                        });
+                      },
+                    );
+                  }),
                 ],
               ),
             ),
@@ -744,7 +843,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     );
   }
 
-  // ── Background ──────────────────────────────────────────────────────────────
   Widget _buildBackground(SparkItem spark) {
     if (spark.mediaUrl != null &&
         spark.mediaUrl!.isNotEmpty &&
@@ -823,7 +921,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     );
   }
 
-  // ── Seen-by bar (own sparks) ───────────────────────────────────────────────
   Widget _buildSeenByBar() {
     return GestureDetector(
       onTap: _openViewers,
@@ -854,37 +951,65 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     );
   }
 
-  // ── Reply bar (other users' sparks) ────────────────────────────────────────
   Widget _buildReplyBar() {
-    return GestureDetector(
-      onTap: _toggleReply,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Row(
-          children: [
-            Text('Send a message...',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 14)),
-            const Spacer(),
-            Icon(Icons.favorite_border_rounded,
-                color: Colors.white.withValues(alpha: 0.4), size: 22),
-            const SizedBox(width: 12),
-            Icon(Icons.send_rounded,
-                color: Colors.white.withValues(alpha: 0.4), size: 20),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _toggleReply,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: Text('Send message...',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 14)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _showHeartPopEffect,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+              child: const Icon(Icons.favorite_border_rounded, color: Colors.white, size: 22),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Spark link copied!'),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ── Reply input ─────────────────────────────────────────────────────────────
   Widget _buildReplyInput() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -903,7 +1028,7 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
               style: const TextStyle(color: Colors.white, fontSize: 14),
               cursorColor: Colors.white,
               decoration: InputDecoration(
-                hintText: 'Reply to ${_current.authorName}...',
+                hintText: 'Reply to ${_currentSpark.authorName}...',
                 hintStyle: TextStyle(
                     color: Colors.white.withValues(alpha: 0.4), fontSize: 14),
                 border: InputBorder.none,
@@ -943,10 +1068,9 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     );
   }
 
-  // ── Viewers sheet ───────────────────────────────────────────────────────────
   Widget _buildViewersSheet() {
     return GestureDetector(
-      onTap: () {}, // Prevent dismiss on sheet tap
+      onTap: () {},
       child: Container(
         constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.55),
@@ -957,7 +1081,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Drag handle
             Padding(
               padding: const EdgeInsets.only(top: 12, bottom: 4),
               child: Container(
@@ -968,7 +1091,6 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                     borderRadius: BorderRadius.circular(2)),
               ),
             ),
-            // Header
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -1094,6 +1216,99 @@ class _ProgressBar extends StatelessWidget {
                   )
                 : const ColoredBox(color: Colors.white30),
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FLOATING HEART
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _FloatingHeart {
+  final double x;
+  final double y;
+  _FloatingHeart({required this.x, required this.y});
+}
+
+class _AnimatedHeart extends StatefulWidget {
+  final double initialX;
+  final double initialY;
+  final VoidCallback onFinished;
+
+  const _AnimatedHeart({
+    required this.initialX,
+    required this.initialY,
+    required this.onFinished,
+  });
+
+  @override
+  State<_AnimatedHeart> createState() => _AnimatedHeartState();
+}
+
+class _AnimatedHeartState extends State<_AnimatedHeart>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _yAnim;
+  late Animation<double> _xAnim;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _opacityAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          widget.onFinished();
+        }
+      });
+
+    _yAnim = Tween<double>(begin: widget.initialY, end: widget.initialY - 200).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    _xAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: widget.initialX, end: widget.initialX - 25), weight: 50),
+      TweenSequenceItem(tween: Tween<double>(begin: widget.initialX - 25, end: widget.initialX + 25), weight: 50),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _scaleAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 1.4), weight: 30),
+      TweenSequenceItem(tween: Tween<double>(begin: 1.4, end: 1.0), weight: 70),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+    _opacityAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.6, 1.0, curve: Curves.easeIn)),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Positioned(
+          left: _xAnim.value,
+          top: _yAnim.value,
+          child: Opacity(
+            opacity: _opacityAnim.value,
+            child: Transform.scale(
+              scale: _scaleAnim.value,
+              child: const Text('❤️', style: TextStyle(fontSize: 32)),
+            ),
+          ),
+        );
+      },
     );
   }
 }

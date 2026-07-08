@@ -9,10 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/nsfw_detection_service.dart';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  CREATE SPARK SCREEN — Instagram-style
-// ═══════════════════════════════════════════════════════════════════════════════
-
 enum _SparkMode { text, photo, video }
 
 class CreateSparkScreen extends StatefulWidget {
@@ -28,8 +24,8 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
   final ImagePicker _picker = ImagePicker();
 
   _SparkMode _mode = _SparkMode.text;
-  File? _selectedMedia;
-  bool _isVideo = false;
+  final List<File> _selectedFiles = [];
+  final List<bool> _isVideos = [];
   bool _isUploading = false;
   int _selectedGradientIndex = 0;
   int _fontSizeIndex = 1; // 0=small, 1=medium, 2=large
@@ -37,7 +33,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
   late AnimationController _modeAnimCtrl;
   late Animation<double> _modeFade;
 
-  // ── Instagram-inspired gradient presets ────────────────────────────────────
   static const List<_GradientPreset> _gradients = [
     _GradientPreset('rainbow',  Color(0xFFFF6B6B), Color(0xFF794AEF)),
     _GradientPreset('sunset',   Color(0xFFFF9A56), Color(0xFFFF355E)),
@@ -67,21 +62,19 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     super.dispose();
   }
 
-  // ── Mode switching ────────────────────────────────────────────────────────
   void _switchMode(_SparkMode mode) {
     if (mode == _mode) return;
     _modeAnimCtrl.reverse().then((_) {
       setState(() {
         _mode = mode;
         if (mode == _SparkMode.text) {
-          _selectedMedia = null;
-          _isVideo = false;
+          _selectedFiles.clear();
+          _isVideos.clear();
         }
       });
       _modeAnimCtrl.forward();
     });
 
-    // Auto-open picker for photo/video modes
     if (mode == _SparkMode.photo) {
       _pickMedia(false);
     } else if (mode == _SparkMode.video) {
@@ -89,7 +82,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     }
   }
 
-  // ── Media picker ──────────────────────────────────────────────────────────
   Future<void> _pickMedia(bool pickVideo) async {
     final cameraStatus = await Permission.camera.status;
     final photosStatus = await Permission.photos.status;
@@ -101,55 +93,66 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                         statuses[Permission.photos]?.isGranted == true ||
                         statuses[Permission.storage]?.isGranted == true;
       if (!isGranted) {
-        _showSnack('Camera & photo library permissions are required to post photo/video sparks.');
+        _showSnack('Permissions are required to post photo/video sparks.');
         return;
       }
     }
 
     try {
-      final XFile? file = pickVideo
-          ? await _picker.pickVideo(
-              source: ImageSource.gallery,
-              maxDuration: const Duration(seconds: 15))
-          : await _picker.pickImage(
-              source: ImageSource.gallery, imageQuality: 85);
-      if (file != null) {
-        setState(() {
-          _selectedMedia = File(file.path);
-          _isVideo = pickVideo;
-          _mode = pickVideo ? _SparkMode.video : _SparkMode.photo;
-        });
+      if (pickVideo) {
+        final XFile? file = await _picker.pickVideo(
+            source: ImageSource.gallery,
+            maxDuration: const Duration(seconds: 15));
+        if (file != null) {
+          setState(() {
+            _selectedFiles.add(File(file.path));
+            _isVideos.add(true);
+            _mode = _SparkMode.video;
+          });
+        }
+      } else {
+        final List<XFile> files = await _picker.pickMultiImage(imageQuality: 85);
+        if (files.isNotEmpty) {
+          setState(() {
+            for (final f in files) {
+              _selectedFiles.add(File(f.path));
+              _isVideos.add(false);
+            }
+            _mode = _SparkMode.photo;
+          });
+        }
       }
     } catch (e) {
       _showSnack('Could not open media: $e');
     }
   }
 
-  // ── Publish ───────────────────────────────────────────────────────────────
   Future<void> _publishSpark() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final caption = _captionController.text.trim();
-    if (_mode == _SparkMode.text && caption.isEmpty) {
-      _showSnack('Please write something for your spark!');
+    if (_selectedFiles.isEmpty && caption.isEmpty) {
+      _showSnack('Please write something or select media for your spark!');
       return;
     }
 
     setState(() => _isUploading = true);
 
-    // ── NSFW Check ────────────────────────────────────────────────────────
     final hasNsfwText = await NsfwDetectionService.isTextNsfw(caption);
-    final hasNsfwMedia = _selectedMedia != null &&
-        await NsfwDetectionService.isMediaNsfw(_selectedMedia);
+    bool hasNsfwMedia = false;
+    for (final file in _selectedFiles) {
+      if (await NsfwDetectionService.isMediaNsfw(file)) {
+        hasNsfwMedia = true;
+        break;
+      }
+    }
 
     if (hasNsfwText || hasNsfwMedia) {
       setState(() => _isUploading = false);
       _showNsfwWarningDialog();
       return;
     }
-
-    String? downloadUrl;
 
     try {
       String authorAvatar = user.photoURL ?? '';
@@ -165,31 +168,48 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         }
       } catch (_) {}
 
-      if (_selectedMedia != null) {
-        final storageRef = FirebaseStorage.instance.ref().child('stories').child(
-            '${user.uid}_${DateTime.now().millisecondsSinceEpoch}.${_isVideo ? 'mp4' : 'jpg'}');
-        final uploadTask = await storageRef.putFile(_selectedMedia!);
-        downloadUrl = await uploadTask.ref.getDownloadURL();
-      }
+      if (_selectedFiles.isEmpty) {
+        // Text spark
+        await FirebaseFirestore.instance.collection('stories').add({
+          'authorId': user.uid,
+          'authorName': authorName,
+          'authorAvatar': authorAvatar,
+          'mediaUrl': null,
+          'isVideo': false,
+          'caption': caption,
+          'gradientColors': [
+            _gradients[_selectedGradientIndex].start.value,
+            _gradients[_selectedGradientIndex].end.value,
+          ],
+          'viewedBy': [],
+          'createdAt': FieldValue.serverTimestamp(),
+          'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
+        });
+      } else {
+        // Multiple media sparks
+        for (int i = 0; i < _selectedFiles.length; i++) {
+          final file = _selectedFiles[i];
+          final isVideo = _isVideos[i];
 
-      await FirebaseFirestore.instance.collection('stories').add({
-        'authorId': user.uid,
-        'authorName': authorName,
-        'authorAvatar': authorAvatar,
-        'mediaUrl': downloadUrl,
-        'isVideo': _isVideo,
-        'caption': caption,
-        'gradientColors': downloadUrl == null
-            ? [
-                _gradients[_selectedGradientIndex].start.value,
-                _gradients[_selectedGradientIndex].end.value,
-              ]
-            : null,
-        'viewedBy': [],
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt':
-            Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
-      });
+          final storageRef = FirebaseStorage.instance.ref().child('stories').child(
+              '${user.uid}_${DateTime.now().millisecondsSinceEpoch}_$i.${isVideo ? 'mp4' : 'jpg'}');
+          final uploadTask = await storageRef.putFile(file);
+          final downloadUrl = await uploadTask.ref.getDownloadURL();
+
+          await FirebaseFirestore.instance.collection('stories').add({
+            'authorId': user.uid,
+            'authorName': authorName,
+            'authorAvatar': authorAvatar,
+            'mediaUrl': downloadUrl,
+            'isVideo': isVideo,
+            'caption': i == 0 && caption.isNotEmpty ? caption : null,
+            'gradientColors': null,
+            'viewedBy': [],
+            'createdAt': FieldValue.serverTimestamp(),
+            'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
+          });
+        }
+      }
 
       if (mounted) {
         _showSuccessDialog();
@@ -200,98 +220,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         _showSnack('Failed to post spark: $e');
       }
     }
-  }
-
-  void _showSuccessDialog() {
-    final c = context.appColors;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.75),
-      builder: (ctx) {
-        Future.delayed(const Duration(milliseconds: 1800), () {
-          if (ctx.mounted) {
-            Navigator.of(ctx).pop();
-            if (mounted) {
-              Navigator.of(context).pop();
-            }
-          }
-        });
-
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1B2E).withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    width: 1.5,
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [c.primary, c.primaryDark],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: c.primary.withValues(alpha: 0.4),
-                            blurRadius: 16,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: 38,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Spark Shared! ✨',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Your followers can now view your new spark.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void _showSnack(String msg) {
@@ -308,33 +236,48 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1C1B2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded,
-                color: Colors.redAccent, size: 28),
-            SizedBox(width: 10),
-            Text('Content Flagged',
-                style: TextStyle(color: Colors.white)),
-          ],
-        ),
+        title: const Text('Sensitive Content Detected',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: const Text(
-          'Our safety systems detected potentially sensitive or NSFW content. '
-          'Posting of this content is restricted.',
-          style: TextStyle(height: 1.4, color: Colors.white70),
-        ),
+            'Your spark contains sensitive or inappropriate content and cannot be shared.',
+            style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK',
+                style: TextStyle(
+                    color: Colors.redAccent, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  BUILD
-  // ═══════════════════════════════════════════════════════════════════════════
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1B2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('🎉 Spark Published!',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text('Your spark is now live for 24 hours.',
+            style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx); // pop dialog
+              Navigator.pop(context); // pop screen
+            },
+            child: const Text('Great',
+                style: TextStyle(
+                    color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -345,15 +288,12 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
       resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
-          // ── Background ──────────────────────────────────────────────────
           Positioned.fill(child: _buildBackground(preset)),
-
-          // ── Bottom scrim ────────────────────────────────────────────────
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            height: 320,
+            height: 340,
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -369,8 +309,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
               ),
             ),
           ),
-
-          // ── Main content ────────────────────────────────────────────────
           SafeArea(
             child: Column(
               children: [
@@ -381,24 +319,22 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                     child: _buildCaptionArea(),
                   ),
                 ),
+                _buildMediaCarousel(),
                 _buildBottomControls(),
               ],
             ),
           ),
-
-          // ── Upload overlay ──────────────────────────────────────────────
           if (_isUploading) _buildUploadOverlay(),
         ],
       ),
     );
   }
 
-  // ── Background ──────────────────────────────────────────────────────────────
   Widget _buildBackground(_GradientPreset preset) {
-    if (_selectedMedia != null && !_isVideo) {
-      return Image.file(_selectedMedia!, fit: BoxFit.cover);
+    if (_selectedFiles.isNotEmpty && !_isVideos.first) {
+      return Image.file(_selectedFiles.first, fit: BoxFit.cover);
     }
-    if (_selectedMedia != null && _isVideo) {
+    if (_selectedFiles.isNotEmpty && _isVideos.first) {
       return Container(
         color: const Color(0xFF0A0A0A),
         child: Center(
@@ -442,21 +378,17 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     );
   }
 
-  // ── Top bar ─────────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Row(
         children: [
-          // Close
           _GlassCircle(
             child: const Icon(Icons.close_rounded,
                 color: Colors.white, size: 20),
             onTap: () => Navigator.of(context).pop(),
           ),
           const Spacer(),
-
-          // 24h badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -479,10 +411,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
               ],
             ),
           ),
-
           const SizedBox(width: 10),
-
-          // Share button
           GestureDetector(
             onTap: _isUploading ? null : _publishSpark,
             child: AnimatedContainer(
@@ -530,7 +459,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     );
   }
 
-  // ── Caption area ────────────────────────────────────────────────────────────
   Widget _buildCaptionArea() {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -591,14 +519,73 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     );
   }
 
-  // ── Bottom controls ─────────────────────────────────────────────────────────
+  Widget _buildMediaCarousel() {
+    if (_selectedFiles.isEmpty) return const SizedBox.shrink();
+    return Container(
+      height: 80,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _selectedFiles.length,
+        itemBuilder: (context, idx) {
+          final file = _selectedFiles[idx];
+          final isVid = _isVideos[idx];
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white30, width: 1.5),
+                  image: isVid
+                      ? null
+                      : DecorationImage(image: FileImage(file), fit: BoxFit.cover),
+                ),
+                child: isVid
+                    ? const Center(child: Icon(Icons.play_circle_outline, color: Colors.white, size: 24))
+                    : null,
+              ),
+              Positioned(
+                top: -6,
+                right: 4,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedFiles.removeAt(idx);
+                      _isVideos.removeAt(idx);
+                      if (_selectedFiles.isEmpty) {
+                        _mode = _SparkMode.text;
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close_rounded, size: 10, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildBottomControls() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Font size selector (text mode only) ───────────────────────
           if (_mode == _SparkMode.text) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -637,9 +624,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
             ),
             const SizedBox(height: 14),
           ],
-
-          // ── Gradient palette (text mode or no media) ─────────────────
-          if (_mode == _SparkMode.text || _selectedMedia == null) ...[
+          if (_mode == _SparkMode.text || _selectedFiles.isEmpty) ...[
             SizedBox(
               height: 48,
               child: ListView.builder(
@@ -685,15 +670,13 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
             ),
             const SizedBox(height: 16),
           ],
-
-          // ── Media action row ─────────────────────────────────────────
-          if (_selectedMedia != null)
+          if (_selectedFiles.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: GestureDetector(
                 onTap: () => setState(() {
-                  _selectedMedia = null;
-                  _isVideo = false;
+                  _selectedFiles.clear();
+                  _isVideos.clear();
                   _mode = _SparkMode.text;
                 }),
                 child: Container(
@@ -712,7 +695,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                           size: 14,
                           color: Colors.white.withValues(alpha: 0.7)),
                       const SizedBox(width: 6),
-                      Text('Remove media',
+                      Text('Remove all media',
                           style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 12,
@@ -722,8 +705,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                 ),
               ),
             ),
-
-          // ── Mode switcher ────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -759,7 +740,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     );
   }
 
-  // ── Upload overlay ──────────────────────────────────────────────────────────
   Widget _buildUploadOverlay() {
     return Positioned.fill(
       child: ClipRect(
@@ -800,10 +780,6 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  HELPER WIDGETS
-// ═══════════════════════════════════════════════════════════════════════════════
 
 class _GradientPreset {
   final String name;

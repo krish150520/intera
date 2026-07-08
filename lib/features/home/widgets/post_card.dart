@@ -621,7 +621,6 @@ class _AuthorRow extends StatelessWidget {
         imageUrl: post.authorAvatarUrl,
         userId: post.authorId,
         radius: 16,
-        heroTag: 'avatar_${post.authorId}_${post.id}',
       ),
       const SizedBox(width: 8),
       Expanded(

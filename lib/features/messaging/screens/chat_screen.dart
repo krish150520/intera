@@ -42,11 +42,28 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isResponding = false;
   final Set<String> _animatedMessageIds = {};
 
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _convoStream;
+
   @override
   void initState() {
     super.initState();
+    _convoStream = FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(widget.conversationId)
+        .snapshots();
     if (widget.initialAccess == ConversationAccess.active) {
       _messagingService.markConversationRead(widget.conversationId);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.conversationId != widget.conversationId) {
+      _convoStream = FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(widget.conversationId)
+          .snapshots();
     }
   }
 
@@ -265,10 +282,7 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('conversations')
-              .doc(widget.conversationId)
-              .snapshots(),
+          stream: _convoStream,
           builder: (context, convoSnapshot) {
             if (convoSnapshot.hasData && !convoSnapshot.data!.exists) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -650,7 +664,7 @@ class _RequestBanner extends StatelessWidget {
   }
 }
 
-class _MessagesPanel extends StatelessWidget {
+class _MessagesPanel extends StatefulWidget {
   final MessagingService messagingService;
   final String conversationId;
   final String myUid;
@@ -664,6 +678,29 @@ class _MessagesPanel extends StatelessWidget {
     required this.otherName,
     required this.animatedMessageIds,
   });
+
+  @override
+  State<_MessagesPanel> createState() => _MessagesPanelState();
+}
+
+class _MessagesPanelState extends State<_MessagesPanel> {
+  bool _initialized = false;
+  late Stream<QuerySnapshot> _messagesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesStream = widget.messagingService.messagesStream(widget.conversationId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessagesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.conversationId != widget.conversationId) {
+      _messagesStream = widget.messagingService.messagesStream(widget.conversationId);
+      _initialized = false;
+    }
+  }
 
   void _showMessageActions(BuildContext context, String messageId, MessageModel message, bool isMe) {
     final c = context.appColors;
@@ -725,7 +762,7 @@ class _MessagesPanel extends StatelessWidget {
                     if (confirm == true) {
                       await FirebaseFirestore.instance
                           .collection('conversations')
-                          .doc(conversationId)
+                          .doc(widget.conversationId)
                           .collection('messages')
                           .doc(messageId)
                           .delete();
@@ -743,7 +780,7 @@ class _MessagesPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.appColors;
     return StreamBuilder(
-      stream: messagingService.messagesStream(conversationId),
+      stream: _messagesStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -766,7 +803,15 @@ class _MessagesPanel extends StatelessWidget {
         final docs = snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
-          return _EmptyConversation(otherName: otherName);
+          return _EmptyConversation(otherName: widget.otherName);
+        }
+
+        // Initialize the animatedMessageIds with existing messages on load
+        if (!_initialized && docs.isNotEmpty) {
+          _initialized = true;
+          for (final doc in docs) {
+            widget.animatedMessageIds.add(doc.id);
+          }
         }
 
         return Container(
@@ -777,12 +822,12 @@ class _MessagesPanel extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final doc = docs[index];
-               final message = MessageModel.fromFirestore(doc);
-              final isMe = message.senderId == myUid;
+              final message = MessageModel.fromFirestore(doc);
+              final isMe = message.senderId == widget.myUid;
               
-              final bool shouldAnimate = !animatedMessageIds.contains(message.id);
+              final bool shouldAnimate = !widget.animatedMessageIds.contains(message.id);
               if (shouldAnimate) {
-                animatedMessageIds.add(message.id);
+                widget.animatedMessageIds.add(message.id);
               }
 
               return Padding(

@@ -18,7 +18,17 @@ import 'package:path_provider/path_provider.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String? communityId;
-  const CreatePostScreen({super.key, this.communityId});
+  final File? initialMediaFile;
+  final bool? isVideo;
+  final bool? isHelpRequest;
+
+  const CreatePostScreen({
+    super.key,
+    this.communityId,
+    this.initialMediaFile,
+    this.isVideo,
+    this.isHelpRequest,
+  });
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -35,13 +45,31 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   File? _selectedMediaFile;
   VideoPlayerController? _videoPreviewController;
   bool _isLoading = false;
-  bool _isVideoMedia = false; // tracks whether picked media is video
+  bool _isVideoMedia = false;
   File? _videoThumbnailFile;
   bool _isCustomThumbnail = false;
   final Set<String> _selectedTags = {};
 
+  // Intera Additions (Optional UI fields)
+  String? _selectedMood;
+  bool _isAnonymous = false;
+  String _selectedVisibility = 'Public';
+  bool _allowComments = true;
+  String? _selectedCommunityId;
+  DateTime? _scheduledDateTime;
+  bool _hasPoll = false;
+  final List<TextEditingController> _pollOptionControllers = [
+    TextEditingController(),
+    TextEditingController(),
+  ];
+
+  List<Map<String, dynamic>> _communities = [];
+  bool _loadingCommunities = false;
+
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeAnim;
+
+  final List<String> _moods = ['😊 Chill', '🔥 Focused', '🚀 Excited', '😴 Tired', '🤔 Curious'];
 
   @override
   void initState() {
@@ -51,6 +79,26 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       duration: const Duration(milliseconds: 300),
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut);
+    
+    if (widget.isHelpRequest == true) {
+      _selectedType = PostType.helpRequest;
+    } else if (widget.initialMediaFile != null) {
+      _selectedMediaFile = widget.initialMediaFile;
+      _isVideoMedia = widget.isVideo ?? false;
+      _selectedType = _isVideoMedia ? PostType.video : PostType.image;
+      if (_isVideoMedia) {
+        _videoPreviewController = VideoPlayerController.file(_selectedMediaFile!)
+          ..initialize().then((_) {
+            setState(() {});
+            _videoPreviewController!.setLooping(true);
+            _videoPreviewController!.play();
+          });
+        _generateAutoThumbnail();
+      }
+    }
+
+    _selectedCommunityId = widget.communityId;
+    _fetchCommunities();
     _animCtrl.forward();
   }
 
@@ -59,12 +107,51 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     _titleController.dispose();
     _bodyController.dispose();
     _rewardController.dispose();
+    for (var controller in _pollOptionControllers) {
+      controller.dispose();
+    }
     _videoPreviewController?.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
+  Future<void> _fetchCommunities() async {
+    setState(() => _loadingCommunities = true);
+    try {
+      final snap = await FirebaseFirestore.instance.collection('communities').get();
+      setState(() {
+        _communities = snap.docs.map((doc) => {
+          'id': doc.id,
+          'name': doc.data()['name'] ?? 'Unnamed',
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('Error fetching communities: $e');
+    } finally {
+      setState(() => _loadingCommunities = false);
+    }
+  }
+
+  Future<void> _generateAutoThumbnail() async {
+    if (_selectedMediaFile == null) return;
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final path = await VideoThumbnail.thumbnailFile(
+        video: _selectedMediaFile!.path,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 360,
+        quality: 75,
+      );
+      if (path != null) {
+        setState(() {
+          _videoThumbnailFile = File(path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error generating automatic thumbnail: $e');
+    }
+  }
 
   Future<void> _pickMedia(XFile? pickedFile, bool isVideo) async {
     if (pickedFile == null) return;
@@ -75,6 +162,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       _isVideoMedia = isVideo;
       _videoThumbnailFile = null;
       _isCustomThumbnail = false;
+      _selectedType = isVideo ? PostType.video : PostType.image;
     });
     if (isVideo) {
       _videoPreviewController = VideoPlayerController.file(_selectedMediaFile!)
@@ -83,25 +171,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           _videoPreviewController!.setLooping(true);
           _videoPreviewController!.play();
         });
-
-      // Generate automatic thumbnail
-      try {
-        final tempDir = await getTemporaryDirectory();
-        final path = await VideoThumbnail.thumbnailFile(
-          video: pickedFile.path,
-          thumbnailPath: tempDir.path,
-          imageFormat: ImageFormat.JPEG,
-          maxWidth: 360,
-          quality: 75,
-        );
-        if (path != null) {
-          setState(() {
-            _videoThumbnailFile = File(path);
-          });
-        }
-      } catch (e) {
-        debugPrint('Error generating automatic thumbnail: $e');
-      }
+      _generateAutoThumbnail();
     }
   }
 
@@ -114,6 +184,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       _isVideoMedia = false;
       _videoThumbnailFile = null;
       _isCustomThumbnail = false;
+      _selectedType = PostType.text;
     });
   }
 
@@ -127,44 +198,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     }
   }
 
-  String _labelFor(PostType t) => switch (t) {
-        PostType.text => 'Text',
-        PostType.question => 'Question',
-        PostType.helpRequest => 'Help',
-        PostType.achievement => 'Achievement',
-        PostType.image => 'Image',
-        PostType.video => 'Video',
-      };
-
-  IconData _iconFor(PostType t) => switch (t) {
-        PostType.text => Icons.chat_bubble_outline_rounded,
-        PostType.question => Icons.help_outline_rounded,
-        PostType.helpRequest => Icons.handshake_outlined,
-        PostType.achievement => Icons.emoji_events_outlined,
-        PostType.image => Icons.photo_outlined,
-        PostType.video => Icons.videocam_outlined,
-      };
-
-  String _descriptionFor(PostType t) => switch (t) {
-        PostType.text => 'Share thoughts',
-        PostType.question => 'Ask the community',
-        PostType.helpRequest => 'Request assistance',
-        PostType.achievement => 'Celebrate a win',
-        PostType.image => 'Share a photo',
-        PostType.video => 'Share a clip',
-      };
-
-  void _selectType(PostType type) {
-    if (type == _selectedType) return;
-    _animCtrl.reverse().then((_) {
-      setState(() {
-        _selectedType = type;
-        _removeMedia();
-      });
-      _animCtrl.forward();
-    });
-  }
-
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   void _submitPost() async {
@@ -176,7 +209,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
     final isHelp = _selectedType == PostType.helpRequest;
     final title = _titleController.text.trim();
-    final body = _bodyController.text.trim();
+    var body = _bodyController.text.trim();
     final reward = int.tryParse(_rewardController.text.trim()) ?? 0;
 
     if (isHelp && title.isEmpty) {
@@ -196,6 +229,23 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     }
 
     setState(() => _isLoading = true);
+
+    // Formulate poll inside body if configured
+    if (_hasPoll) {
+      final options = _pollOptionControllers
+          .map((c) => c.text.trim())
+          .where((t) => t.isNotEmpty)
+          .toList();
+      if (options.isNotEmpty) {
+        body += '\n\n📊 Poll:\n' + options.asMap().entries.map((e) => '${e.key + 1}️⃣ ${e.value}').join('\n');
+      }
+    }
+
+    // Add mood tags if configured
+    final tagsList = _selectedTags.toList();
+    if (_selectedMood != null) {
+      tagsList.add('mood_${_selectedMood!.replaceAll(' ', '_')}');
+    }
 
     // ── NSFW Check ──────────────────────────────────────────────────────
     final hasNsfwText = await NsfwDetectionService.isTextNsfw(title) ||
@@ -227,7 +277,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         if (task.state != TaskState.success) throw Exception('Upload failed');
         mediaUrl = await ref.getDownloadURL();
 
-        // Upload generated or custom thumbnail if video
         if (isVid && _videoThumbnailFile != null) {
           final thumbRef = FirebaseStorage.instance
               .ref('posts/thumbnails/${user.uid}_$ts.jpg');
@@ -239,22 +288,26 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       }
 
       // ── Fetch verified user data ───────────────────────────────────────
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final ud = userDoc.data() ?? {};
-      final displayName = ud['name'] ?? user.displayName ?? 'Anonymous';
-      final rawUsername = ud['username'] ?? user.email?.split('@')[0] ?? 'user';
-      final username =
-          rawUsername.startsWith('@') ? rawUsername : '@$rawUsername';
-      final avatarUrl =
-          ud['profileImageUrl'] ?? ud['photoURL'] ?? user.photoURL ?? '';
+      String displayName = 'Anonymous';
+      String username = '@anonymous';
+      String avatarUrl = '';
+
+      if (!_isAnonymous) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        final ud = userDoc.data() ?? {};
+        displayName = ud['name'] ?? user.displayName ?? 'Anonymous';
+        final rawUsername = ud['username'] ?? user.email?.split('@')[0] ?? 'user';
+        username = rawUsername.startsWith('@') ? rawUsername : '@$rawUsername';
+        avatarUrl = ud['profileImageUrl'] ?? ud['photoURL'] ?? user.photoURL ?? '';
+      }
 
       // ── Build payload ──────────────────────────────────────────────────
       final post = Post(
         id: '',
-        authorId: user.uid,
+        authorId: _isAnonymous ? 'anonymous' : user.uid,
         authorName: displayName,
         authorUsername: username,
         authorAvatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,
@@ -271,19 +324,24 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         likeCount: 0,
         commentCount: 0,
         shareCount: 0,
-        tags: _selectedTags.toList(),
+        tags: tagsList,
         createdAt: DateTime.now(),
         rewardKarma: isHelp ? reward : null,
       );
 
       final payload = post.toFirestore();
+      payload['communityId'] = widget.communityId ?? _selectedCommunityId;
+      payload['visibility'] = _selectedVisibility;
+      payload['allowComments'] = _allowComments;
+      
       if (isHelp) {
         payload['isCompleted'] = false;
         payload['assignedTo'] = null;
-        payload['communityId'] = widget.communityId;
         if (reward > 0) payload['karmaReserved'] = true;
-      } else {
-        payload['communityId'] = widget.communityId;
+      }
+
+      if (_scheduledDateTime != null) {
+        payload['scheduledAt'] = Timestamp.fromDate(_scheduledDateTime!);
       }
 
       // ── Write to Firestore ─────────────────────────────────────────────
@@ -298,8 +356,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       }
 
       if (!mounted) return;
-      _snack('🎉 ${_labelFor(_selectedType)} post published!',
-          color: const Color(0xFF388E3C));
+      _snack('🎉 Post published!', color: const Color(0xFF388E3C));
       Navigator.of(context).canPop()
           ? Navigator.of(context).pop()
           : Navigator.of(context).pushReplacementNamed('/main');
@@ -353,1193 +410,642 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: c.bg,
+      appBar: AppBar(
+        backgroundColor: c.surface,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.textHi, size: 20),
+          onPressed: () async {
+            if (Navigator.of(context).canPop()) {
+              await Navigator.of(context).maybePop();
+            } else {
+              BottomNavScreen.switchToTab(0);
+            }
+          },
+        ),
+        title: Text(
+          'Create Post',
+          style: TextStyle(
+            color: c.textHi,
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+          ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: _PublishButton(
+              onTap: _isLoading ? null : _submitPost,
+            ),
+          ),
+        ],
+      ),
       body: _isLoading
-          ? _buildLoader(context)
-          : CustomScrollView(
-              slivers: [
-                // ── App bar with author ─────────────────────────────────────
-                SliverAppBar(
-                  pinned: true,
-                  backgroundColor: c.surface,
-                  elevation: 0,
-                  leading: GestureDetector(
-                    onTap: () async {
-                      if (Navigator.of(context).canPop()) {
-                        await Navigator.of(context).maybePop();
-                      } else {
-                        BottomNavScreen.switchToTab(0);
-                      }
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.all(8),
-                      decoration:
-                          BoxDecoration(color: c.field, shape: BoxShape.circle),
-                      child: Icon(Icons.arrow_back_ios_new_rounded,
-                          size: 16, color: c.primary),
-                    ),
-                  ),
-                  title: Text('Create post',
-                      style: TextStyle(
-                          color: c.textHi,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18)),
-                  actions: [
-                    if (uid.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Center(
-                          child:
-                              KarmaBadge(uid: uid, size: KarmaBadgeSize.small),
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: _PostButton(
-                        onTap: _isLoading ? null : _submitPost,
-                        gradient: c.primaryGradient,
+          ? _buildLoader()
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. Preview Card & Replacement (Staggered Delay: 50ms)
+                  _buildStaggeredEntrance(
+                    delayMs: 50,
+                    child: Center(
+                      child: _PreviewCard(
+                        mediaFile: _selectedMediaFile,
+                        isVideo: _isVideoMedia,
+                        videoController: _videoPreviewController,
+                        onReplace: () async {
+                          final file = _isVideoMedia
+                              ? await _picker.pickVideo(source: ImageSource.gallery)
+                              : await _picker.pickImage(source: ImageSource.gallery);
+                          _pickMedia(file, _isVideoMedia);
+                        },
                       ),
                     ),
-                  ],
-                  bottom: PreferredSize(
-                    preferredSize: const Size.fromHeight(56),
-                    child: _AuthorStrip(user: user, uid: uid),
                   ),
-                ),
+                  const SizedBox(height: 24),
 
-                // ── Body content ────────────────────────────────────────────
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      // ── Post type grid ──────────────────────────────────
-                      _SectionHeader(
-                        icon: Icons.category_rounded,
-                        label: 'Choose post type',
-                      ),
-                      const SizedBox(height: 12),
-                      _PostTypeGrid(
-                        selectedType: _selectedType,
-                        onSelect: _selectType,
-                        labelFor: _labelFor,
-                        iconFor: _iconFor,
-                        descriptionFor: _descriptionFor,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // ── Content fields (animated) ───────────────────────
-                      FadeTransition(
-                        opacity: _fadeAnim,
-                        child: _buildContentSection(context),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // ── Tag picker ──────────────────────────────────────
-                      _TagPickerSection(
-                        selectedTags: _selectedTags,
-                        onToggle: (tag) => setState(() {
-                          if (_selectedTags.contains(tag)) {
-                            _selectedTags.remove(tag);
-                          } else {
-                            _selectedTags.add(tag);
-                          }
-                        }),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // ── Submit button ───────────────────────────────────
-                      _GradientSubmitButton(
-                        label: _selectedType == PostType.helpRequest
-                            ? '🚀  Launch help request'
-                            : 'Share ${_labelFor(_selectedType).toLowerCase()} post',
-                        gradient: c.primaryGradient,
-                        onTap: _submitPost,
-                        isLoading: _isLoading,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Visible to everyone in the community',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: c.textMuted),
-                      ),
-                    ]),
+                  // 2. Title & Caption Card (Staggered Delay: 100ms)
+                  _buildStaggeredEntrance(
+                    delayMs: 100,
+                    child: _buildInputFieldsCard(),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+
+                  // 3. Optionals / Intera Improvements (Staggered Delay: 150ms)
+                  _buildStaggeredEntrance(
+                    delayMs: 150,
+                    child: _buildInteraImprovementsSection(),
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
     );
   }
 
-  // ── Content section builder ─────────────────────────────────────────────
-
-  Widget _buildContentSection(BuildContext context) {
-    final isHelp = _selectedType == PostType.helpRequest;
-    final isImage = _selectedType == PostType.image;
-    final isVideo = _selectedType == PostType.video;
-
-    return _ContentCard(
-      children: [
-        // ── Media post fields ────────────────────────────────────────────
-        if (isImage || isVideo) ...[
-          _SectionHeader(
-            icon: isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
-            label: isVideo ? 'Select video' : 'Select image',
-          ),
-          const SizedBox(height: 10),
-          _buildMediaPicker(context, isVideo: isVideo),
-          const SizedBox(height: 16),
-          _FieldLabel(label: 'Caption'),
-          const SizedBox(height: 6),
-          _StyledTextArea(
-            controller: _bodyController,
-            placeholder: 'Write a caption for your media...',
-            maxLines: 2,
-          ),
-        ]
-
-        // ── Help request fields ──────────────────────────────────────────
-        else if (isHelp) ...[
-          _SectionHeader(
-            icon: Icons.edit_rounded,
-            label: 'Task details',
-          ),
-          const SizedBox(height: 10),
-          _FieldLabel(label: 'Task title *'),
-          const SizedBox(height: 6),
-          _StyledInputWithIcon(
-            controller: _titleController,
-            placeholder: 'Describe the task briefly...',
-            icon: Icons.title_rounded,
-          ),
-          const SizedBox(height: 16),
-          _ContentDivider(),
-          const SizedBox(height: 16),
-          _FieldLabel(label: 'Details'),
-          const SizedBox(height: 6),
-          _StyledTextArea(
-            controller: _bodyController,
-            placeholder: 'Explain what needs to be done...',
-            maxLines: 4,
-          ),
-
-          // ── Media attachment for help posts (NEW) ─────────────────────
-          const SizedBox(height: 16),
-          _ContentDivider(),
-          const SizedBox(height: 16),
-          _SectionHeader(
-            icon: Icons.attach_file_rounded,
-            label: 'Attach media (optional)',
-          ),
-          const SizedBox(height: 10),
-          _HelpMediaAttachment(
-            mediaFile: _selectedMediaFile,
-            isVideo: _isVideoMedia,
-            videoController: _videoPreviewController,
-            onPickImage: () async {
-              final file = await _picker.pickImage(source: ImageSource.gallery);
-              _pickMedia(file, false);
-            },
-            onPickVideo: () async {
-              final file = await _picker.pickVideo(source: ImageSource.gallery);
-              _pickMedia(file, true);
-            },
-            onRemove: _removeMedia,
-          ),
-
-          const SizedBox(height: 16),
-          _ContentDivider(),
-          const SizedBox(height: 16),
-          _KarmaRewardRow(
-            controller: _rewardController,
-            userUid: FirebaseAuth.instance.currentUser?.uid ?? '',
-          ),
-        ]
-
-        // ── Normal text / question / achievement fields ──────────────────
-        else ...[
-          _SectionHeader(
-            icon: Icons.edit_rounded,
-            label: 'Write your post',
-          ),
-          const SizedBox(height: 10),
-          _FieldLabel(label: 'Title (optional)'),
-          const SizedBox(height: 6),
-          _StyledInputWithIcon(
-            controller: _titleController,
-            placeholder: 'Give your post a title...',
-            icon: Icons.title_rounded,
-          ),
-          const SizedBox(height: 16),
-          _ContentDivider(),
-          const SizedBox(height: 16),
-          _FieldLabel(label: "What's on your mind?"),
-          const SizedBox(height: 6),
-          _StyledTextArea(
-            controller: _bodyController,
-            placeholder: 'Share something with the community...',
-            maxLines: 5,
-          ),
-        ],
-      ],
-    );
-  }
-
-  // ── Loader ──────────────────────────────────────────────────────────────
-
-  Widget _buildLoader(BuildContext context) {
+  Widget _buildLoader() {
     final c = context.appColors;
     return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        CircularProgressIndicator(color: c.primary),
-        const SizedBox(height: 16),
-        Text('Publishing your post...',
-            style: TextStyle(color: c.textMuted, fontSize: 14)),
-      ]),
-    );
-  }
-
-  // ── Media picker (for Image/Video post types) ───────────────────────────
-
-  Widget _buildMediaPicker(BuildContext context, {required bool isVideo}) {
-    final c = context.appColors;
-    if (_selectedMediaFile != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Stack(
-            alignment: Alignment.topRight,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: isVideo &&
-                        _videoPreviewController != null &&
-                        _videoPreviewController!.value.isInitialized
-                    ? SizedBox(
-                        height: 200,
-                        width: double.infinity,
-                        child: AspectRatio(
-                          aspectRatio: _videoPreviewController!.value.aspectRatio,
-                          child: VideoPlayer(_videoPreviewController!),
-                        ),
-                      )
-                    : Image.file(_selectedMediaFile!,
-                        height: 200, width: double.infinity, fit: BoxFit.cover),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: GestureDetector(
-                  onTap: _removeMedia,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 16),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (isVideo) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.border.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: c.field,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: _videoThumbnailFile != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(_videoThumbnailFile!,
-                                fit: BoxFit.cover),
-                          )
-                        : const Center(
-                            child: Icon(Icons.movie_creation_outlined, size: 20),
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _isCustomThumbnail ? 'Custom Thumbnail' : 'Auto Thumbnail',
-                          style: TextStyle(
-                            color: c.textHi,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _isCustomThumbnail
-                              ? 'Picked custom image'
-                              : 'Automatically extracted from video',
-                          style: TextStyle(
-                            color: c.textMuted,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _pickCustomThumbnail,
-                    icon: const Icon(Icons.photo_library_outlined, size: 14),
-                    label: const Text('Change', style: TextStyle(fontSize: 11)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: c.primary,
-                      backgroundColor: c.primary.withValues(alpha: 0.1),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      );
-    }
-
-    return GestureDetector(
-      onTap: () async {
-        final file = isVideo
-            ? await _picker.pickVideo(source: ImageSource.gallery)
-            : await _picker.pickImage(source: ImageSource.gallery);
-        _pickMedia(file, isVideo);
-      },
-      child: Container(
-        height: 160,
-        decoration: BoxDecoration(
-          color: c.field,
-          borderRadius: BorderRadius.circular(14),
-          border:
-              Border.all(color: c.border, width: 1.5, style: BorderStyle.solid),
-        ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isVideo
-                  ? Icons.video_collection_outlined
-                  : Icons.add_photo_alternate_outlined,
-              size: 26,
-              color: c.primary,
-            ),
-          ),
-          const SizedBox(height: 10),
+          CircularProgressIndicator(color: c.primary),
+          const SizedBox(height: 16),
           Text(
-            isVideo ? 'Tap to select video' : 'Tap to select image',
-            style: TextStyle(
-                fontSize: 13, color: c.textMuted, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isVideo ? 'MP4, MOV up to 50MB' : 'JPG, PNG up to 10MB',
-            style: TextStyle(fontSize: 11, color: c.textDim),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ── Sub-widgets ─────────────────────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ── Author strip (in app bar bottom) ──────────────────────────────────────────
-
-class _AuthorStrip extends StatelessWidget {
-  final User? user;
-  final String uid;
-  const _AuthorStrip({required this.user, required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    if (user == null) return const SizedBox.shrink();
-
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
-      builder: (context, snap) {
-        final ud = snap.data?.data() as Map<String, dynamic>? ?? {};
-        final name = ud['name'] ?? user!.displayName ?? 'You';
-        final raw = ud['username'] ?? user!.email?.split('@')[0] ?? 'user';
-        final username = raw.startsWith('@') ? raw : '@$raw';
-        final avatar =
-            ud['profileImageUrl'] ?? ud['photoURL'] ?? user!.photoURL;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: c.surface,
-            border: Border(bottom: BorderSide(color: c.divider, width: 0.5)),
-          ),
-          child: Row(children: [
-            CustomAvatar(name: name, radius: 16, imageUrl: avatar, userId: uid),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(name,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: c.textHi)),
-                  Text(username,
-                      style: TextStyle(fontSize: 11, color: c.textMuted)),
-                ],
-              ),
-            ),
-            // Audience indicator
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: c.field,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: c.chipBorder, width: 1),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.public_rounded, size: 12, color: c.primary),
-                const SizedBox(width: 4),
-                Text('Everyone',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: c.primary)),
-              ]),
-            ),
-          ]),
-        );
-      },
-    );
-  }
-}
-
-// ── Post type grid ────────────────────────────────────────────────────────────
-
-class _PostTypeGrid extends StatelessWidget {
-  final PostType selectedType;
-  final void Function(PostType) onSelect;
-  final String Function(PostType) labelFor;
-  final IconData Function(PostType) iconFor;
-  final String Function(PostType) descriptionFor;
-
-  const _PostTypeGrid({
-    required this.selectedType,
-    required this.onSelect,
-    required this.labelFor,
-    required this.iconFor,
-    required this.descriptionFor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 1.05,
-      children: PostType.values.map((type) {
-        return _PostTypeCard(
-          type: type,
-          selected: type == selectedType,
-          label: labelFor(type),
-          icon: iconFor(type),
-          description: descriptionFor(type),
-          onTap: () => onSelect(type),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _PostTypeCard extends StatelessWidget {
-  final PostType type;
-  final bool selected;
-  final String label;
-  final IconData icon;
-  final String description;
-  final VoidCallback onTap;
-
-  const _PostTypeCard({
-    required this.type,
-    required this.selected,
-    required this.label,
-    required this.icon,
-    required this.description,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: selected ? c.primary.withValues(alpha: 0.1) : c.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? c.primary : c.border,
-            width: selected ? 2.0 : 1.0,
-          ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: c.primary.withValues(alpha: 0.15),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : null,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: selected ? c.primary : c.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon,
-                  size: 18, color: selected ? Colors.white : c.primary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? c.primary : c.textHi,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 9,
-                color: c.textMuted,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Help media attachment widget ──────────────────────────────────────────────
-
-class _HelpMediaAttachment extends StatelessWidget {
-  final File? mediaFile;
-  final bool isVideo;
-  final VideoPlayerController? videoController;
-  final VoidCallback onPickImage;
-  final VoidCallback onPickVideo;
-  final VoidCallback onRemove;
-
-  const _HelpMediaAttachment({
-    required this.mediaFile,
-    required this.isVideo,
-    required this.videoController,
-    required this.onPickImage,
-    required this.onPickVideo,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Show preview if media selected
-    if (mediaFile != null) {
-      return Stack(
-        alignment: Alignment.topRight,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: isVideo &&
-                    videoController != null &&
-                    videoController!.value.isInitialized
-                ? SizedBox(
-                    height: 180,
-                    width: double.infinity,
-                    child: AspectRatio(
-                      aspectRatio: videoController!.value.aspectRatio,
-                      child: VideoPlayer(videoController!),
-                    ),
-                  )
-                : Image.file(mediaFile!,
-                    height: 180, width: double.infinity, fit: BoxFit.cover),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 16),
-              ),
-            ),
-          ),
-          // Type badge
-          Positioned(
-            bottom: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(
-                  isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
-                  color: Colors.white,
-                  size: 12,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isVideo ? 'Video' : 'Image',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500),
-                ),
-              ]),
-            ),
+            'Uploading content safely...',
+            style: TextStyle(color: c.textMuted, fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ],
-      );
-    }
-
-    // Show dual pick buttons
-    return Row(
-      children: [
-        Expanded(
-          child: _MediaPickButton(
-            icon: Icons.add_photo_alternate_outlined,
-            label: 'Image',
-            subtitle: 'JPG, PNG',
-            onTap: onPickImage,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _MediaPickButton(
-            icon: Icons.video_collection_outlined,
-            label: 'Video',
-            subtitle: 'MP4, MOV',
-            onTap: onPickVideo,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MediaPickButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _MediaPickButton({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 96,
-        decoration: BoxDecoration(
-          color: c.field,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border, width: 1.5),
-        ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 18, color: c.primary),
-          ),
-          const SizedBox(height: 6),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: c.textHi)),
-          Text(subtitle, style: TextStyle(fontSize: 9, color: c.textMuted)),
-        ]),
       ),
     );
   }
-}
 
-// ── Content card ──────────────────────────────────────────────────────────────
+  Widget _buildStaggeredEntrance({required int delayMs, required Widget child}) {
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 250 + delayMs),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      builder: (context, value, childWidget) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: childWidget,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
 
-class _ContentCard extends StatelessWidget {
-  final List<Widget> children;
-  const _ContentCard({required this.children});
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildInputFieldsCard() {
     final c = context.appColors;
+    final isHelp = _selectedType == PostType.helpRequest;
+
     return Container(
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: c.border.withOpacity(0.4)),
         boxShadow: [
           BoxShadow(
-            color: c.primary.withValues(alpha: 0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(18),
       child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
-    );
-  }
-}
-
-class _ContentDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) =>
-      Divider(color: context.appColors.divider, thickness: 0.5, height: 1);
-}
-
-// ── Section header ────────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _SectionHeader({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return Row(children: [
-      Container(
-        width: 26,
-        height: 26,
-        decoration: BoxDecoration(
-          color: c.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Icon(icon, size: 14, color: c.primary),
-      ),
-      const SizedBox(width: 8),
-      Text(
-        label,
-        style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: c.textHi,
-            letterSpacing: 0.2),
-      ),
-    ]);
-  }
-}
-
-// ── Field label ───────────────────────────────────────────────────────────────
-
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  const _FieldLabel({required this.label});
-  @override
-  Widget build(BuildContext context) => Text(label,
-      style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: context.appColors.textMuted));
-}
-
-// ── Styled text area ──────────────────────────────────────────────────────────
-
-class _StyledTextArea extends StatelessWidget {
-  final TextEditingController controller;
-  final String placeholder;
-  final int maxLines;
-  const _StyledTextArea({
-    required this.controller,
-    required this.placeholder,
-    this.maxLines = 4,
-  });
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      style: TextStyle(fontSize: 14, color: c.textHi),
-      decoration: InputDecoration(
-        hintText: placeholder,
-        hintStyle: TextStyle(color: c.textMuted, fontSize: 14),
-        filled: true,
-        fillColor: c.field,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: c.border, width: 1.5)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: c.border, width: 1.5)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: c.primary, width: 1.5)),
-      ),
-    );
-  }
-}
-
-// ── Styled input with icon ────────────────────────────────────────────────────
-
-class _StyledInputWithIcon extends StatelessWidget {
-  final TextEditingController controller;
-  final String placeholder;
-  final IconData icon;
-  const _StyledInputWithIcon({
-    required this.controller,
-    required this.placeholder,
-    required this.icon,
-  });
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return TextField(
-      controller: controller,
-      style: TextStyle(fontSize: 14, color: c.textHi),
-      decoration: InputDecoration(
-        hintText: placeholder,
-        hintStyle: TextStyle(color: c.textMuted, fontSize: 14),
-        prefixIcon: Icon(icon, color: c.textMuted, size: 18),
-        filled: true,
-        fillColor: c.field,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: c.border, width: 1.5)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: c.border, width: 1.5)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: c.primary, width: 1.5)),
-      ),
-    );
-  }
-}
-
-// ── Karma reward row ──────────────────────────────────────────────────────────
-
-class _KarmaRewardRow extends StatelessWidget {
-  final TextEditingController controller;
-  final String userUid;
-  const _KarmaRewardRow({required this.controller, required this.userUid});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return StreamBuilder<int>(
-      stream: KarmaService.balanceStream(userUid),
-      builder: (context, snap) {
-        final balance = snap.data ?? 0;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: c.warningKarmaBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: c.warningKarmaBorder, width: 1.5),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title (Visible if Help Request, or optionally toggleable)
+          TextField(
+            controller: _titleController,
+            style: TextStyle(color: c.textHi, fontSize: 16, fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              hintText: isHelp ? 'Task title *' : 'Add a title (optional)',
+              hintStyle: TextStyle(color: c.textMuted, fontSize: 16, fontWeight: FontWeight.w600),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
           ),
+          Divider(color: c.border.withOpacity(0.5), height: 24),
+
+          // Caption / Description
+          TextField(
+            controller: _bodyController,
+            maxLines: null,
+            style: TextStyle(color: c.textHi, fontSize: 14, height: 1.5),
+            decoration: InputDecoration(
+              hintText: "What's happening?",
+              hintStyle: TextStyle(color: c.textMuted, fontSize: 14),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInteraImprovementsSection() {
+    final c = context.appColors;
+    final isHelp = _selectedType == PostType.helpRequest;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Tags Selection Card ──
+        _buildExpansionCard(
+          title: 'Tags & Topics',
+          icon: Icons.tag_rounded,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Icon(Icons.bolt_rounded, color: c.warningKarma, size: 22),
-                const SizedBox(width: 10),
-                Text('Karma reward',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: c.warningKarma)),
-                const Spacer(),
-                SizedBox(
-                  width: 64,
-                  child: TextField(
-                    controller: controller,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: c.warningKarma),
-                    decoration: InputDecoration(
-                      hintText: '0',
-                      hintStyle: TextStyle(
-                          color: c.warningKarma.withValues(alpha: 0.6)),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: ['flutter', 'design', 'college', 'tech', 'lifestyle'].map((tag) {
+                  final isSelected = _selectedTags.contains(tag);
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selectedTags.remove(tag);
+                        } else {
+                          _selectedTags.add(tag);
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? c.primary.withOpacity(0.15) : c.field,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? c.primary : c.border.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        '#$tag',
+                        style: TextStyle(
+                          color: isSelected ? c.primary : c.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 6),
-              Text(
-                'Your balance: $balance ⚡  · Deducted immediately on post',
-                style: TextStyle(
-                    fontSize: 10, color: c.warningKarma.withValues(alpha: 0.7)),
+                  );
+                }).toList(),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-// ── Post button (app bar) ─────────────────────────────────────────────────────
-
-class _PostButton extends StatelessWidget {
-  final VoidCallback? onTap;
-  final LinearGradient gradient;
-  const _PostButton({required this.onTap, required this.gradient});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: onTap != null ? gradient : null,
-          color: onTap == null ? Colors.grey : null,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: const Text('Post',
-            style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 14)),
-      ),
-    );
-  }
-}
-
-// ── Gradient submit button ────────────────────────────────────────────────────
-
-class _GradientSubmitButton extends StatelessWidget {
-  final String label;
-  final LinearGradient gradient;
-  final VoidCallback onTap;
-  final bool isLoading;
-
-  const _GradientSubmitButton({
-    required this.label,
-    required this.gradient,
-    required this.onTap,
-    this.isLoading = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: c.primary,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isLoading)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
-              )
-            else ...[
-              const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-            ],
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Tag Picker Section ───────────────────────────────────────────────────────
-
-class _TagPickerSection extends StatelessWidget {
-  final Set<String> selectedTags;
-  final void Function(String tag) onToggle;
-
-  const _TagPickerSection({
-    required this.selectedTags,
-    required this.onToggle,
-  });
-
-  static const _tagIcons = <String, IconData>{
-    'tech': Icons.computer_rounded,
-    'art': Icons.palette_rounded,
-    'gaming': Icons.videogame_asset_rounded,
-    'health': Icons.favorite_rounded,
-    'education': Icons.school_rounded,
-    'music': Icons.music_note_rounded,
-    'food': Icons.restaurant_rounded,
-    'travel': Icons.flight_rounded,
-    'sports': Icons.sports_soccer_rounded,
-    'science': Icons.science_rounded,
-    'fashion': Icons.checkroom_rounded,
-    'business': Icons.business_center_rounded,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.label_rounded, size: 16, color: c.primary),
-            const SizedBox(width: 6),
-            Text(
-              'Add topic tags',
-              style: TextStyle(
-                color: c.textHi,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '(optional)',
-              style: TextStyle(color: c.textMuted, fontSize: 12),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Helps the right people discover your post.',
-          style: TextStyle(color: c.textDim, fontSize: 12),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: kAllInterestTags.map((tag) {
-            final selected = selectedTags.contains(tag);
-            return GestureDetector(
-              onTap: () => onToggle(tag),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: selected ? c.primary.withValues(alpha: 0.08) : c.field,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: selected ? c.primary : c.border,
-                    width: selected ? 1.2 : 0.8,
+
+        // ── Mood Selection Card ──
+        _buildExpansionCard(
+          title: 'How is your Mood?',
+          icon: Icons.emoji_emotions_outlined,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _moods.map((mood) {
+                final isSelected = _selectedMood == mood;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(mood),
+                    selected: isSelected,
+                    onSelected: (val) {
+                      setState(() {
+                        _selectedMood = val ? mood : null;
+                      });
+                    },
+                    selectedColor: c.primary.withOpacity(0.15),
+                    backgroundColor: c.field,
+                    labelStyle: TextStyle(
+                      color: isSelected ? c.primary : c.textMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Community Selector Card ──
+        if (widget.communityId == null) ...[
+          _buildExpansionCard(
+            title: 'Publish to Community',
+            icon: Icons.groups_outlined,
+            child: _loadingCommunities
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : DropdownButtonFormField<String>(
+                    value: _selectedCommunityId,
+                    hint: Text('Select Community (Optional)', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: c.field,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    items: _communities.map((comm) {
+                      return DropdownMenuItem<String>(
+                        value: comm['id'] as String,
+                        child: Text(comm['name'] as String, style: TextStyle(color: c.textHi, fontSize: 13)),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedCommunityId = val;
+                      });
+                    },
+                  ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // ── Visibility & Interaction Controls Card ──
+        _buildExpansionCard(
+          title: 'Visibility & Comments',
+          icon: Icons.lock_outline_rounded,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Who can see this?', style: TextStyle(color: c.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                  DropdownButton<String>(
+                    value: _selectedVisibility,
+                    underline: const SizedBox(),
+                    items: ['Public', 'Followers', 'Only Me'].map((item) {
+                      return DropdownMenuItem<String>(
+                        value: item,
+                        child: Text(item, style: TextStyle(color: c.primary, fontSize: 13, fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedVisibility = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Allow Comments', style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+                value: _allowComments,
+                activeColor: c.primary,
+                onChanged: (val) => setState(() => _allowComments = val),
+              ),
+              const Divider(height: 20),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Anonymous Post', style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+                value: _isAnonymous,
+                activeColor: c.primary,
+                onChanged: (val) => setState(() => _isAnonymous = val),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Scheduling Card ──
+        _buildExpansionCard(
+          title: 'Schedule Post',
+          icon: Icons.calendar_month_outlined,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _scheduledDateTime == null
+                    ? 'Publish Instantly'
+                    : 'Scheduled: ${_scheduledDateTime.toString().substring(0, 16)}',
+                style: TextStyle(color: c.textMuted, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 30)),
+                  );
+                  if (date != null && mounted) {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+                    if (time != null) {
+                      setState(() {
+                        _scheduledDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                      });
+                    }
+                  }
+                },
+                child: Text(_scheduledDateTime == null ? 'Schedule' : 'Clear', style: TextStyle(color: c.primary)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Task/Karma Card Toggle (Help Requests) ──
+        _buildExpansionCard(
+          title: 'Request Help from Community',
+          icon: Icons.handshake_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Mark as Help Request', style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+                value: isHelp,
+                activeColor: c.primary,
+                onChanged: (val) {
+                  setState(() {
+                    _selectedType = val ? PostType.helpRequest : (_selectedMediaFile != null ? (_isVideoMedia ? PostType.video : PostType.image) : PostType.text);
+                  });
+                },
+              ),
+              if (isHelp) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _rewardController,
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(color: c.textHi, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Karma Reward Amount',
+                    hintText: 'Enter karma points to reserve...',
+                    filled: true,
+                    fillColor: c.field,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _tagIcons[tag] ?? Icons.tag_rounded,
-                      size: 13,
-                      color: selected ? c.primary : c.textMuted,
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpansionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    final c = context.appColors;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: c.primary, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: TextStyle(
+                  color: c.textHi,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// ── Publish Button Widget with physical touch animation ───────────────────────
+
+class _PublishButton extends StatefulWidget {
+  final VoidCallback? onTap;
+
+  const _PublishButton({required this.onTap});
+
+  @override
+  State<_PublishButton> createState() => _PublishButtonState();
+}
+
+class _PublishButtonState extends State<_PublishButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      lowerBound: 0.94,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+    _scaleAnimation = _controller;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    const buttonColor = Color(0xFF8870EE);
+
+    return GestureDetector(
+      onTapDown: widget.onTap != null
+          ? (_) => _controller.animateTo(0.94, curve: Curves.easeInOut)
+          : null,
+      onTapUp: widget.onTap != null
+          ? (_) {
+              _controller.animateTo(1.0, curve: Curves.easeInOut);
+              widget.onTap!();
+            }
+          : null,
+      onTapCancel: widget.onTap != null
+          ? () => _controller.animateTo(1.0, curve: Curves.easeInOut)
+          : null,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: widget.onTap == null ? c.field : buttonColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: widget.onTap == null
+                ? []
+                : [
+                    BoxShadow(
+                      color: buttonColor.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
-                    const SizedBox(width: 5),
+                  ],
+          ),
+          child: Text(
+            'Publish',
+            style: TextStyle(
+              color: widget.onTap == null ? c.textMuted : Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Media Preview Card ────────────────────────────────────────────────────────
+
+class _PreviewCard extends StatelessWidget {
+  final File? mediaFile;
+  final bool isVideo;
+  final VideoPlayerController? videoController;
+  final VoidCallback onReplace;
+
+  const _PreviewCard({
+    required this.mediaFile,
+    required this.isVideo,
+    required this.videoController,
+    required this.onReplace,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: GestureDetector(
+        key: ValueKey(mediaFile?.path),
+        onTap: onReplace,
+        child: Container(
+          width: 140,
+          height: 190,
+          decoration: BoxDecoration(
+            color: c.field,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: c.border.withOpacity(0.5), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Media Content
+              if (mediaFile != null) ...[
+                if (isVideo && videoController != null && videoController!.value.isInitialized)
+                  FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: videoController!.value.size.width,
+                      height: videoController!.value.size.height,
+                      child: VideoPlayer(videoController!),
+                    ),
+                  )
+                else
+                  Image.file(mediaFile!, fit: BoxFit.cover),
+              ] else
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.photo_outlined, size: 28, color: c.textMuted),
+                    const SizedBox(height: 8),
                     Text(
-                      tag[0].toUpperCase() + tag.substring(1),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        color: selected ? c.primary : c.textSecondary,
-                      ),
+                      'No Media',
+                      style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
+
+              // Edit overlay button
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.edit_outlined,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                ),
               ),
-            );
-          }).toList(),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }

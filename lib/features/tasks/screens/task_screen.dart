@@ -9,6 +9,7 @@ import '../../../core/karma/karma_ledger_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/services/notification_service.dart';
+import '../../create/screens/create_post_screen.dart';
 
 class HelpRequestScreen extends StatefulWidget {
   const HelpRequestScreen({super.key});
@@ -53,6 +54,25 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
             ),
             _LeaderboardTab(myUid: _myUid),
           ],
+        ),
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 70), // Lift FAB to avoid bottom navigation bar overlap
+        child: FloatingActionButton.extended(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const CreatePostScreen(
+                  isHelpRequest: true,
+                ),
+              ),
+            );
+          },
+          backgroundColor: context.appColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          icon: const Icon(Icons.handshake_outlined),
+          label: const Text('Request Help', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ),
     );

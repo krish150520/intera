@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-
-import 'firebase_options.dart';
 import 'core/constants/strings.dart';
 import 'core/routes/app_routes.dart';
 import 'core/theme/app_theme.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
   runApp(const InteraApp());
 }
 
