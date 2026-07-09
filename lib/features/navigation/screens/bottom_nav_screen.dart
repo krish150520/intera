@@ -47,8 +47,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   final List<_NavItem> _items = [
     _NavItem(icon: Icons.home_outlined,          activeIcon: Icons.home_rounded,          label: AppStrings.home),
-    _NavItem(icon: Icons.search_rounded,         activeIcon: Icons.search_rounded,        label: 'Search'),
-    _NavItem(icon: Icons.add_rounded,             activeIcon: Icons.add_rounded,           label: AppStrings.create),
+    _NavItem( icon: Icons.explore_outlined,activeIcon: Icons.explore, label: 'Discover',),    _NavItem(icon: Icons.add_rounded,             activeIcon: Icons.add_rounded,           label: AppStrings.create),
     _NavItem(icon: Icons.people_outline_rounded,  activeIcon: Icons.people_rounded,        label: 'Communities'),
     _NavItem(icon: Icons.assignment_turned_in_outlined, activeIcon: Icons.assignment_turned_in_rounded, label: 'Tasks'),
   ];
@@ -366,6 +365,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Scaffold(
       extendBody: true,
       body: IndexedStack(index: _currentIndex, children: _screens),
@@ -381,11 +381,11 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
         child: Container(
           height: 60, // Exact visual height matching the user's screenshot
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.isDarkMode ? c.surface : Colors.white,
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.04),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -415,8 +415,10 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                         duration: const Duration(milliseconds: 150),
                         opacity: showIndicator ? 1.0 : 0.0,
                         child: Container(
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF1EEFF),
+                          decoration: BoxDecoration(
+                            color: context.isDarkMode
+                                ? c.primary.withValues(alpha: 0.15)
+                                : const Color(0xFFF1EEFF),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -521,8 +523,9 @@ class _FloatingNavItemState extends State<_FloatingNavItem>
 
   @override
   Widget build(BuildContext context) {
-    const activeColor = Color(0xFF8870EE);
-    const inactiveColor = Color(0xFF9490A5);
+    final c = context.appColors;
+    final activeColor = c.primary;
+    final inactiveColor = c.textDim;
 
     return Expanded(
       child: GestureDetector(
@@ -602,7 +605,8 @@ class _FloatingCreateButtonState extends State<_FloatingCreateButton>
 
   @override
   Widget build(BuildContext context) {
-    const buttonColor = Color(0xFF917CF2);
+    final c = context.appColors;
+    final buttonColor = c.primary;
 
     return Expanded(
       child: GestureDetector(
@@ -624,7 +628,7 @@ class _FloatingCreateButtonState extends State<_FloatingCreateButton>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: buttonColor.withOpacity(0.25),
+                    color: buttonColor.withValues(alpha: context.isDarkMode ? 0.35 : 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -817,7 +821,7 @@ class _PinterestOptionButtonState extends State<_PinterestOptionButton>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: context.isDarkMode ? 0.2 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),

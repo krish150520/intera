@@ -47,11 +47,11 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "lib/core/constants/assets/images/logo.png"
+  image_path: "lib/core/constants/assets/images/intera_app_icon.png"
 
 flutter:
   uses-material-design: true
 
   assets:
-    - lib/core/constants/assets/images/logo.png
+    - lib/core/constants/assets/images/intera_app_icon.png
     - assets/models/

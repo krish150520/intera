@@ -55,9 +55,9 @@ class _CommunitiesScreenState extends State<CommunitiesScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: c.bg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: c.bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
         title: Text(
@@ -99,9 +99,11 @@ class _CommunitiesScreenState extends State<CommunitiesScreen> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
+            colors: context.isDarkMode
+                ? [const Color(0xFF2A2F55), const Color(0xFF171A30), const Color(0xFF171A30)]
+                : const [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -137,9 +139,17 @@ class _CommunitiesScreenState extends State<CommunitiesScreen> {
                                   end: Alignment.bottomRight,
                                 )
                               : null,
-                          color: isSelected ? null : Colors.white.withValues(alpha: 0.4),
+                          color: isSelected
+                              ? null
+                              : (context.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.white.withValues(alpha: 0.4)),
                           border: Border.all(
-                            color: isSelected ? Colors.transparent : c.border.withValues(alpha: 0.5),
+                            color: isSelected
+                                ? Colors.transparent
+                                : (context.isDarkMode
+                                    ? c.border.withValues(alpha: 0.25)
+                                    : c.border.withValues(alpha: 0.5)),
                             width: 1,
                           ),
                           boxShadow: [
@@ -327,12 +337,17 @@ class _CommunityCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: context.isDarkMode ? 0.16 : 0.6),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.02),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -393,7 +408,10 @@ class _CommunityCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: c.surface,
-                          border: Border.all(color: Colors.white, width: 3),
+                          border: Border.all(
+                            color: context.isDarkMode ? c.surface : Colors.white,
+                            width: 3,
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.1),
@@ -576,7 +594,11 @@ class _CommunityJoinButtonState extends State<_CommunityJoinButton>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-            color: widget.isMember ? Colors.white.withValues(alpha: 0.6) : null,
+            color: widget.isMember
+                ? (context.isDarkMode
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.6))
+                : null,
             border: widget.isMember
                 ? Border.all(color: c.border, width: 1.2)
                 : null,

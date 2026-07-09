@@ -11,8 +11,40 @@ import '../../videos/screens/community_detail_screen.dart';
 import '../../messaging/screens/chat_screen.dart';
 import '../../messaging/services/messaging_service.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _markAllAsRead();
+  }
+
+  void _markAllAsRead() async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (currentUid.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('recipientId', isEqualTo: currentUid)
+          .where('isRead', isEqualTo: false)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (var doc in snap.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint('Error marking notifications as read: $e');
+    }
+  }
 
   // ─── Visual Helpers ────────────────────────────────────────────────────────
   IconData _iconFor(String type) {
@@ -146,7 +178,6 @@ class NotificationsScreen extends StatelessWidget {
         break;
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

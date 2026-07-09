@@ -117,7 +117,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final c = context.appColors;
 
     return Scaffold(
-      backgroundColor: c.bg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           widget.userName,
@@ -127,7 +127,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             fontSize: 16,
           ),
         ),
-        backgroundColor: c.bg,
+        backgroundColor: Colors.transparent,
         foregroundColor: c.textHi,
         elevation: 0,
         centerTitle: true,
@@ -197,7 +197,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 userData['bio'] ??
                 'Hey there! I am excited to join the INTERA community. 🚀';
 
-            return SingleChildScrollView(
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: context.isDarkMode
+                      ? [const Color(0xFF2A2F55), const Color(0xFF171A30), const Color(0xFF171A30)]
+                      : const [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -573,7 +583,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                 ],
               ),
-            );
+            ),);
           },
         ),
       ),

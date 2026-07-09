@@ -22,17 +22,17 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    
+
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
-    
+
     _scale = CurvedAnimation(
       parent: _ctrl,
       curve: const Interval(0.0, 0.8, curve: Curves.easeOutBack),
     );
-    
+
     _fade = CurvedAnimation(
       parent: _ctrl,
       curve: const Interval(0.2, 1.0, curve: Curves.easeIn),
@@ -137,7 +137,8 @@ class _SplashScreenState extends State<SplashScreen>
                               left: -10,
                               child: CircleAvatar(
                                 radius: 24,
-                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.08),
                               ),
                             ),
                             // Logo letter mark
@@ -158,7 +159,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Brand title with fade-in animation
                   FadeTransition(
                     opacity: _fade,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import 'user_profile_screen.dart';
 
@@ -23,15 +23,17 @@ class ConnectionsListScreen extends StatelessWidget {
         ? FirebaseFirestore.instance.collection('users').doc(userId).collection('followers')
         : FirebaseFirestore.instance.collection('users').doc(userId).collection('following');
 
+    final c = context.appColors;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: c.surface,
       appBar: AppBar(
         title: Text(
           isFollowersMode ? "$profileOwnerName's Followers" : "Following",
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: c.textHi),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: c.surface,
+        foregroundColor: c.textHi,
         elevation: 0.5,
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -50,7 +52,7 @@ class ConnectionsListScreen extends StatelessWidget {
             return Center(
               child: Text(
                 isFollowersMode ? 'No followers listed yet.' : 'Not following any profiles yet.',
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: c.textMuted, fontSize: 13),
               ),
             );
           }
@@ -81,10 +83,10 @@ class ConnectionsListScreen extends StatelessWidget {
 
                   return ListTile(
                     leading: CustomAvatar(name: name, imageUrl: avatar, userId: targetUid, radius: 18),
-                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    title: Text(name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: c.textHi)),
                     subtitle: Text(
                       username.startsWith('@') ? username : '@$username',
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                      style: TextStyle(color: c.textMuted, fontSize: 12),
                     ),
                     onTap: () {
                       Navigator.of(context).push(

@@ -215,9 +215,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         final List<String> hobbies = List<String>.from(ud['hobbies'] ?? ud['hobbiesAndInterests'] ?? ud['skills'] ?? []);
 
         return Scaffold(
-          backgroundColor: c.bg,
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
-            backgroundColor: c.bg,
+            backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
             title: Text(
@@ -293,9 +293,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             ],
           ),
           body: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
+                colors: context.isDarkMode
+                    ? [const Color(0xFF2A2F55), const Color(0xFF171A30), const Color(0xFF171A30)]
+                    : const [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -669,12 +671,17 @@ class _WeeklyBonusCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: context.isDarkMode ? 0.16 : 0.6),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.02),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -779,12 +786,17 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: context.isDarkMode ? 0.16 : 0.6),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1030,9 +1042,14 @@ class _HobbyChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.3),
+        color: context.isDarkMode
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 0.8),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: context.isDarkMode ? 0.16 : 0.5),
+          width: 0.8,
+        ),
       ),
       child: Text(
         label,

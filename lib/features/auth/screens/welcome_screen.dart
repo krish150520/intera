@@ -3,6 +3,7 @@ import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../shared/widgets/custom_button.dart';
+import '../../../core/constants/assets.dart';
 
 /// Screen 2: Welcome Screen
 /// Entry point with Login and Sign Up actions.
@@ -25,14 +26,11 @@ class WelcomeScreen extends StatelessWidget {
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Center(
-                  child: Text(
-                    'IN',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14.0),
+                  child: Image.asset(
+                    AppAssets.logo,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),

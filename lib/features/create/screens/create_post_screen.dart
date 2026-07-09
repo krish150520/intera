@@ -21,6 +21,7 @@ class CreatePostScreen extends StatefulWidget {
   final File? initialMediaFile;
   final bool? isVideo;
   final bool? isHelpRequest;
+  final String? postType;
 
   const CreatePostScreen({
     super.key,
@@ -28,6 +29,7 @@ class CreatePostScreen extends StatefulWidget {
     this.initialMediaFile,
     this.isVideo,
     this.isHelpRequest,
+    this.postType,
   });
 
   @override
@@ -80,7 +82,16 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut);
     
-    if (widget.isHelpRequest == true) {
+    if (widget.postType == 'text') {
+      _selectedType = PostType.text;
+    } else if (widget.postType == 'photo') {
+      _selectedType = PostType.image;
+    } else if (widget.postType == 'question') {
+      _selectedType = PostType.helpRequest;
+    } else if (widget.postType == 'poll') {
+      _selectedType = PostType.text;
+      _hasPoll = true;
+    } else if (widget.isHelpRequest == true) {
       _selectedType = PostType.helpRequest;
     } else if (widget.initialMediaFile != null) {
       _selectedMediaFile = widget.initialMediaFile;
