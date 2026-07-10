@@ -3,7 +3,6 @@ import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../shared/widgets/custom_button.dart';
-import '../../../core/constants/assets.dart';
 
 /// Screen 2: Welcome Screen
 /// Entry point with Login and Sign Up actions.
@@ -19,21 +18,60 @@ class WelcomeScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(flex: 2),
+
+              // ── Squircle logo (no image asset) ───────────────────────────
               Container(
                 width: 88,
                 height: 88,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14.0),
-                  child: Image.asset(
-                    AppAssets.logo,
-                    fit: BoxFit.contain,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primary,
+                      AppColors.primary.withValues(alpha: 0.8),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.30),
+                      blurRadius: 24,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    width: 1.5,
                   ),
                 ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Decorative ghost circle (top-left)
+                    Positioned(
+                      top: -10,
+                      left: -10,
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    // "IN" lettermark
+                    const Text(
+                      'IN',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+
               const SizedBox(height: 24),
               const Text(
                 AppStrings.appName,

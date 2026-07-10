@@ -199,6 +199,28 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
     super.dispose();
   }
 
+  // ── FIX #11: Enter text editing mode ─────────────────────────────────────
+  // The TextField used for captions only exists in the widget tree while
+  // `_isTextEditing` is true (see _buildFullscreenTextEditor). Previously,
+  // several tap handlers called `_textFocusNode.requestFocus()` directly to
+  // *trigger* entering edit mode - but since the TextField wasn't built yet,
+  // there was nothing for the FocusNode to attach to, so the request was a
+  // no-op and the listener that flips `_isTextEditing` never fired. This
+  // helper flips the flag first (which builds the TextField), then requests
+  // focus once the widget is mounted on the next frame.
+  void _enterTextEditMode() {
+    debugPrint('>>> _enterTextEditMode called, was _isTextEditing=$_isTextEditing');
+    setState(() {
+      _isTextEditing = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint('>>> postFrameCallback firing, mounted=$mounted, hasFocus=${_textFocusNode.hasFocus}');
+      if (mounted) {
+        _textFocusNode.requestFocus();
+      }
+    });
+  }
+
   // ── FIX #4: Discard confirmation ─────────────────────────────────────────
 
   bool get _hasContent =>
@@ -821,7 +843,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
       return GestureDetector(
         onTap: () {
           if (!_isTextEditing) {
-            _textFocusNode.requestFocus();
+            _enterTextEditMode();
           }
         },
         child: AnimatedSwitcher(
@@ -851,7 +873,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         },
         onDoubleTap: () {
           if (!_isTextEditing) {
-            _textFocusNode.requestFocus();
+            _enterTextEditMode();
           }
         },
         child: Container(
@@ -983,7 +1005,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         child: GestureDetector(
           onTap: () {
             setState(() => _textPositioned = false);
-            _textFocusNode.requestFocus();
+            _enterTextEditMode();
           },
           child: Center(
             child: Text(
@@ -1054,7 +1076,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
             _isNearTrash = false;
           });
         },
-        onTap: () => _textFocusNode.requestFocus(),
+        onTap: () => _enterTextEditMode(),
         child: Stack(
           children: [
             Positioned(
@@ -1354,7 +1376,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
           isText: true,
           onTap: () {
             HapticFeedback.selectionClick();
-            _textFocusNode.requestFocus();
+            _enterTextEditMode();
           },
         ),
         const SizedBox(height: 14),
