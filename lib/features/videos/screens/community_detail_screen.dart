@@ -11,6 +11,11 @@ import 'edit_community_screen.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/routes/app_routes.dart';
 import 'community_search_screen.dart';
+import 'community_chat_screen.dart';
+import 'create_poll_screen.dart';
+import 'create_question_screen.dart';
+
+
 
 class CommunityDetailScreen extends StatefulWidget {
   final String communityId;
@@ -134,6 +139,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
               icon: Icons.article_outlined,
               label: 'Text Post',
               communityId: widget.communityId,
+              communityName: widget.communityName,
               postType: 'text',
               sheetCtx: sheetCtx,
             ),
@@ -141,6 +147,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
               icon: Icons.image_outlined,
               label: 'Photo Post',
               communityId: widget.communityId,
+              communityName: widget.communityName,
               postType: 'photo',
               sheetCtx: sheetCtx,
             ),
@@ -148,6 +155,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
               icon: Icons.help_outline_rounded,
               label: 'Question Post',
               communityId: widget.communityId,
+              communityName: widget.communityName,
               postType: 'question',
               sheetCtx: sheetCtx,
             ),
@@ -155,6 +163,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
               icon: Icons.poll_outlined,
               label: 'Poll Post',
               communityId: widget.communityId,
+              communityName: widget.communityName,
               postType: 'poll',
               sheetCtx: sheetCtx,
             ),
@@ -391,17 +400,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                                     const SizedBox(width: 8),
                                     _ActionPillButton(
                                       onPressed: () {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                'Welcome to $name Chat Room! 💬'),
-                                            behavior:
-                                                SnackBarBehavior.floating,
-                                            shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        10)),
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => CommunityChatScreen(
+                                              communityId: widget.communityId,
+                                              communityName: name,
+                                              communityAvatar: avatarUrl,
+                                            ),
                                           ),
                                         );
                                       },
@@ -759,6 +764,7 @@ class _PostTypeListTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String communityId;
+  final String? communityName;
   final String postType;
   final BuildContext sheetCtx;
 
@@ -766,6 +772,7 @@ class _PostTypeListTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.communityId,
+    this.communityName,
     required this.postType,
     required this.sheetCtx,
   });
@@ -780,12 +787,28 @@ class _PostTypeListTile extends StatelessWidget {
               TextStyle(color: c.textHi, fontWeight: FontWeight.w600)),
       onTap: () {
         Navigator.pop(sheetCtx);
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => CreatePostScreen(
-            communityId: communityId,
-            postType: postType, // pass type so CreatePostScreen can use it
-          ),
-        ));
+        if (postType == 'poll') {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => CreatePollScreen(
+              communityId: communityId,
+              communityName: communityName,
+            ),
+          ));
+        } else if (postType == 'question') {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => CreateQuestionScreen(
+              communityId: communityId,
+              communityName: communityName,
+            ),
+          ));
+        } else {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => CreatePostScreen(
+              communityId: communityId,
+              postType: postType,
+            ),
+          ));
+        }
       },
     );
   }

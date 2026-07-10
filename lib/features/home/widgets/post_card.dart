@@ -4,6 +4,9 @@ import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../shared/widgets/live_username.dart';
+import 'poll_card_widget.dart';
+import 'question_card_widget.dart';
+
 
 class PostCard extends StatelessWidget {
   final Post post;
@@ -35,6 +38,13 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (post.type == PostType.poll) {
+      return PollCardWidget(post: post);
+    }
+    if (post.type == PostType.question) {
+      return QuestionCardWidget(post: post);
+    }
+
     if (_hasMedia || _isMediaType) {
       return _MediaPostCard(
         post: post,
@@ -451,7 +461,7 @@ class _MediaPostCard extends StatelessWidget {
             children: [
               hasDisplayImage
                   ? Image.network(
-                      displayUrl!,
+                      displayUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => const _FallbackBg(),
                     )

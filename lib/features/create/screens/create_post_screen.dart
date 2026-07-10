@@ -7,11 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/karma/karma_service.dart';
-import '../../../core/karma/karma_badge.dart';
-import '../../../shared/widgets/custom_avatar.dart';
+
+
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/nsfw_detection_service.dart';
-import '../../../core/services/feed_algorithm.dart';
+
 import '../../navigation/screens/bottom_nav_screen.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:path_provider/path_provider.dart';

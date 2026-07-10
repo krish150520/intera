@@ -58,8 +58,8 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
         await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
     if (picked == null) return;
     setState(() {
-      if (isBanner) _bannerFile = File(picked.path);
-      else          _avatarFile = File(picked.path);
+      if (isBanner){ _bannerFile = File(picked.path);}
+      else       {   _avatarFile = File(picked.path);}
     });
   }
 
@@ -611,7 +611,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+         const Text(
             'Danger Zone',
             style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14),
           ),

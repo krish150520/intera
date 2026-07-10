@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// The type of content a post represents.
-enum PostType { text, question, helpRequest, achievement, image, video }
+enum PostType { text, question, helpRequest, achievement, image, video, poll }
 
 /// Represents a single feed item (post, question, help request, etc.)
 class Post {
@@ -31,6 +31,13 @@ class Post {
   final String? communityId;
   final String? videoThumbnailUrl;
 
+  // Poll fields
+  final List<String>? pollOptions;
+  final Map<String, int>? pollVotes;
+  final List<String>? pollVotedBy;
+  final int? totalVotes;
+  final DateTime? pollExpiresAt;
+
   const Post({
     required this.id,
     required this.authorId,
@@ -56,6 +63,11 @@ class Post {
     this.rewardKarma,
     this.communityId,
     this.videoThumbnailUrl,
+    this.pollOptions,
+    this.pollVotes,
+    this.pollVotedBy,
+    this.totalVotes,
+    this.pollExpiresAt,
   });
 
   factory Post.fromFirestore(DocumentSnapshot doc, String currentUid) {
@@ -112,6 +124,18 @@ class Post {
       rewardKarma: data['karmaReward'] ?? data['rewardKarma'],
       communityId: data['communityId'] as String?,
       videoThumbnailUrl: data['videoThumbnailUrl'] as String?,
+      pollOptions: data['pollOptions'] != null
+          ? List<String>.from(data['pollOptions'])
+          : null,
+      pollVotes: data['pollVotes'] != null
+          ? Map<String, int>.from(
+              (data['pollVotes'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt())))
+          : null,
+      pollVotedBy: data['pollVotedBy'] != null
+          ? List<String>.from(data['pollVotedBy'])
+          : null,
+      totalVotes: (data['totalVotes'] as num?)?.toInt(),
+      pollExpiresAt: (data['pollExpiresAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -141,6 +165,11 @@ class Post {
       if (rewardKarma != null) 'rewardKarma': rewardKarma,
       if (communityId != null) 'communityId': communityId,
       if (videoThumbnailUrl != null) 'videoThumbnailUrl': videoThumbnailUrl,
+      if (pollOptions != null) 'pollOptions': pollOptions,
+      if (pollVotes != null) 'pollVotes': pollVotes,
+      if (pollVotedBy != null) 'pollVotedBy': pollVotedBy,
+      if (totalVotes != null) 'totalVotes': totalVotes,
+      if (pollExpiresAt != null) 'pollExpiresAt': Timestamp.fromDate(pollExpiresAt!),
     };
   }
 }

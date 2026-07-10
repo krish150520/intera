@@ -104,6 +104,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
         'members':     [user.uid],
         'memberCount': 1,
         'isPrivate':   !_isPublic,
+        'chatMode':    'everyone',
         'createdAt':   FieldValue.serverTimestamp(),
       });
 

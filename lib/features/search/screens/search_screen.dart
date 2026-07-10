@@ -217,7 +217,7 @@ class _UserResultsList extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (searchQuery.isEmpty) {
-      return _GlassEmptyPlaceholder(
+      return const _GlassEmptyPlaceholder(
           icon: Icons.people_outline_rounded,
           label: 'Type to search community members');
     }
@@ -258,7 +258,7 @@ class _UserResultsList extends StatelessWidget {
               return name.contains(q) || username.contains(q);
             }).toList();
             if (docs.isEmpty) {
-              return _GlassEmptyPlaceholder(
+              return const _GlassEmptyPlaceholder(
                   icon: Icons.person_search_rounded,
                   label: 'No users found');
             }
@@ -397,9 +397,9 @@ class _PostResultsList extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           if (searchVideos) {
-            return SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 8),
+            return const SingleChildScrollView(
+              physics:  NeverScrollableScrollPhysics(),
+              padding:  EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -407,26 +407,26 @@ class _PostResultsList extends StatelessWidget {
                     child: Column(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding:  EdgeInsets.only(bottom: 12),
                           child: StaggeredCardShimmer(height: 190),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding:  EdgeInsets.only(bottom: 12),
                           child: StaggeredCardShimmer(height: 220),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                   SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding:  EdgeInsets.only(bottom: 12),
                           child: StaggeredCardShimmer(height: 240),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding:  EdgeInsets.only(bottom: 12),
                           child: StaggeredCardShimmer(height: 170),
                         ),
                       ],
@@ -464,7 +464,7 @@ class _PostResultsList extends StatelessWidget {
             if (!title.contains(q) &&
                 !body.contains(q) &&
                 !content.contains(q) &&
-                !authorName.contains(q)) continue;
+                !authorName.contains(q)){ continue;}
             posts.add(Post.fromFirestore(doc, currentUid));
           } catch (e) {
             debugPrint('Skipped post [${doc.id}]: $e');

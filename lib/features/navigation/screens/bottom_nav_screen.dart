@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -14,7 +12,7 @@ import '../../tasks/screens/task_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/services/reaction_service.dart';
 import '../../../core/karma/karma_service.dart';
-
+import '../../../core/services/permission_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -144,183 +142,18 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   Future<void> _checkPermissions() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final hasPrompted = prefs.getBool('has_prompted_notifications') ?? false;
-      if (hasPrompted) return;
-
-      final notifStatus = await Permission.notification.status;
-
-      if (notifStatus.isDenied) {
-        if (!mounted) return;
-        _showNotificationPermissionSheet(prefs);
+      final isGranted = await PermissionService.requestNotificationPermission(context);
+      if (isGranted) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          _initLocalNotificationsAndListen(uid);
+        }
       }
     } catch (e) {
       debugPrint('Notification permission check failed: $e');
     }
   }
 
-  void _showNotificationPermissionSheet(SharedPreferences prefs) {
-    final c = context.appColors;
-    showModalBottomSheet(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: c.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (sheetCtx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: c.border,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Enable Notifications',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: c.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Allow notification permissions to get the best experience on INTERA, like receiving chat messages and replies in real-time.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: c.textSecondary,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildPermissionRow(
-                      icon: Icons.notifications_active_rounded,
-                      color: Colors.orangeAccent,
-                      title: 'Push Notifications',
-                      subtitle: 'Stay updated on replies, likes, and sparks.',
-                      onTap: () async {
-                        final status = await Permission.notification.request();
-                        final uid = FirebaseAuth.instance.currentUser?.uid;
-                        if (status.isGranted && uid != null && uid.isNotEmpty) {
-                          _initLocalNotificationsAndListen(uid);
-                        }
-                        setSheetState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 28),
-                    ElevatedButton(
-                      onPressed: () async {
-                        await prefs.setBool('has_prompted_notifications', true);
-                        if (sheetCtx.mounted) Navigator.pop(sheetCtx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: c.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Continue',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildPermissionRow({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    final c = context.appColors;
-    return Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: c.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: c.textMuted,
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        TextButton(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
-            backgroundColor: c.field,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: c.border, width: 0.8),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          ),
-          child: Text(
-            'Allow',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: c.primary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   void _onTap(int index) {
     if (index == _createIndex) {
