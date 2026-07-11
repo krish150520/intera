@@ -11,3 +11,7 @@
 # Firebase
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+
+# Play Store/Play Core Split Install (Flutter Deferred Components)
+-dontwarn com.google.android.play.core.**
+
