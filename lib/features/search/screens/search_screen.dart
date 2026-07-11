@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intera/features/home/widgets/post_card.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/routes/app_routes.dart';
+
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';

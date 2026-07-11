@@ -5,7 +5,7 @@ import 'dart:ui';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../shared/models/post_model.dart';
-import '../../home/screens/post_detail_screen.dart';
+
 import '../../profile/screens/user_profile_screen.dart';
 import '../../videos/screens/community_detail_screen.dart';
 import '../../messaging/screens/chat_screen.dart';

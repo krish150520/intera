@@ -10,12 +10,15 @@ void main() {
 
 /// Root widget for the INTERA app.
 class InteraApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   const InteraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: AppStrings.appName,
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

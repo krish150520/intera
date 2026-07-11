@@ -70,7 +70,7 @@ class MessagingService {
     final snapshot = await docRef.get();
 
     if (snapshot.exists) {
-      final status = (snapshot.data() as Map<String, dynamic>?)?['status'] as String? ?? 'active';
+      final status = (snapshot.data())?['status'] as String? ?? 'active';
       return (
         conversationId: convoId,
         access: status == 'pending'

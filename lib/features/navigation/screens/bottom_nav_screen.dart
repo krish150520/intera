@@ -15,6 +15,9 @@ import '../../../core/karma/karma_service.dart';
 import '../../../core/services/permission_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../core/services/notification_service.dart';
+
 
 class BottomNavScreen extends StatefulWidget {
   const BottomNavScreen({super.key});
@@ -73,6 +76,16 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     _notificationsListenerInitialized = true;
 
     try {
+      // Fetch current FCM token on startup/permission grant and save to Firestore
+      try {
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          await NotificationService.saveFcmToken(token);
+        }
+      } catch (e) {
+        debugPrint('FCM Token retrieval failed inside bottom_nav_screen: $e');
+      }
+
       final androidInit = const AndroidInitializationSettings('@mipmap/ic_launcher');
       final iosInit = const DarwinInitializationSettings();
       final initSettings = InitializationSettings(android: androidInit, iOS: iosInit);
@@ -89,7 +102,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
           .listen((snap) {
             for (final change in snap.docChanges) {
               if (change.type == DocumentChangeType.added) {
-                final data = change.doc.data() as Map<String, dynamic>? ?? {};
+                final data = change.doc.data() ?? {};
                 final title = data['title'] ?? 'New Notification';
                 final subtitle = data['subtitle'] ?? '';
                 _showLocalNotification(title, subtitle);
@@ -511,7 +524,7 @@ class _PinterestBottomSheet extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 24,
             offset: const Offset(0, -8),
           ),

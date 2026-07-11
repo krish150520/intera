@@ -42,6 +42,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   final _rewardController = TextEditingController();
+  final _tagController = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
   File? _selectedMediaFile;
@@ -49,7 +50,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   bool _isLoading = false;
   bool _isVideoMedia = false;
   File? _videoThumbnailFile;
-  bool _isCustomThumbnail = false;
+
   final Set<String> _selectedTags = {};
 
   // Intera Additions (Optional UI fields)
@@ -69,7 +70,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   bool _loadingCommunities = false;
 
   late final AnimationController _animCtrl;
-  late final Animation<double> _fadeAnim;
+
 
   final List<String> _moods = ['😊 Chill', '🔥 Focused', '🚀 Excited', '😴 Tired', '🤔 Curious'];
 
@@ -80,7 +81,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut);
+
     
     if (widget.postType == 'text') {
       _selectedType = PostType.text;
@@ -118,6 +119,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     _titleController.dispose();
     _bodyController.dispose();
     _rewardController.dispose();
+    _tagController.dispose();
     for (var controller in _pollOptionControllers) {
       controller.dispose();
     }
@@ -172,7 +174,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       _selectedMediaFile = File(pickedFile.path);
       _isVideoMedia = isVideo;
       _videoThumbnailFile = null;
-      _isCustomThumbnail = false;
+
       _selectedType = isVideo ? PostType.video : PostType.image;
     });
     if (isVideo) {
@@ -186,28 +188,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     }
   }
 
-  void _removeMedia() {
-    _videoPreviewController?.pause();
-    _videoPreviewController?.dispose();
-    _videoPreviewController = null;
-    setState(() {
-      _selectedMediaFile = null;
-      _isVideoMedia = false;
-      _videoThumbnailFile = null;
-      _isCustomThumbnail = false;
-      _selectedType = PostType.text;
-    });
-  }
 
-  Future<void> _pickCustomThumbnail() async {
-    final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
-    if (file != null) {
-      setState(() {
-        _videoThumbnailFile = File(file.path);
-        _isCustomThumbnail = true;
-      });
-    }
-  }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
@@ -358,6 +339,17 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       // ── Write to Firestore ─────────────────────────────────────────────
       final docRef =
           await FirebaseFirestore.instance.collection('posts').add(payload);
+
+      // Save tags to the global database collection 'tags'
+      for (final tag in _selectedTags) {
+        final cleanTag = tag.toLowerCase().trim().replaceAll('#', '');
+        if (cleanTag.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('tags').doc(cleanTag).set({
+            'name': cleanTag,
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      }
 
       if (isHelp && reward > 0) {
         await KarmaService.reserveForHelpPost(
@@ -543,10 +535,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.border.withOpacity(0.4)),
+        border: Border.all(color: c.border.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -566,7 +558,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
               contentPadding: EdgeInsets.zero,
             ),
           ),
-          Divider(color: c.border.withOpacity(0.5), height: 24),
+          Divider(color: c.border.withValues(alpha: 0.5), height: 24),
 
           // Caption / Description
           TextField(
@@ -596,47 +588,170 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         _buildExpansionCard(
           title: 'Tags & Topics',
           icon: Icons.tag_rounded,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: ['flutter', 'design', 'college', 'tech', 'lifestyle'].map((tag) {
-                  final isSelected = _selectedTags.contains(tag);
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        if (isSelected) {
-                          _selectedTags.remove(tag);
-                        } else {
-                          _selectedTags.add(tag);
-                        }
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? c.primary.withOpacity(0.15) : c.field,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? c.primary : c.border.withOpacity(0.3),
-                          width: 1,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('tags')
+                .orderBy('createdAt', descending: true)
+                .limit(40)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final defaultTags = ['design', 'college', 'tech', 'lifestyle', 'help', 'question'];
+              final dbTags = snapshot.hasData
+                  ? snapshot.data!.docs
+                      .map((doc) => doc.id.toLowerCase().trim())
+                      .where((t) => t.isNotEmpty)
+                      .toList()
+                  : <String>[];
+
+              // Union of standard tags and database tags while keeping order
+              final allTags = <String>[];
+              allTags.addAll(defaultTags);
+              for (final t in dbTags) {
+                if (!allTags.contains(t)) {
+                  allTags.add(t);
+                }
+              }
+
+              // Also make sure currently selected tags are visible in the pool
+              for (final t in _selectedTags) {
+                if (!allTags.contains(t)) {
+                  allTags.add(t);
+                }
+              }
+
+              final searchQuery = _tagController.text.toLowerCase().trim().replaceAll('#', '');
+              final filteredTags = searchQuery.isEmpty
+                  ? allTags
+                  : allTags.where((t) => t.contains(searchQuery)).toList();
+
+              final isNewTag = searchQuery.isNotEmpty && !allTags.contains(searchQuery);
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Search & Create input field
+                  Container(
+                    decoration: BoxDecoration(
+                      color: c.field,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: c.border.withValues(alpha: 0.3)),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.search_rounded, color: c.textMuted, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _tagController,
+                            style: TextStyle(color: c.textPrimary, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'Search or type custom tag...',
+                              hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (val) {
+                              final clean = val.toLowerCase().trim().replaceAll('#', '');
+                              if (clean.isNotEmpty) {
+                                setState(() {
+                                  _selectedTags.add(clean);
+                                  _tagController.clear();
+                                });
+                              }
+                            },
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        '#$tag',
-                        style: TextStyle(
-                          color: isSelected ? c.primary : c.textMuted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                        if (_tagController.text.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => setState(() => _tagController.clear()),
+                            child: Icon(Icons.close_rounded, color: c.textMuted, size: 16),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // If user is typing a new tag, offer to create it
+                  if (isNewTag) ...[
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedTags.add(searchQuery);
+                          _tagController.clear();
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: c.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: c.primary, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_rounded, color: c.primary, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Create "#$searchQuery"',
+                              style: TextStyle(
+                                color: c.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ],
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Wrap list of tags
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: filteredTags.map((tag) {
+                      final isSelected = _selectedTags.contains(tag);
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedTags.remove(tag);
+                            } else {
+                              _selectedTags.add(tag);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? c.primary.withValues(alpha: 0.15) : c.field,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isSelected ? c.primary : c.border.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            '#$tag',
+                            style: TextStyle(
+                              color: isSelected ? c.primary : c.textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 12),
@@ -660,7 +775,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                         _selectedMood = val ? mood : null;
                       });
                     },
-                    selectedColor: c.primary.withOpacity(0.15),
+                    selectedColor: c.primary.withValues(alpha: 0.15),
                     backgroundColor: c.field,
                     labelStyle: TextStyle(
                       color: isSelected ? c.primary : c.textMuted,
@@ -856,7 +971,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.3)),
+        border: Border.all(color: c.border.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -947,7 +1062,7 @@ class _PublishButtonState extends State<_PublishButton>
                 ? []
                 : [
                     BoxShadow(
-                      color: buttonColor.withOpacity(0.2),
+                      color: buttonColor.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -997,10 +1112,10 @@ class _PreviewCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.field,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: c.border.withOpacity(0.5), width: 1.5),
+            border: Border.all(color: c.border.withValues(alpha: 0.5), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -1043,7 +1158,7 @@ class _PreviewCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
+                    color: Colors.black.withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(

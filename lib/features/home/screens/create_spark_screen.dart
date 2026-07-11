@@ -288,10 +288,10 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
           child: Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1828).withOpacity(0.95),
+              color: const Color(0xFF1A1828).withValues(alpha: 0.95),
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -302,7 +302,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -692,7 +692,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Colors.black.withOpacity(0.75),
+                          Colors.black.withValues(alpha: 0.75),
                         ],
                       ),
                     ),
@@ -713,7 +713,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withOpacity(0.45),
+                          Colors.black.withValues(alpha: 0.45),
                           Colors.transparent,
                         ],
                       ),
@@ -742,8 +742,8 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _isNearTrash
-                            ? Colors.redAccent.withOpacity(0.3)
-                            : Colors.black.withOpacity(0.5),
+                            ? Colors.redAccent.withValues(alpha: 0.3)
+                            : Colors.black.withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: _isNearTrash ? Colors.redAccent : Colors.white24,
@@ -919,7 +919,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF7F00FF).withOpacity(0.4),
+                          color: const Color(0xFF7F00FF).withValues(alpha: 0.4),
                           blurRadius: 24,
                           spreadRadius: 2,
                         )
@@ -940,20 +940,20 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.videocam_rounded,
-                            size: 12, color: Colors.white.withOpacity(0.7)),
+                            size: 12, color: Colors.white.withValues(alpha: 0.7)),
                         const SizedBox(width: 4),
                         Text(
                           _formatDuration(
                               _videoPreviewController!.value.duration),
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1011,7 +1011,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
             child: Text(
               'Tap to type…',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.45),
+                color: Colors.white.withValues(alpha: 0.45),
                 fontSize: _fontSizes[_fontSizeIndex],
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.3,
@@ -1109,7 +1109,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         padding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.55),
+          color: Colors.black.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(32),
         ),
         child: textWidget,
@@ -1126,7 +1126,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
 
   Widget _buildFullscreenTextEditor(Size size) {
     return Container(
-      color: Colors.black.withOpacity(0.55), // Dim the image/video/gradient
+      color: Colors.black.withValues(alpha: 0.55), // Dim the image/video/gradient
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => _textFocusNode.unfocus(),
@@ -1146,7 +1146,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                 decoration: InputDecoration(
                   hintText: 'Type something…',
                   hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.35),
+                    color: Colors.white.withValues(alpha: 0.35),
                     fontSize: _fontSizes[_fontSizeIndex],
                     fontWeight: FontWeight.w600,
                   ),
@@ -1295,7 +1295,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
             padding:
                 const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -1303,11 +1303,11 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
               children: [
                 Icon(Icons.access_time_rounded,
                     size: 11,
-                    color: Colors.white.withOpacity(0.45)),
+                    color: Colors.white.withValues(alpha: 0.45)),
                 const SizedBox(width: 3),
                 Text('24h',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.45),
+                      color: Colors.white.withValues(alpha: 0.45),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     )),
@@ -1337,7 +1337,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                     ? []
                     : [
                         BoxShadow(
-                          color: const Color(0xFF9B59F5).withOpacity(0.45),
+                          color: const Color(0xFF9B59F5).withValues(alpha: 0.45),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         )
@@ -1456,10 +1456,10 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
           width: 52,
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
+            color: Colors.white.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(20),
             border:
-                Border.all(color: Colors.white.withOpacity(0.1)),
+                Border.all(color: Colors.white.withValues(alpha: 0.1)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1495,7 +1495,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                     boxShadow: selected
                         ? [
                             BoxShadow(
-                              color: g.start.withOpacity(0.6),
+                              color: g.start.withValues(alpha: 0.6),
                               blurRadius: 10,
                             )
                           ]
@@ -1551,11 +1551,11 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: selected
-                    ? Colors.white.withOpacity(0.2)
-                    : Colors.white.withOpacity(0.07),
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.07),
                 border: selected
                     ? Border.all(
-                        color: Colors.white.withOpacity(0.6), width: 1.5)
+                        color: Colors.white.withValues(alpha: 0.6), width: 1.5)
                     : null,
               ),
               child: Center(
@@ -1597,13 +1597,13 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                       width: 1.5,
                       style: BorderStyle.solid),
-                  color: Colors.white.withOpacity(0.06),
+                  color: Colors.white.withValues(alpha: 0.06),
                 ),
                 child: Icon(Icons.add_rounded,
-                    color: Colors.white.withOpacity(0.6), size: 26),
+                    color: Colors.white.withValues(alpha: 0.6), size: 26),
               ),
             );
           }
@@ -1622,7 +1622,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                      color: Colors.white.withOpacity(0.25), width: 1.5),
+                      color: Colors.white.withValues(alpha: 0.25), width: 1.5),
                   // FIX #3: Show video thumbnail in carousel
                   image: isVid
                       ? (thumbnail != null
@@ -1639,7 +1639,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                           width: 24,
                           height: 24,
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
+                            color: Colors.black.withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.play_arrow_rounded,
@@ -1713,10 +1713,10 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         child: Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(40),
             border: Border.all(
-                color: Colors.white.withOpacity(0.08)),
+                color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Row(
             children: [
@@ -1750,7 +1750,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            color: Colors.black.withOpacity(0.6),
+            color: Colors.black.withValues(alpha: 0.6),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1774,7 +1774,7 @@ class _CreateSparkScreenState extends State<CreateSparkScreen>
                   const SizedBox(height: 6),
                   Text('Just a moment',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 13,
                       )),
                 ],
@@ -1831,9 +1831,9 @@ class _PremiumDialog extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1828).withOpacity(0.9),
+              color: const Color(0xFF1A1828).withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1850,7 +1850,7 @@ class _PremiumDialog extends StatelessWidget {
                 Text(body,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.65),
+                      color: Colors.white.withValues(alpha: 0.65),
                       fontSize: 14,
                       height: 1.5,
                     )),
@@ -1861,10 +1861,10 @@ class _PremiumDialog extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: actionColor.withOpacity(0.15),
+                      color: actionColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: actionColor.withOpacity(0.4)),
+                          color: actionColor.withValues(alpha: 0.4)),
                     ),
                     child: Center(
                       child: Text(action,
@@ -1884,15 +1884,15 @@ class _PremiumDialog extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                            color: Colors.white.withOpacity(0.1)),
+                            color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Center(
                         child: Text(secondaryAction!,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
                             )),
@@ -1926,9 +1926,9 @@ class _GlassBtn extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.12),
+              color: Colors.white.withValues(alpha: 0.12),
               border:
-                  Border.all(color: Colors.white.withOpacity(0.14)),
+                  Border.all(color: Colors.white.withValues(alpha: 0.14)),
             ),
             child: Center(child: child),
           ),
@@ -1967,12 +1967,12 @@ class _ToolbarBtn extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: active
-                  ? Colors.white.withOpacity(0.22)
-                  : Colors.white.withOpacity(0.1),
+                  ? Colors.white.withValues(alpha: 0.22)
+                  : Colors.white.withValues(alpha: 0.1),
               border: Border.all(
                 color: active
-                    ? Colors.white.withOpacity(0.4)
-                    : Colors.white.withOpacity(0.12),
+                    ? Colors.white.withValues(alpha: 0.4)
+                    : Colors.white.withValues(alpha: 0.12),
               ),
             ),
             child: Center(
@@ -2022,7 +2022,7 @@ class _ModeTab2 extends StatelessWidget {
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF9B59F5).withOpacity(0.35),
+                      color: const Color(0xFF9B59F5).withValues(alpha: 0.35),
                       blurRadius: 14,
                       offset: const Offset(0, 3),
                     )
@@ -2035,7 +2035,7 @@ class _ModeTab2 extends StatelessWidget {
               style: TextStyle(
                 color: active
                     ? Colors.white
-                    : Colors.white.withOpacity(0.4),
+                    : Colors.white.withValues(alpha: 0.4),
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.0,
@@ -2078,12 +2078,12 @@ class _MediaSourceCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: gradient.map((c) => c.withOpacity(0.2)).toList(),
+            colors: gradient.map((c) => c.withValues(alpha: 0.2)).toList(),
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: gradient.first.withOpacity(0.3)),
+          border: Border.all(color: gradient.first.withValues(alpha: 0.3)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2096,7 +2096,7 @@ class _MediaSourceCard extends StatelessWidget {
                 gradient: LinearGradient(colors: gradient),
                 boxShadow: [
                   BoxShadow(
-                    color: gradient.first.withOpacity(0.4),
+                    color: gradient.first.withValues(alpha: 0.4),
                     blurRadius: 16,
                     spreadRadius: 1,
                   ),
@@ -2148,10 +2148,10 @@ class _EmojiPickerSheetState extends State<_EmojiPickerSheet> {
         child: Container(
           height: MediaQuery.of(context).size.height * 0.45,
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1828).withOpacity(0.95),
+            color: const Color(0xFF1A1828).withValues(alpha: 0.95),
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Column(
             children: [
@@ -2161,7 +2161,7 @@ class _EmojiPickerSheetState extends State<_EmojiPickerSheet> {
                 height: 4,
                 margin: const EdgeInsets.only(top: 12, bottom: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -2189,13 +2189,13 @@ class _EmojiPickerSheetState extends State<_EmojiPickerSheet> {
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: selected
-                              ? const Color(0xFF9B59F5).withOpacity(0.2)
-                              : Colors.white.withOpacity(0.06),
+                              ? const Color(0xFF9B59F5).withValues(alpha: 0.2)
+                              : Colors.white.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: selected
-                                ? const Color(0xFF9B59F5).withOpacity(0.5)
-                                : Colors.white.withOpacity(0.1),
+                                ? const Color(0xFF9B59F5).withValues(alpha: 0.5)
+                                : Colors.white.withValues(alpha: 0.1),
                           ),
                         ),
                         child: Text(
@@ -2204,7 +2204,7 @@ class _EmojiPickerSheetState extends State<_EmojiPickerSheet> {
                           style: TextStyle(
                             color: selected
                                 ? Colors.white
-                                : Colors.white.withOpacity(0.5),
+                                : Colors.white.withValues(alpha: 0.5),
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),

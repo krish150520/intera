@@ -82,9 +82,9 @@ class _CommunityChatSettingsSheetState
 
     return Container(
       decoration: BoxDecoration(
-        color: c.surface.withOpacity(0.9),
+        color: c.surface.withValues(alpha: 0.9),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: c.border.withOpacity(0.3), width: 1),
+        border: Border.all(color: c.border.withValues(alpha: 0.3), width: 1),
       ),
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -138,94 +138,99 @@ class _CommunityChatSettingsSheetState
                       ),
                     )
                   else
-                    ...CommunityChatMode.values.map((mode) {
-                      final isSelected = _selectedMode == mode;
-                      IconData icon;
-                      Color iconColor;
+                    RadioGroup<CommunityChatMode>(
+                      groupValue: _selectedMode,
+                      onChanged: (val) {
+                        if (val != null) _updateMode(val);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: CommunityChatMode.values.map((mode) {
+                          final isSelected = _selectedMode == mode;
+                          IconData icon;
+                          Color iconColor;
 
-                      switch (mode) {
-                        case CommunityChatMode.everyone:
-                          icon = Icons.public_rounded;
-                          iconColor = Colors.greenAccent;
-                          break;
-                        case CommunityChatMode.membersOnly:
-                          icon = Icons.people_alt_rounded;
-                          iconColor = c.primary;
-                          break;
-                        case CommunityChatMode.announcement:
-                          icon = Icons.campaign_rounded;
-                          iconColor = Colors.orangeAccent;
-                          break;
-                      }
+                          switch (mode) {
+                            case CommunityChatMode.everyone:
+                              icon = Icons.public_rounded;
+                              iconColor = Colors.greenAccent;
+                              break;
+                            case CommunityChatMode.membersOnly:
+                              icon = Icons.people_alt_rounded;
+                              iconColor = c.primary;
+                              break;
+                            case CommunityChatMode.announcement:
+                              icon = Icons.campaign_rounded;
+                              iconColor = Colors.orangeAccent;
+                              break;
+                          }
 
-                      return InkWell(
-                        onTap: () => _updateMode(mode),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? c.primary.withOpacity(0.08)
-                                : c.field.withOpacity(0.5),
+                          return InkWell(
+                            onTap: () => _updateMode(mode),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected
-                                  ? c.primary.withOpacity(0.4)
-                                  : c.border.withOpacity(0.2),
-                              width: 1,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? c.primary.withValues(alpha: 0.08)
+                                    : c.field.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? c.primary.withValues(alpha: 0.4)
+                                      : c.border.withValues(alpha: 0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: iconColor.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(icon, color: iconColor, size: 22),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          mode.label,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: c.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          mode.description,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: c.textMuted,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Radio<CommunityChatMode>(
+                                    value: mode,
+                                    activeColor: c.primary,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: iconColor.withOpacity(0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(icon, color: iconColor, size: 22),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      mode.label,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                        color: c.textPrimary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      mode.description,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: c.textMuted,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Radio<CommunityChatMode>(
-                                value: mode,
-                                groupValue: _selectedMode,
-                                activeColor: c.primary,
-                                onChanged: (val) {
-                                  if (val != null) _updateMode(val);
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                 ],
               ),
             ),

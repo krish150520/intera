@@ -62,7 +62,7 @@ class _PinterestPostCardState extends State<PinterestPostCard> {
                     aspectRatio: aspectRatio,
                     child: hasDisplayImage
                         ? Image.network(
-                            displayUrl!,
+                            displayUrl,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             errorBuilder: (_, __, ___) => Container(

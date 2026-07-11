@@ -30,10 +30,10 @@ class QuestionCardWidget extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: c.border.withOpacity(0.4)),
+          border: Border.all(color: c.border.withValues(alpha: 0.4)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.015),
+              color: Colors.black.withValues(alpha: 0.015),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -77,7 +77,7 @@ class QuestionCardWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withOpacity(0.08),
+                    color: Colors.orangeAccent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
@@ -170,7 +170,7 @@ class QuestionCardWidget extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      side: BorderSide(color: c.primary.withOpacity(0.5)),
+                      side: BorderSide(color: c.primary.withValues(alpha: 0.5)),
                     ),
                   ),
                 ),

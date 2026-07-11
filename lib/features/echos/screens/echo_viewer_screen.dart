@@ -100,6 +100,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isPlaying = false;
+
   bool _showHeartAnimation = false;
 
   // Single tap play/pause overlay animation
@@ -168,7 +169,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
       _controller!.setLooping(true);
       _controller!.play();
     } catch (e) {
-      print('[EchoPlayer] Error initializing video: $e');
+      debugPrint('[EchoPlayer] Error initializing video: $e');
     }
   }
 
@@ -206,6 +207,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
         _showPlayOverlay = true;
       });
     }
+    debugPrint('[EchoPlayer] Play state toggled. Playing: $_isPlaying');
 
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
@@ -307,8 +309,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final c = context.appColors;
+
 
     return Stack(
       fit: StackFit.expand,
@@ -355,7 +356,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.55),
+                  Colors.black.withValues(alpha: 0.55),
                   Colors.transparent,
                 ],
               ),
@@ -375,7 +376,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withOpacity(0.7),
+                  Colors.black.withValues(alpha: 0.7),
                 ],
               ),
             ),
@@ -440,7 +441,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                           userId: widget.post.authorId,
                           fallback: widget.post.authorUsername,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
+                            color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 12,
                           ),
                         ),
@@ -468,7 +469,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
                     height: 1.4,
                   ),
@@ -528,7 +529,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                 width: 68,
                 height: 68,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(_overlayIcon, color: Colors.white, size: 36),
@@ -564,21 +565,19 @@ class _SidebarAction extends StatelessWidget {
   final Color iconColor;
   final String label;
   final VoidCallback onTap;
-  final VoidCallback? onLongPress;
+
 
   const _SidebarAction({
     required this.icon,
     required this.iconColor,
     required this.label,
     required this.onTap,
-    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onLongPress,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -586,7 +585,7 @@ class _SidebarAction extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
+              color: Colors.black.withValues(alpha: 0.35),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 24),

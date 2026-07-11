@@ -110,7 +110,7 @@ class _BadgeChip extends StatelessWidget {
         border: Border.all(color: const Color(0xFFFFCA28), width: 1),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFFCA28).withOpacity(0.3),
+            color: const Color(0xFFFFCA28).withValues(alpha: 0.3),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),

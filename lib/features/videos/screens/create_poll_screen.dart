@@ -259,7 +259,7 @@ class _CreatePollScreenState extends State<CreatePollScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: c.primary.withOpacity(0.08),
+                          color: c.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -291,7 +291,7 @@ class _CreatePollScreenState extends State<CreatePollScreen>
                         color: c.surface,
                         borderRadius: BorderRadius.circular(24),
                         border:
-                            Border.all(color: c.border.withOpacity(0.4)),
+                            Border.all(color: c.border.withValues(alpha: 0.4)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,7 +343,7 @@ class _CreatePollScreenState extends State<CreatePollScreen>
                         color: c.surface,
                         borderRadius: BorderRadius.circular(24),
                         border:
-                            Border.all(color: c.border.withOpacity(0.4)),
+                            Border.all(color: c.border.withValues(alpha: 0.4)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,7 +384,7 @@ class _CreatePollScreenState extends State<CreatePollScreen>
                                     height: 28,
                                     decoration: BoxDecoration(
                                       color:
-                                          c.primary.withOpacity(0.1),
+                                          c.primary.withValues(alpha: 0.1),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Center(
@@ -470,7 +470,7 @@ class _CreatePollScreenState extends State<CreatePollScreen>
                         color: c.surface,
                         borderRadius: BorderRadius.circular(24),
                         border:
-                            Border.all(color: c.border.withOpacity(0.4)),
+                            Border.all(color: c.border.withValues(alpha: 0.4)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -506,14 +506,14 @@ class _CreatePollScreenState extends State<CreatePollScreen>
                                       horizontal: 14, vertical: 8),
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? c.primary.withOpacity(0.15)
+                                        ? c.primary.withValues(alpha: 0.15)
                                         : c.field,
                                     borderRadius:
                                         BorderRadius.circular(20),
                                     border: Border.all(
                                       color: isSelected
                                           ? c.primary
-                                          : c.border.withOpacity(0.3),
+                                          : c.border.withValues(alpha: 0.3),
                                     ),
                                   ),
                                   child: Text(

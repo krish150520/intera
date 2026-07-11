@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:ui';
-import '../../../core/theme/colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../models/message_model.dart';
@@ -556,13 +555,3 @@ class _GlassCenteredMessage extends StatelessWidget {
   }
 }
 
-class _ThemeResolver {
-  const _ThemeResolver._();
-  static Color textHi(BuildContext context) => context.isDarkMode
-      ? AppColors.darkTextPrimary
-      : AppColors.lightTextPrimary;
-  static Color textDim(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkTextDim : AppColors.lightTextDim;
-  static Color border(BuildContext context) =>
-      context.isDarkMode ? AppColors.darkDivider : AppColors.lightDivider;
-}

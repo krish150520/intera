@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'notification_service.dart';
 
 class FollowService {
@@ -63,7 +64,7 @@ class FollowService {
         );
       } catch (e) {
         // Fail silently so it doesn't interrupt the main follow operation
-        print('Error sending follow notification: $e');
+        debugPrint('Error sending follow notification: $e');
       }
     }
   }

@@ -294,7 +294,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           await storageRef.delete();
         } catch (e) {
           // If the file does not exist, ignore the exception
-          print('Storage delete ignored: $e');
+          debugPrint('Storage delete ignored: $e');
         }
       }
 

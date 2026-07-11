@@ -151,4 +151,4 @@ class _MessageBubbleState extends State<MessageBubble>
       ),
     );
   }
-}
+}

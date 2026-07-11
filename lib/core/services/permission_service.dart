@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../theme/app_theme.dart';
 
 class PermissionService {
   PermissionService._();
@@ -219,7 +218,6 @@ class _InteraPermissionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -231,9 +229,9 @@ class _InteraPermissionDialog extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1828).withOpacity(0.85),
+              color: const Color(0xFF1A1828).withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -251,7 +249,7 @@ class _InteraPermissionDialog extends StatelessWidget {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: iconGradient.first.withOpacity(0.4),
+                        color: iconGradient.first.withValues(alpha: 0.4),
                         blurRadius: 16,
                         spreadRadius: 1,
                       ),
@@ -274,7 +272,7 @@ class _InteraPermissionDialog extends StatelessWidget {
                   message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 13,
                     height: 1.4,
                   ),
@@ -289,17 +287,17 @@ class _InteraPermissionDialog extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                             ),
                           ),
                           child: Center(
                             child: Text(
                               'Not Now',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -324,7 +322,7 @@ class _InteraPermissionDialog extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF9B59F5).withOpacity(0.4),
+                                color: const Color(0xFF9B59F5).withValues(alpha: 0.4),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -375,9 +373,9 @@ class _InteraPermanentlyDeniedDialog extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1828).withOpacity(0.85),
+              color: const Color(0xFF1A1828).withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -387,9 +385,9 @@ class _InteraPermanentlyDeniedDialog extends StatelessWidget {
                   height: 64,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.redAccent.withOpacity(0.15),
+                    color: Colors.redAccent.withValues(alpha: 0.15),
                     border: Border.all(
-                      color: Colors.redAccent.withOpacity(0.4),
+                      color: Colors.redAccent.withValues(alpha: 0.4),
                       width: 2,
                     ),
                   ),
@@ -414,7 +412,7 @@ class _InteraPermanentlyDeniedDialog extends StatelessWidget {
                   message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 13,
                     height: 1.4,
                   ),
@@ -428,17 +426,17 @@ class _InteraPermanentlyDeniedDialog extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                             ),
                           ),
                           child: Center(
                             child: Text(
                               'Cancel',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -464,7 +462,7 @@ class _InteraPermanentlyDeniedDialog extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFFEF4444).withOpacity(0.4),
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.4),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),

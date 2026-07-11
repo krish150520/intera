@@ -301,8 +301,8 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: c.surface.withOpacity(0.8),
-        border: Border(bottom: BorderSide(color: c.border.withOpacity(0.5))),
+        color: c.surface.withValues(alpha: 0.8),
+        border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
       ),
       child: Row(
         children: [
@@ -374,9 +374,9 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: c.field.withOpacity(0.5),
+        color: c.field.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.2), width: 0.8),
+        border: Border.all(color: c.border.withValues(alpha: 0.2), width: 0.8),
       ),
       child: Center(
         widthFactor: 1,
@@ -441,7 +441,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border(top: BorderSide(color: c.border.withOpacity(0.5))),
+        border: Border(top: BorderSide(color: c.border.withValues(alpha: 0.5))),
       ),
       child: Row(
         children: [
@@ -455,7 +455,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen> {
               decoration: BoxDecoration(
                 color: c.field,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: c.border.withOpacity(0.5), width: 0.8),
+                border: Border.all(color: c.border.withValues(alpha: 0.5), width: 0.8),
               ),
               child: TextField(
                 controller: _textController,
@@ -640,7 +640,7 @@ class _CommunityMessageBubbleState extends State<_CommunityMessageBubble>
                               borderRadius: radius,
                               border: widget.isMe
                                   ? null
-                                  : Border.all(color: c.border.withOpacity(0.5), width: 0.8),
+                                  : Border.all(color: c.border.withValues(alpha: 0.5), width: 0.8),
                             ),
                             child: Text(
                               widget.text ?? '',

@@ -162,10 +162,10 @@ class _PollCardWidgetState extends State<PollCardWidget> {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: c.border.withOpacity(0.4)),
+          border: Border.all(color: c.border.withValues(alpha: 0.4)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.015),
+              color: Colors.black.withValues(alpha: 0.015),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -209,7 +209,7 @@ class _PollCardWidgetState extends State<PollCardWidget> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.08),
+                    color: c.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -305,7 +305,7 @@ class _PollCardWidgetState extends State<PollCardWidget> {
         decoration: BoxDecoration(
           color: c.field,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.border.withOpacity(0.3)),
+          border: Border.all(color: c.border.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -340,7 +340,7 @@ class _PollCardWidgetState extends State<PollCardWidget> {
               decoration: BoxDecoration(
                 color: c.field,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: c.border.withOpacity(0.2)),
+                border: Border.all(color: c.border.withValues(alpha: 0.2)),
               ),
               clipBehavior: Clip.antiAlias,
               child: Row(
@@ -349,7 +349,7 @@ class _PollCardWidgetState extends State<PollCardWidget> {
                     duration: const Duration(milliseconds: 600),
                     curve: Curves.easeOutCubic,
                     width: constraints.maxWidth * percent,
-                    color: c.primary.withOpacity(0.12),
+                    color: c.primary.withValues(alpha: 0.12),
                   ),
                 ],
               ),

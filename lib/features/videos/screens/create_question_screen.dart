@@ -23,6 +23,7 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
     with SingleTickerProviderStateMixin {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _tagController = TextEditingController();
   final Set<String> _selectedTags = {};
   bool _isPublishing = false;
 
@@ -41,6 +42,7 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
+    _tagController.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -104,6 +106,17 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
       payload['allowComments'] = true;
 
       await FirebaseFirestore.instance.collection('posts').add(payload);
+
+      // Save tags to the global database collection 'tags'
+      for (final tag in _selectedTags) {
+        final cleanTag = tag.toLowerCase().trim().replaceAll('#', '');
+        if (cleanTag.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('tags').doc(cleanTag).set({
+            'name': cleanTag,
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      }
 
       if (mounted) {
         _snack('❓ Question published!', color: const Color(0xFF388E3C));
@@ -201,7 +214,7 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: c.primary.withOpacity(0.08),
+                          color: c.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -233,7 +246,7 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
                         color: c.surface,
                         borderRadius: BorderRadius.circular(24),
                         border:
-                            Border.all(color: c.border.withOpacity(0.4)),
+                            Border.all(color: c.border.withValues(alpha: 0.4)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,7 +267,7 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
                             ),
                           ),
                           Divider(
-                              color: c.border.withOpacity(0.5),
+                              color: c.border.withValues(alpha: 0.5),
                               height: 24),
                           TextField(
                             controller: _bodyController,
@@ -286,7 +299,7 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
                         color: c.surface,
                         borderRadius: BorderRadius.circular(24),
                         border:
-                            Border.all(color: c.border.withOpacity(0.4)),
+                            Border.all(color: c.border.withValues(alpha: 0.4)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,57 +320,168 @@ class _CreateQuestionScreenState extends State<CreateQuestionScreen>
                             ],
                           ),
                           const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              'help',
-                              'question',
-                              'tech',
-                              'flutter',
-                              'design',
-                              'college'
-                            ].map((tag) {
-                              final isSelected =
-                                  _selectedTags.contains(tag);
-                              return GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    if (isSelected) {
-                                      _selectedTags.remove(tag);
-                                    } else {
-                                      _selectedTags.add(tag);
-                                    }
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? c.primary.withOpacity(0.15)
-                                        : c.field,
-                                    borderRadius:
-                                        BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? c.primary
-                                          : c.border.withOpacity(0.3),
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('tags')
+                                .orderBy('createdAt', descending: true)
+                                .limit(40)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              final defaultTags = ['help', 'question', 'tech', 'design', 'college'];
+                              final dbTags = snapshot.hasData
+                                  ? snapshot.data!.docs
+                                      .map((doc) => doc.id.toLowerCase().trim())
+                                      .where((t) => t.isNotEmpty)
+                                      .toList()
+                                  : <String>[];
+
+                              final allTags = <String>[];
+                              allTags.addAll(defaultTags);
+                              for (final t in dbTags) {
+                                if (!allTags.contains(t)) {
+                                  allTags.add(t);
+                                }
+                              }
+
+                              for (final t in _selectedTags) {
+                                if (!allTags.contains(t)) {
+                                  allTags.add(t);
+                                }
+                              }
+
+                              final searchQuery = _tagController.text.toLowerCase().trim().replaceAll('#', '');
+                              final filteredTags = searchQuery.isEmpty
+                                  ? allTags
+                                  : allTags.where((t) => t.contains(searchQuery)).toList();
+
+                              final isNewTag = searchQuery.isNotEmpty && !allTags.contains(searchQuery);
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Search & Create input field
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: c.field,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: c.border.withValues(alpha: 0.3)),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.search_rounded, color: c.textMuted, size: 18),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _tagController,
+                                            style: TextStyle(color: c.textPrimary, fontSize: 13),
+                                            decoration: InputDecoration(
+                                              hintText: 'Search or type custom tag...',
+                                              hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
+                                              border: InputBorder.none,
+                                              enabledBorder: InputBorder.none,
+                                              focusedBorder: InputBorder.none,
+                                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                            ),
+                                            onChanged: (_) => setState(() {}),
+                                            onSubmitted: (val) {
+                                              final clean = val.toLowerCase().trim().replaceAll('#', '');
+                                              if (clean.isNotEmpty) {
+                                                setState(() {
+                                                  _selectedTags.add(clean);
+                                                  _tagController.clear();
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        if (_tagController.text.isNotEmpty)
+                                          GestureDetector(
+                                            onTap: () => setState(() => _tagController.clear()),
+                                            child: Icon(Icons.close_rounded, color: c.textMuted, size: 16),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  child: Text(
-                                    '#$tag',
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? c.primary
-                                          : c.textMuted,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
+                                  const SizedBox(height: 14),
+
+                                  // If user is typing a new tag, offer to create it
+                                  if (isNewTag) ...[
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedTags.add(searchQuery);
+                                          _tagController.clear();
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: c.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: c.primary, width: 1),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.add_rounded, color: c.primary, size: 14),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Create "#$searchQuery"',
+                                              style: TextStyle(
+                                                color: c.primary,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
+                                    const SizedBox(height: 14),
+                                  ],
+
+                                  // Wrap list of tags
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: filteredTags.map((tag) {
+                                      final isSelected = _selectedTags.contains(tag);
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            if (isSelected) {
+                                              _selectedTags.remove(tag);
+                                            } else {
+                                              _selectedTags.add(tag);
+                                            }
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSelected ? c.primary.withValues(alpha: 0.15) : c.field,
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: isSelected ? c.primary : c.border.withValues(alpha: 0.3),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '#$tag',
+                                            style: TextStyle(
+                                              color: isSelected ? c.primary : c.textMuted,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
                                   ),
-                                ),
+                                ],
                               );
-                            }).toList(),
+                            },
                           ),
                         ],
                       ),

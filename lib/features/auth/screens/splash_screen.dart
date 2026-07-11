@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/notification_service.dart';
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -59,6 +61,9 @@ class _SplashScreenState extends State<SplashScreen>
         ),
         Future.delayed(const Duration(milliseconds: 2500)),
       ]);
+
+      // Initialize global notification service settings, request permissions, FCM registration
+      await NotificationService.initialize();
 
       final auth = AuthService.instance;
       if (auth.isLoggedIn) {

@@ -88,7 +88,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           relatedId: post.id,
         );
       } catch (e) {
-        print('Error sending comment notification: $e');
+        debugPrint('Error sending comment notification: $e');
       }
 
       _commentController.clear();
@@ -158,7 +158,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           relatedId: widget.post!.id,
         );
       } catch (e) {
-        print('Error sending best answer notification: $e');
+        debugPrint('Error sending best answer notification: $e');
       }
 
       if (!mounted) return;
@@ -229,7 +229,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 relatedId: postId,
               );
             } catch (e) {
-              print('Error sending tip notification: $e');
+              debugPrint('Error sending tip notification: $e');
             }
 
             if (!mounted) return;
@@ -756,7 +756,7 @@ class _PostBodyCard extends StatelessWidget {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: c.primary.withOpacity(0.08),
+                  color: c.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1443,7 +1443,7 @@ class _CommentInput extends StatelessWidget {
         color: c.surface,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               offset: const Offset(0, -3),
               blurRadius: 4),
         ],

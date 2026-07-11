@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img_lib;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -101,11 +102,11 @@ class NsfwDetectionService {
       final sfwProb = output[0][0];
       final nsfwProb = output[0][1];
       
-      print('[NsfwDetection] TF-Lite Inference -> SFW: $sfwProb, NSFW: $nsfwProb');
+      debugPrint('[NsfwDetection] TF-Lite Inference -> SFW: $sfwProb, NSFW: $nsfwProb');
       return nsfwProb > 0.5;
     } catch (e) {
       // Fallback if the placeholder or native libraries fail to initialize
-      print('[NsfwDetection] TF-Lite model not initialized, falling back to pixel heuristics: $e');
+      debugPrint('[NsfwDetection] TF-Lite model not initialized, falling back to pixel heuristics: $e');
       return await _isImageNsfwFallback(imageFile);
     }
   }
@@ -159,7 +160,7 @@ class NsfwDetectionService {
         return true;
       }
     } catch (e) {
-      print('[NsfwDetection] Fallback image analysis error: $e');
+      debugPrint('[NsfwDetection] Fallback image analysis error: $e');
     }
     return false;
   }
