@@ -413,10 +413,21 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      String senderName = 'Someone';
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_myUid)
+            .get();
+        if (userDoc.exists) {
+          senderName = userDoc.data()?['name'] ?? 'Someone';
+        }
+      } catch (_) {}
+
       NotificationService.sendNotification(
         recipientId: _currentSpark.authorId,
         type: 'spark_reply',
-        title: 'replied to your spark',
+        title: '$senderName replied to your spark',
         subtitle: text,
         relatedId: _currentSpark.sparkId,
       );
@@ -448,7 +459,7 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     }
   }
 
-  void _showHeartPopEffect() {
+  Future<void> _showHeartPopEffect() async {
     final width = MediaQuery.of(context).size.width;
     final height = MediaQuery.of(context).size.height;
     setState(() {
@@ -459,10 +470,21 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     });
 
     if (_currentSpark.authorId != _myUid) {
+      String senderName = 'Someone';
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_myUid)
+            .get();
+        if (userDoc.exists) {
+          senderName = userDoc.data()?['name'] ?? 'Someone';
+        }
+      } catch (_) {}
+
       NotificationService.sendNotification(
         recipientId: _currentSpark.authorId,
         type: 'spark_like',
-        title: 'liked your spark',
+        title: '$senderName liked your spark',
         subtitle: '❤️',
         relatedId: _currentSpark.sparkId,
       );
