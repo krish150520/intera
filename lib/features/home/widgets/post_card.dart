@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
@@ -46,24 +47,30 @@ class PostCard extends StatelessWidget {
     }
 
     if (_hasMedia || _isMediaType) {
-      return _MediaPostCard(
-        post: post,
-        onTap: onTap,
-        onLike: onLike,
-        onSave: onSave,
-        onComment: onComment,
-        onReact: onReact,
-        heroTag: heroTag,
+      return _DoubleTapLikeWrapper(
+        onDoubleTapLike: onReact != null ? () => onReact!('like') : onLike,
+        child: _MediaPostCard(
+          post: post,
+          onTap: onTap,
+          onLike: onLike,
+          onSave: onSave,
+          onComment: onComment,
+          onReact: onReact,
+          heroTag: heroTag,
+        ),
       );
     } else {
-      return _TextPostCard(
-        post: post,
-        onTap: onTap,
-        onLike: onLike,
-        onSave: onSave,
-        onComment: onComment,
-        onReact: onReact,
-        heroTag: heroTag,
+      return _DoubleTapLikeWrapper(
+        onDoubleTapLike: onReact != null ? () => onReact!('like') : onLike,
+        child: _TextPostCard(
+          post: post,
+          onTap: onTap,
+          onLike: onLike,
+          onSave: onSave,
+          onComment: onComment,
+          onReact: onReact,
+          heroTag: heroTag,
+        ),
       );
     }
   }
@@ -854,4 +861,133 @@ Widget _reactionItem(
       ],
     ),
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DOUBLE-TAP LIKE ANIMATION WRAPPER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _DoubleTapLikeWrapper extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onDoubleTapLike;
+
+  const _DoubleTapLikeWrapper({
+    required this.child,
+    this.onDoubleTapLike,
+  });
+
+  @override
+  State<_DoubleTapLikeWrapper> createState() => _DoubleTapLikeWrapperState();
+}
+
+class _DoubleTapLikeWrapperState extends State<_DoubleTapLikeWrapper>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnim;
+  late final Animation<double> _opacityAnim;
+  bool _showHeart = false;
+  Offset _tapPosition = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          if (mounted) setState(() => _showHeart = false);
+        }
+      });
+
+    _scaleAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.3)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 60,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.3, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40,
+      ),
+    ]).animate(_controller);
+
+    _opacityAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.0),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleDoubleTap(TapDownDetails details) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _showHeart = true;
+      _tapPosition = details.localPosition;
+    });
+    _controller.forward(from: 0.0);
+    widget.onDoubleTapLike?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onDoubleTapDown: _handleDoubleTap,
+      onDoubleTap: () {},
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          widget.child,
+          if (_showHeart)
+            Positioned(
+              left: _tapPosition.dx - 36,
+              top: _tapPosition.dy - 36,
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _opacityAnim.value,
+                      child: Transform.scale(
+                        scale: _scaleAnim.value,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: const Icon(
+                    Icons.favorite_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 72,
+                    shadows: [
+                      Shadow(
+                        color: Color(0x66000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

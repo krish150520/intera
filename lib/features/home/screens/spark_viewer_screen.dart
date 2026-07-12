@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -110,8 +110,8 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
   double _dragOffset = 0;
   bool _isDragging = false;
 
-  // ── Floating hearts ──────────────────────────────────────────────────────
-  final List<_FloatingHeart> _floatingHearts = [];
+  // ── Floating flares ──────────────────────────────────────────────────────
+  final List<_FloatingFlare> _floatingFlares = [];
 
   // ── Reply ───────────────────────────────────────────────────────────────
   final _replyController = TextEditingController();
@@ -459,15 +459,19 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
     }
   }
 
-  Future<void> _showHeartPopEffect() async {
+  Future<void> _showFlareEffect() async {
     final width = MediaQuery.of(context).size.width;
     final height = MediaQuery.of(context).size.height;
-    setState(() {
-      _floatingHearts.add(_FloatingHeart(
-        x: width - 80,
-        y: height - 120,
-      ));
-    });
+    // Spawn 3 flares with random horizontal scatter for a fire-burst feel
+    final rng = Random();
+    for (int i = 0; i < 3; i++) {
+      setState(() {
+        _floatingFlares.add(_FloatingFlare(
+          x: width - 80 + (rng.nextDouble() * 60 - 30),
+          y: height - 120 - (rng.nextDouble() * 20),
+        ));
+      });
+    }
 
     if (_currentSpark.authorId != _myUid) {
       String senderName = 'Someone';
@@ -484,8 +488,8 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
       NotificationService.sendNotification(
         recipientId: _currentSpark.authorId,
         type: 'spark_like',
-        title: '$senderName liked your spark',
-        subtitle: '❤️',
+        title: '$senderName flared your spark',
+        subtitle: '🔥',
         relatedId: _currentSpark.sparkId,
       );
     }
@@ -845,13 +849,13 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
                         ),
                       ),
                     ),
-                  ..._floatingHearts.map((heart) {
-                    return _AnimatedHeart(
-                      initialX: heart.x,
-                      initialY: heart.y,
+                  ..._floatingFlares.map((flare) {
+                    return _AnimatedFlare(
+                      initialX: flare.x,
+                      initialY: flare.y,
                       onFinished: () {
                         setState(() {
-                          _floatingHearts.remove(heart);
+                          _floatingFlares.remove(flare);
                         });
                       },
                     );
@@ -997,14 +1001,14 @@ class _SparkViewerScreenState extends State<SparkViewerScreen>
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: _showHeartPopEffect,
+            onTap: _showFlareEffect,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.08),
               ),
-              child: const Icon(Icons.favorite_border_rounded, color: Colors.white, size: 22),
+              child: const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF6B35), size: 22),
             ),
           ),
           const SizedBox(width: 12),
@@ -1243,66 +1247,111 @@ class _ProgressBar extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  FLOATING HEART
+//  FLOATING FLARE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _FloatingHeart {
+class _FloatingFlare {
   final double x;
   final double y;
-  _FloatingHeart({required this.x, required this.y});
+  _FloatingFlare({required this.x, required this.y});
 }
 
-class _AnimatedHeart extends StatefulWidget {
+class _AnimatedFlare extends StatefulWidget {
   final double initialX;
   final double initialY;
   final VoidCallback onFinished;
 
-  const _AnimatedHeart({
+  const _AnimatedFlare({
     required this.initialX,
     required this.initialY,
     required this.onFinished,
   });
 
   @override
-  State<_AnimatedHeart> createState() => _AnimatedHeartState();
+  State<_AnimatedFlare> createState() => _AnimatedFlareState();
 }
 
-class _AnimatedHeartState extends State<_AnimatedHeart>
+class _AnimatedFlareState extends State<_AnimatedFlare>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _yAnim;
   late Animation<double> _xAnim;
   late Animation<double> _scaleAnim;
   late Animation<double> _opacityAnim;
+  late Animation<double> _rotationAnim;
+  late final double _xDrift;
 
   @override
   void initState() {
     super.initState();
+    final rng = Random();
+    _xDrift = (rng.nextDouble() * 50 - 25); // random horizontal drift
+
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1200),
     )..addStatusListener((status) {
         if (status == AnimationStatus.completed) {
           widget.onFinished();
         }
       });
 
-    _yAnim = Tween<double>(begin: widget.initialY, end: widget.initialY - 200).animate(
+    _yAnim = Tween<double>(
+      begin: widget.initialY,
+      end: widget.initialY - 240,
+    ).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
 
     _xAnim = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween<double>(begin: widget.initialX, end: widget.initialX - 25), weight: 50),
-      TweenSequenceItem(tween: Tween<double>(begin: widget.initialX - 25, end: widget.initialX + 25), weight: 50),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: widget.initialX,
+          end: widget.initialX + _xDrift,
+        ),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: widget.initialX + _xDrift,
+          end: widget.initialX - _xDrift * 0.5,
+        ),
+        weight: 50,
+      ),
     ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
     _scaleAnim = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 1.4), weight: 30),
-      TweenSequenceItem(tween: Tween<double>(begin: 1.4, end: 1.0), weight: 70),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.6),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.6, end: 0.8),
+        weight: 75,
+      ),
     ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
+    // Subtle rotation wobble (fire flickers)
+    _rotationAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 0.15),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.15, end: -0.15),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -0.15, end: 0.0),
+        weight: 25,
+      ),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
     _opacityAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.6, 1.0, curve: Curves.easeIn)),
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.5, 1.0, curve: Curves.easeIn),
+      ),
     );
 
     _controller.forward();
@@ -1324,9 +1373,12 @@ class _AnimatedHeartState extends State<_AnimatedHeart>
           top: _yAnim.value,
           child: Opacity(
             opacity: _opacityAnim.value,
-            child: Transform.scale(
-              scale: _scaleAnim.value,
-              child: const Text('❤️', style: TextStyle(fontSize: 32)),
+            child: Transform.rotate(
+              angle: _rotationAnim.value,
+              child: Transform.scale(
+                scale: _scaleAnim.value,
+                child: const Text('🔥', style: TextStyle(fontSize: 36)),
+              ),
             ),
           ),
         );
