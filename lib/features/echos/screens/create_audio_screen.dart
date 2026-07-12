@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -113,108 +114,177 @@ class _CreateAudioScreenState extends State<CreateAudioScreen> {
     Navigator.of(context).pop(result);
   }
 
+  // ── Glass helper ─────────────────────────────────────────────────────────────
+  Widget _glassCard({required Widget child, EdgeInsets? padding, double radius = 20}) {
+    final c = context.appColors;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: c.surface.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: c.border.withValues(alpha: 0.18),
+              width: 0.8,
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  // ── Grouped empty-state block (icon + label + subtext) ───────────────────────
+  Widget _emptyStateBlock({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required AppColorsExtension c,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: BoxDecoration(
+            color: c.surface.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: c.primary.withValues(alpha: 0.15),
+              width: 0.8,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: c.primary.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 20, color: c.primary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textHi, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textMuted, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
 
     return Scaffold(
       backgroundColor: c.bg,
-      appBar: AppBar(
-        backgroundColor: c.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.textHi, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Customize Soundtrack',
-          style: TextStyle(
-            color: c.textHi,
-            fontWeight: FontWeight.w800,
-            fontSize: 17,
-          ),
-        ),
-      ),
+      appBar: _buildAppBar(c),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Audio File Card ──────────────────────────────────────────────
-            Text(
-              'Audio File',
-              style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.bold),
-            ),
+            _sectionLabel('Audio File', c),
             const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _selectedAudioFile == null ? _pickAudio : null,
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.border.withValues(alpha: 0.3)),
+            _glassCard(
+              radius: 20,
+              child: GestureDetector(
+                onTap: _selectedAudioFile == null ? _pickAudio : null,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  child: _selectedAudioFile != null
+                      ? Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: c.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: c.primary.withValues(alpha: 0.22),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Icon(Icons.audiotrack_rounded, color: c.primary, size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _selectedAudioName ?? 'audio_file',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.check_circle_rounded, size: 12, color: c.primary),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Ready to use',
+                                        style: TextStyle(color: c.primary, fontSize: 11, fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                _isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
+                                color: c.primary,
+                                size: 30,
+                              ),
+                              onPressed: _togglePreview,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
+                              onPressed: () async {
+                                await _previewPlayer?.pause();
+                                setState(() {
+                                  _selectedAudioFile = null;
+                                  _selectedAudioName = null;
+                                  _isPlaying = false;
+                                });
+                              },
+                            ),
+                          ],
+                        )
+                      : _emptyStateBlock(
+                          icon: Icons.cloud_upload_outlined,
+                          label: 'Select Audio File',
+                          subtitle: '.mp3, .wav, .m4a supported',
+                          c: c,
+                        ),
                 ),
-                child: _selectedAudioFile != null
-                    ? Row(
-                        children: [
-                          Icon(Icons.audiotrack_rounded, color: c.primary, size: 36),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _selectedAudioName ?? 'audio_file',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: c.textHi, fontSize: 14, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Ready to use',
-                                  style: TextStyle(color: c.textMuted, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                              color: c.primary,
-                              size: 32,
-                            ),
-                            onPressed: _togglePreview,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 22),
-                            onPressed: () async {
-                              await _previewPlayer?.pause();
-                              setState(() {
-                                _selectedAudioFile = null;
-                                _selectedAudioName = null;
-                                _isPlaying = false;
-                              });
-                            },
-                          ),
-                        ],
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.cloud_upload_outlined, size: 40, color: c.textMuted),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Select Audio File (.mp3/.wav/.m4a)',
-                            style: TextStyle(color: c.textMuted, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // ── Symmetrical Cover Picker ─────────────────────────────────────
+            // ── Soundtrack Name + Cover Art ──────────────────────────────────
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -223,17 +293,10 @@ class _CreateAudioScreenState extends State<CreateAudioScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Soundtrack Name',
-                        style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
+                      _sectionLabel('Soundtrack Name', c),
                       const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: c.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: c.border.withValues(alpha: 0.3)),
-                        ),
+                      _glassCard(
+                        radius: 16,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: TextField(
                           controller: _titleController,
@@ -246,93 +309,60 @@ class _CreateAudioScreenState extends State<CreateAudioScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Text(
                         'If empty, defaults to your video caption or profile name.',
-                        style: TextStyle(color: c.textMuted, fontSize: 11),
+                        style: TextStyle(color: c.textMuted, fontSize: 11, height: 1.3),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 16),
                 Expanded(
                   flex: 2,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Audio Cover Art',
-                        style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
+                      _sectionLabel('Cover Art', c),
                       const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: _pickCover,
-                        child: Container(
-                          height: 110,
-                          decoration: BoxDecoration(
-                            color: c.field,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: c.border.withValues(alpha: 0.5), width: 1.5),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: _selectedCoverFile != null
-                              ? Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.file(_selectedCoverFile!, fit: BoxFit.cover),
-                                    Container(
-                                      color: Colors.black26,
-                                      child: const Center(
-                                        child: Icon(Icons.edit_rounded, color: Colors.white, size: 24),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add_photo_alternate_outlined, size: 28, color: c.textMuted),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Add Cover',
-                                      style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
+                      _buildCoverArtCard(c),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
 
             // ── Save Button ──────────────────────────────────────────────────
             GestureDetector(
               onTap: _save,
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: _selectedAudioFile == null ? c.field : const Color(0xFF8870EE),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: _selectedAudioFile == null
-                      ? []
-                      : [
-                          BoxShadow(
-                            color: const Color(0xFF8870EE).withValues(alpha: 0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                ),
-                child: Text(
-                  'Apply Soundtrack',
-                  style: TextStyle(
-                    color: _selectedAudioFile == null ? c.textMuted : Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: _selectedAudioFile == null
+                          ? c.field.withValues(alpha: 0.5)
+                          : c.primary.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _selectedAudioFile == null
+                            ? c.border.withValues(alpha: 0.18)
+                            : c.primary.withValues(alpha: 0.4),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Text(
+                      'Apply Soundtrack',
+                      style: TextStyle(
+                        color: _selectedAudioFile == null ? c.textMuted : Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -341,5 +371,115 @@ class _CreateAudioScreenState extends State<CreateAudioScreen> {
         ),
       ),
     );
+  }
+
+  PreferredSizeWidget _buildAppBar(AppColorsExtension c) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: AppBar(
+            backgroundColor: c.surface.withValues(alpha: 0.6),
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.textHi, size: 20),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Customize Soundtrack',
+              style: TextStyle(
+                color: c.textHi,
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+              ),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(0.5),
+              child: Divider(height: 0.5, thickness: 0.5, color: c.border.withValues(alpha: 0.18)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoverArtCard(AppColorsExtension c) {
+    return GestureDetector(
+      onTap: _pickCover,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 130,
+          decoration: BoxDecoration(
+            gradient: _selectedCoverFile == null
+                ? LinearGradient(
+                    colors: [
+                      c.primary.withValues(alpha: 0.08),
+                      c.field.withValues(alpha: 0.5),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _selectedCoverFile == null
+                  ? c.primary.withValues(alpha: 0.25)
+                  : c.border.withValues(alpha: 0.25),
+              width: _selectedCoverFile == null ? 1.2 : 0.8,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _selectedCoverFile != null
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(_selectedCoverFile!, fit: BoxFit.cover),
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 0.8),
+                        ),
+                        child: const Icon(Icons.edit_rounded, color: Colors.white, size: 13),
+                      ),
+                    ),
+                  ],
+                )
+              : Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: c.primary.withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.add_photo_alternate_outlined, size: 18, color: c.primary),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Add Cover',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: c.textHi, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text, AppColorsExtension c) {
+    return Text(text, style: TextStyle(color: c.textHi, fontSize: 13, fontWeight: FontWeight.bold));
   }
 }

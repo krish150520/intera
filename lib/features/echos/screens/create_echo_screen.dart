@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
@@ -62,7 +63,7 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
   }
 
   final Set<String> _selectedTags = {};
-  String? _selectedCategory; // 'beauty', 'art', 'funny'
+  String? _selectedCategory;
 
   late final AnimationController _animCtrl;
 
@@ -75,7 +76,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
     );
     _animCtrl.forward();
 
-    // Auto trigger picker if no video is selected yet
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pickVideo();
     });
@@ -130,8 +130,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
           _customAudioFileName = result.audioFile.path.split('/').last.split('\\').last;
           _customAudioCoverFile = result.coverFile;
           _customAudioTitle = result.title;
-
-          // Clear selected existing audio if any
           _selectedExistingAudioId = null;
           _selectedExistingAudioTitle = null;
           _selectedExistingAudioAuthorId = null;
@@ -205,7 +203,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
 
     setState(() => _isLoading = true);
 
-    // ── NSFW Check ──────────────────────────────────────────────────────
     final hasNsfwText = await NsfwDetectionService.isTextNsfw(title) ||
         await NsfwDetectionService.isTextNsfw(body);
     final hasNsfwMedia =
@@ -220,7 +217,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
     try {
       final ts = DateTime.now().millisecondsSinceEpoch;
 
-      // Upload Video
       final videoRef =
           FirebaseStorage.instance.ref('posts/videos/${user.uid}_$ts.mp4');
       final videoTask =
@@ -229,7 +225,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
         throw Exception('Video upload failed');
       final videoUrl = await videoRef.getDownloadURL();
 
-      // Upload Thumbnail (Custom or Auto)
       String? thumbnailUrl;
       final thumbnailToUpload = _customThumbnailFile ?? _autoThumbnailFile;
       if (thumbnailToUpload != null) {
@@ -242,7 +237,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
         }
       }
 
-      // Fetch user data
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -255,7 +249,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
       final avatarUrl =
           ud['profileImageUrl'] ?? ud['photoURL'] ?? user.photoURL ?? '';
 
-      // Prepare Audio info
       String? audioId = widget.audioId ?? _selectedExistingAudioId;
       String? audioTitle = widget.audioTitle ?? _selectedExistingAudioTitle;
       String? audioAuthorId = widget.audioAuthorId ?? _selectedExistingAudioAuthorId;
@@ -271,16 +264,22 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
 
         if (_customAudioFile != null) {
           final audioExt = _customAudioFile!.path.split('.').last;
-          final audioStorageRef = FirebaseStorage.instance.ref('posts/audios/${user.uid}_$ts.$audioExt');
-          final audioUploadTask = await audioStorageRef.putFile(_customAudioFile!).whenComplete(() {});
-          if (audioUploadTask.state != TaskState.success) throw Exception('Audio upload failed');
+          final audioStorageRef = FirebaseStorage.instance
+              .ref('posts/audios/${user.uid}_$ts.$audioExt');
+          final audioUploadTask =
+              await audioStorageRef.putFile(_customAudioFile!).whenComplete(() {});
+          if (audioUploadTask.state != TaskState.success)
+            throw Exception('Audio upload failed');
           resolvedAudioUrl = await audioStorageRef.getDownloadURL();
-          
-          audioTitle = _customAudioTitle ?? (title.isNotEmpty ? title : 'Original audio · $username');
+
+          audioTitle = _customAudioTitle ??
+              (title.isNotEmpty ? title : 'Original audio · $username');
 
           if (_customAudioCoverFile != null) {
-            final coverRef = FirebaseStorage.instance.ref('posts/audio_covers/${user.uid}_$ts.jpg');
-            final coverTask = await coverRef.putFile(_customAudioCoverFile!).whenComplete(() {});
+            final coverRef = FirebaseStorage.instance
+                .ref('posts/audio_covers/${user.uid}_$ts.jpg');
+            final coverTask =
+                await coverRef.putFile(_customAudioCoverFile!).whenComplete(() {});
             if (coverTask.state == TaskState.success) {
               audioCoverUrl = await coverRef.getDownloadURL();
             }
@@ -288,7 +287,8 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
           audioCoverUrl ??= thumbnailUrl;
         } else {
           resolvedAudioUrl = videoUrl;
-          audioTitle = title.isNotEmpty ? 'Original audio · $title' : 'Original audio · $username';
+          audioTitle =
+              title.isNotEmpty ? 'Original audio · $title' : 'Original audio · $username';
           audioCoverUrl = thumbnailUrl;
         }
 
@@ -303,8 +303,10 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
           'createdAt': FieldValue.serverTimestamp(),
         });
       } else {
-        // Reuse audio, increment use count
-        final audioDoc = await FirebaseFirestore.instance.collection('audios').doc(audioId).get();
+        final audioDoc = await FirebaseFirestore.instance
+            .collection('audios')
+            .doc(audioId)
+            .get();
         final audioData = audioDoc.data() ?? {};
         resolvedAudioUrl = audioData['audioUrl'] as String? ?? resolvedAudioUrl;
         audioTitle = audioData['title'] as String? ?? audioTitle;
@@ -313,9 +315,7 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
         await FirebaseFirestore.instance
             .collection('audios')
             .doc(audioId)
-            .update({
-          'echoCount': FieldValue.increment(1),
-        });
+            .update({'echoCount': FieldValue.increment(1)});
       }
 
       final tagsList = _selectedTags.toList();
@@ -347,12 +347,9 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
       );
 
       final payload = post.toFirestore();
-      // Remove placeholder ID key from doc payload since Firestore generates ID
       payload.remove('id');
-
       await postRef.set(payload);
 
-      // Save tags globally
       for (final tag in _selectedTags) {
         final cleanTag = tag.toLowerCase().trim();
         if (cleanTag.isNotEmpty) {
@@ -394,8 +391,7 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded,
-                color: Colors.red, size: 28),
+            const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
             const SizedBox(width: 10),
             const Text('Content Flagged'),
           ],
@@ -415,80 +411,70 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
     );
   }
 
+  // ── Glass helper ─────────────────────────────────────────────────────────────
+  Widget _glassCard({required Widget child, EdgeInsets? padding, double radius = 20}) {
+    final c = context.appColors;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: c.surface.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: c.border.withValues(alpha: 0.18),
+              width: 0.8,
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  // ── Duration formatter ───────────────────────────────────────────────────────
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(1, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
 
     return Scaffold(
       backgroundColor: c.bg,
-      appBar: AppBar(
-        backgroundColor: c.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon:
-              Icon(Icons.arrow_back_ios_new_rounded, color: c.textHi, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Create Echo',
-          style: TextStyle(
-            color: c.textHi,
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _PublishButton(
-              onTap: _isLoading ? null : _submitEcho,
-            ),
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(c),
       body: _isLoading
-          ? _buildLoader()
+          ? _buildLoader(c)
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Video & Thumbnail Picker Row
+                  // ── Video & Thumbnail row ──
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Video Preview
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Video File',
-                              style: TextStyle(
-                                color: c.textHi,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            _sectionLabel('Video File', c),
                             const SizedBox(height: 8),
                             _buildVideoCard(c),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      // Thumbnail
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Cover Thumbnail',
-                              style: TextStyle(
-                                color: c.textHi,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            _sectionLabel('Cover Thumbnail', c),
                             const SizedBox(height: 8),
                             _buildThumbnailCard(c),
                           ],
@@ -496,125 +482,102 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
-                  // Audio Track Info Badge
-                  Container(
+                  // ── Audio Track ──
+                  _glassCard(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: c.border.withValues(alpha: 0.3)),
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.music_note_rounded, color: c.primary, size: 20),
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: c.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: c.primary.withValues(alpha: 0.22),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Icon(Icons.music_note_rounded,
+                                  color: c.primary, size: 18),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Audio Track',
-                                    style: TextStyle(
-                                      color: c.textHi,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  Text('Audio Track',
+                                      style: TextStyle(
+                                          color: c.textHi,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 2),
                                   Text(
                                     widget.audioId == null
                                         ? (_selectedExistingAudioId != null
-                                            ? 'Existing Audio: ${_selectedExistingAudioTitle}'
+                                            ? 'Existing: ${_selectedExistingAudioTitle}'
                                             : (_customAudioFile != null
-                                                ? 'Custom Audio: ${_customAudioFileName}'
-                                                : 'Original audio (generated from your video)'))
-                                        : widget.audioTitle ?? 'Using selected audio track',
+                                                ? 'Custom: $_customAudioFileName'
+                                                : 'Original audio from your video'))
+                                        : widget.audioTitle ?? 'Using selected audio',
                                     style: TextStyle(
-                                      color: (_customAudioFile != null || _selectedExistingAudioId != null) ? c.primary : c.textMuted,
-                                      fontSize: 12,
-                                      fontWeight: (_customAudioFile != null || _selectedExistingAudioId != null) ? FontWeight.bold : FontWeight.normal,
+                                      color: (_customAudioFile != null ||
+                                              _selectedExistingAudioId != null)
+                                          ? c.primary
+                                          : c.textMuted,
+                                      fontSize: 11,
+                                      fontWeight: (_customAudioFile != null ||
+                                              _selectedExistingAudioId != null)
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            if (widget.audioId == null && (_customAudioFile != null || _selectedExistingAudioId != null))
+                            if (widget.audioId == null &&
+                                (_customAudioFile != null ||
+                                    _selectedExistingAudioId != null))
                               IconButton(
-                                icon: const Icon(Icons.cancel_outlined, size: 20, color: Colors.red),
+                                icon: const Icon(Icons.cancel_outlined,
+                                    size: 20, color: Colors.red),
                                 onPressed: () {
                                   _removeCustomAudio();
                                   _removeExistingAudio();
                                 },
-                                tooltip: 'Remove custom audio',
                               ),
                           ],
                         ),
-                        if (widget.audioId == null && _customAudioFile == null && _selectedExistingAudioId == null) ...[
-                          const SizedBox(height: 12),
-                          const Divider(height: 1),
-                          const SizedBox(height: 12),
+                        if (widget.audioId == null &&
+                            _customAudioFile == null &&
+                            _selectedExistingAudioId == null) ...[
+                          const SizedBox(height: 14),
+                          Divider(
+                              height: 1,
+                              color: c.border.withValues(alpha: 0.18)),
+                          const SizedBox(height: 14),
                           Row(
                             children: [
                               Expanded(
-                                child: GestureDetector(
+                                child: _audioActionButton(
+                                  icon: Icons.upload_file_rounded,
+                                  label: 'Upload File',
                                   onTap: _pickCustomAudio,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: c.field,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: c.border.withValues(alpha: 0.3)),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.upload_file_rounded, color: c.primary, size: 14),
-                                        const SizedBox(width: 6),
-                                        const Text(
-                                          'Upload File',
-                                          style: TextStyle(
-                                            color: Color(0xFF8870EE),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  c: c,
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: GestureDetector(
+                                child: _audioActionButton(
+                                  icon: Icons.search_rounded,
+                                  label: 'Search Audio',
                                   onTap: _showAudioSearchSheet,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: c.field,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: c.border.withValues(alpha: 0.3)),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.search_rounded, color: c.primary, size: 14),
-                                        const SizedBox(width: 6),
-                                        const Text(
-                                          'Search Audio',
-                                          style: TextStyle(
-                                            color: Color(0xFF8870EE),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  c: c,
                                 ),
                               ),
                             ],
@@ -623,97 +586,120 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Title & Caption
-                  Card(
-                    color: c.surface,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      side: BorderSide(color: c.border.withValues(alpha: 0.3)),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: _titleController,
-                            style: TextStyle(
-                                color: c.textHi,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold),
-                            decoration: InputDecoration(
-                              hintText: 'Give your Echo a catchy title...',
-                              hintStyle:
-                                  TextStyle(color: c.textMuted, fontSize: 15),
-                              border: InputBorder.none,
-                            ),
-                          ),
-                          const Divider(height: 20),
-                          TextField(
-                            controller: _bodyController,
-                            maxLines: 4,
-                            style: TextStyle(color: c.textHi, fontSize: 13),
-                            decoration: InputDecoration(
-                              hintText:
-                                  'Add a description or caption (optional)...',
-                              hintStyle:
-                                  TextStyle(color: c.textMuted, fontSize: 13),
-                              border: InputBorder.none,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 16),
 
-                  // Leaderboard Categories Selection
-                  _buildExpansionCard(
-                    title: 'Leaderboard Category (Optional)',
-                    icon: Icons.emoji_events_outlined,
-                    c: c,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  // ── Title & Caption ──
+                  _glassCard(
+                    padding: const EdgeInsets.all(20),
+                    radius: 24,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildCategoryChip('beauty', '💅 Beauty', c),
-                        _buildCategoryChip('art', '🎨 Art', c),
-                        _buildCategoryChip('funny', '😂 Funny', c),
+                        TextField(
+                          controller: _titleController,
+                          style: TextStyle(
+                              color: c.textHi,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold),
+                          decoration: InputDecoration(
+                            hintText: 'Give your Echo a catchy title...',
+                            hintStyle:
+                                TextStyle(color: c.textMuted, fontSize: 15),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                        Divider(
+                            height: 20,
+                            color: c.border.withValues(alpha: 0.18)),
+                        TextField(
+                          controller: _bodyController,
+                          maxLines: 4,
+                          style: TextStyle(color: c.textHi, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Add a description or caption (optional)...',
+                            hintStyle:
+                                TextStyle(color: c.textMuted, fontSize: 13),
+                            border: InputBorder.none,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Tag input
-                  _buildExpansionCard(
-                    title: 'Tags (Max 5)',
-                    icon: Icons.tag_rounded,
-                    c: c,
+                  // ── Leaderboard Category ──
+                  _glassCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _cardHeader(Icons.emoji_events_outlined,
+                            'Leaderboard Category (Optional)', c),
+                        const SizedBox(height: 14),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildCategoryChip('beauty', '💅 Beauty', c),
+                            _buildCategoryChip('art', '🎨 Art', c),
+                            _buildCategoryChip('funny', '😂 Funny', c),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Tags ──
+                  _glassCard(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
-                          controller: _tagController,
-                          style: TextStyle(color: c.textHi, fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'Type tag and press enter...',
-                            hintStyle:
-                                TextStyle(color: c.textMuted, fontSize: 13),
-                            filled: true,
-                            fillColor: c.field,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(Icons.add_circle_outline_rounded,
-                                  color: c.primary),
-                              onPressed: () => _addTag(_tagController.text),
+                        _cardHeader(Icons.tag_rounded, 'Tags (Max 5)', c),
+                        const SizedBox(height: 14),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                            child: TextField(
+                              controller: _tagController,
+                              style: TextStyle(color: c.textHi, fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: 'Type tag and press enter...',
+                                hintStyle:
+                                    TextStyle(color: c.textMuted, fontSize: 13),
+                                filled: true,
+                                fillColor: c.field.withValues(alpha: 0.5),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: c.border.withValues(alpha: 0.18),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: c.border.withValues(alpha: 0.18),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: c.primary.withValues(alpha: 0.5),
+                                    width: 1,
+                                  ),
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(Icons.add_circle_outline_rounded,
+                                      color: c.primary),
+                                  onPressed: () => _addTag(_tagController.text),
+                                ),
+                              ),
+                              onSubmitted: _addTag,
                             ),
                           ),
-                          onSubmitted: _addTag,
                         ),
                         if (_selectedTags.isNotEmpty) ...[
                           const SizedBox(height: 12),
@@ -724,11 +710,14 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
                               return Chip(
                                 label: Text('#$tag'),
                                 deleteIcon: const Icon(Icons.close, size: 14),
-                                onDeleted: () {
-                                  setState(() => _selectedTags.remove(tag));
-                                },
+                                onDeleted: () =>
+                                    setState(() => _selectedTags.remove(tag)),
                                 backgroundColor:
-                                    c.primary.withValues(alpha: 0.15),
+                                    c.primary.withValues(alpha: 0.12),
+                                side: BorderSide(
+                                  color: c.primary.withValues(alpha: 0.25),
+                                  width: 0.8,
+                                ),
                                 labelStyle: TextStyle(
                                     color: c.primary,
                                     fontSize: 11,
@@ -742,149 +731,407 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
                       ],
                     ),
                   ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildVideoCard(AppColorsExtension c) {
-    return GestureDetector(
-      onTap: _pickVideo,
-      child: Container(
-        height: 190,
-        decoration: BoxDecoration(
-          color: c.field,
-          borderRadius: BorderRadius.circular(24),
-          border:
-              Border.all(color: c.border.withValues(alpha: 0.5), width: 1.5),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: _selectedVideoFile != null
-            ? Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (_videoController != null &&
-                      _videoController!.value.isInitialized)
-                    FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: _videoController!.value.size.width,
-                        height: _videoController!.value.size.height,
-                        child: VideoPlayer(_videoController!),
-                      ),
-                    ),
-                  Container(
-                    color: Colors.black26,
-                    child: const Center(
-                      child: Icon(Icons.replay_rounded,
-                          color: Colors.white, size: 28),
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.video_camera_back_outlined,
-                      size: 32, color: c.textMuted),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap to select video',
-                    style: TextStyle(
-                        color: c.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
+  PreferredSizeWidget _buildAppBar(AppColorsExtension c) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: AppBar(
+            backgroundColor: c.surface.withValues(alpha: 0.6),
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded,
+                  color: c.textHi, size: 20),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Create Echo',
+              style: TextStyle(
+                  color: c.textHi,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(0.5),
+              child: Divider(
+                  height: 0.5,
+                  thickness: 0.5,
+                  color: c.border.withValues(alpha: 0.18)),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _PublishButton(
+                    onTap: _isLoading ? null : _submitEcho),
               ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  // ── Video card (redesigned) ─────────────────────────────────────────────────
+  Widget _buildVideoCard(AppColorsExtension c) {
+    final hasVideo = _selectedVideoFile != null;
+    final isReady = _videoController != null && _videoController!.value.isInitialized;
+
+    return GestureDetector(
+      onTap: hasVideo ? null : _pickVideo,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 190,
+          decoration: BoxDecoration(
+            color: hasVideo ? Colors.black : null,
+            gradient: hasVideo
+                ? null
+                : LinearGradient(
+                    colors: [
+                      c.primary.withValues(alpha: 0.08),
+                      c.field.withValues(alpha: 0.5),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: hasVideo
+                  ? c.border.withValues(alpha: 0.25)
+                  : c.primary.withValues(alpha: 0.25),
+              width: hasVideo ? 0.8 : 1.2,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: hasVideo
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (isReady)
+                      FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: _videoController!.value.size.width,
+                          height: _videoController!.value.size.height,
+                          child: VideoPlayer(_videoController!),
+                        ),
+                      )
+                    else
+                      Center(
+                        child: CircularProgressIndicator(
+                            color: c.primary, strokeWidth: 2),
+                      ),
+
+                    // bottom gradient for legibility of badges
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.55),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // duration badge
+                    if (isReady)
+                      Positioned(
+                        left: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.videocam_rounded,
+                                  color: Colors.white, size: 11),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDuration(_videoController!.value.duration),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // change button
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: GestureDetector(
+                        onTap: _pickVideo,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.autorenew_rounded,
+                                  color: Colors.white, size: 12),
+                              const SizedBox(width: 4),
+                              const Text('Change',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: c.surface.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: c.primary.withValues(alpha: 0.15),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: c.primary.withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.video_camera_back_rounded,
+                                size: 20, color: c.primary),
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Tap to select video',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: c.textHi,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 1),
+                          Text('MP4, MOV supported',
+                              textAlign: TextAlign.center,
+                              style:
+                                  TextStyle(color: c.textMuted, fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  // ── Thumbnail card (redesigned) ─────────────────────────────────────────────
   Widget _buildThumbnailCard(AppColorsExtension c) {
     final imageFile = _customThumbnailFile ?? _autoThumbnailFile;
+    final isCustom = _customThumbnailFile != null;
 
     return GestureDetector(
       onTap: _pickCustomThumbnail,
-      child: Container(
-        height: 190,
-        decoration: BoxDecoration(
-          color: c.field,
-          borderRadius: BorderRadius.circular(24),
-          border:
-              Border.all(color: c.border.withValues(alpha: 0.5), width: 1.5),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: imageFile != null
-            ? Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.file(imageFile, fit: BoxFit.cover),
-                  if (_customThumbnailFile != null)
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 190,
+          decoration: BoxDecoration(
+            gradient: imageFile == null
+                ? LinearGradient(
+                    colors: [
+                      c.primary.withValues(alpha: 0.08),
+                      c.field.withValues(alpha: 0.5),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: imageFile == null
+                  ? c.primary.withValues(alpha: 0.25)
+                  : c.border.withValues(alpha: 0.25),
+              width: imageFile == null ? 1.2 : 0.8,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: imageFile != null
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(imageFile, fit: BoxFit.cover),
+
+                    // subtle bottom gradient so badges read well
                     Positioned(
-                      bottom: 8,
-                      right: 8,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Custom',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.5),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  Container(
-                    color: Colors.black12,
-                    child: const Center(
-                      child: Icon(Icons.edit_rounded,
-                          color: Colors.white, size: 24),
+
+                    if (isCustom)
+                      Positioned(
+                        left: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('Custom',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+
+                    // edit pencil, corner only — image stays clean
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: GestureDetector(
+                        onTap: _pickCustomThumbnail,
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 0.8),
+                          ),
+                          child: const Icon(Icons.edit_rounded,
+                              color: Colors.white, size: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: c.surface.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: c.primary.withValues(alpha: 0.15),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: c.primary.withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.photo_rounded,
+                                size: 20, color: c.primary),
+                          ),
+                          const SizedBox(height: 8),
+                          Text('No thumbnail yet',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: c.textHi,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 1),
+                          Text('Auto-generated after video',
+                              textAlign: TextAlign.center,
+                              style:
+                                  TextStyle(color: c.textMuted, fontSize: 10)),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.photo_outlined, size: 32, color: c.textMuted),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No Thumbnail yet',
-                    style: TextStyle(
-                        color: c.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
+                ),
+        ),
       ),
     );
   }
 
-  Widget _buildCategoryChip(String catId, String label, AppColorsExtension c) {
+  Widget _buildCategoryChip(
+      String catId, String label, AppColorsExtension c) {
     final isSelected = _selectedCategory == catId;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedCategory = isSelected ? null : catId;
-        });
-      },
+      onTap: () => setState(
+          () => _selectedCategory = isSelected ? null : catId),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? c.primary.withValues(alpha: 0.15) : c.field,
+          color: isSelected
+              ? c.primary.withValues(alpha: 0.15)
+              : c.field.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? c.primary : c.border.withValues(alpha: 0.3),
-            width: 1,
+            color: isSelected
+                ? c.primary.withValues(alpha: 0.5)
+                : c.border.withValues(alpha: 0.18),
+            width: isSelected ? 1 : 0.8,
           ),
         ),
         child: Text(
@@ -899,56 +1146,76 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
     );
   }
 
-  Widget _buildExpansionCard({
-    required String title,
+  Widget _audioActionButton({
     required IconData icon,
+    required String label,
+    required VoidCallback onTap,
     required AppColorsExtension c,
-    required Widget child,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: c.primary, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                title,
-                style: TextStyle(
-                  color: c.textHi,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: c.field.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: c.border.withValues(alpha: 0.18),
+                width: 0.8,
               ),
-            ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: c.primary, size: 14),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        color: c.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          child,
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildLoader() {
-    final c = context.appColors;
+  Widget _sectionLabel(String text, AppColorsExtension c) {
+    return Text(text,
+        style: TextStyle(
+            color: c.textHi, fontSize: 13, fontWeight: FontWeight.bold));
+  }
+
+  Widget _cardHeader(IconData icon, String title, AppColorsExtension c) {
+    return Row(
+      children: [
+        Icon(icon, color: c.primary, size: 20),
+        const SizedBox(width: 10),
+        Text(title,
+            style: TextStyle(
+                color: c.textHi, fontSize: 14, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildLoader(AppColorsExtension c) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(color: c.primary),
           const SizedBox(height: 16),
-          Text(
-            'Uploading Echo post safely...',
-            style: TextStyle(
-                color: c.textMuted, fontSize: 13, fontWeight: FontWeight.w600),
-          ),
+          Text('Uploading Echo post safely...',
+              style: TextStyle(
+                  color: c.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -967,8 +1234,6 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
               _selectedExistingAudioTitle = title;
               _selectedExistingAudioAuthorId = authorId;
               _selectedExistingAudioUrl = url;
-
-              // Clear custom audio if any
               _customAudioFile = null;
               _customAudioFileName = null;
             });
@@ -979,9 +1244,10 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
   }
 }
 
+// ── Publish Button ────────────────────────────────────────────────────────────
+
 class _PublishButton extends StatefulWidget {
   final VoidCallback? onTap;
-
   const _PublishButton({required this.onTap});
 
   @override
@@ -991,7 +1257,6 @@ class _PublishButton extends StatefulWidget {
 class _PublishButtonState extends State<_PublishButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -1003,7 +1268,6 @@ class _PublishButtonState extends State<_PublishButton>
       upperBound: 1.0,
       value: 1.0,
     );
-    _scaleAnimation = _controller;
   }
 
   @override
@@ -1015,7 +1279,6 @@ class _PublishButtonState extends State<_PublishButton>
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    const buttonColor = Color(0xFF8870EE);
 
     return GestureDetector(
       onTapDown: widget.onTap != null
@@ -1031,28 +1294,35 @@ class _PublishButtonState extends State<_PublishButton>
           ? () => _controller.animateTo(1.0, curve: Curves.easeInOut)
           : null,
       child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: widget.onTap == null ? c.field : buttonColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: widget.onTap == null
-                ? []
-                : [
-                    BoxShadow(
-                      color: buttonColor.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-          ),
-          child: Text(
-            'Publish',
-            style: TextStyle(
-              color: widget.onTap == null ? c.textMuted : Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
+        scale: _controller,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: widget.onTap == null
+                    ? c.field.withValues(alpha: 0.5)
+                    : c.primary.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: widget.onTap == null
+                      ? c.border.withValues(alpha: 0.18)
+                      : c.primary.withValues(alpha: 0.4),
+                  width: 0.8,
+                ),
+              ),
+              child: Text(
+                'Publish',
+                style: TextStyle(
+                  color: widget.onTap == null
+                      ? c.textMuted
+                      : Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ),
@@ -1061,9 +1331,10 @@ class _PublishButtonState extends State<_PublishButton>
   }
 }
 
+// ── Audio Search Sheet ────────────────────────────────────────────────────────
+
 class _AudioSearchSheet extends StatefulWidget {
   final Function(String audioId, String title, String authorId, String url) onSelect;
-
   const _AudioSearchSheet({required this.onSelect});
 
   @override
@@ -1085,17 +1356,11 @@ class _AudioSearchSheetState extends State<_AudioSearchSheet> {
 
   Future<void> _togglePreview(String url) async {
     if (_currentlyPlayingUrl == url) {
-      // Pause
       await _previewPlayer?.pause();
-      setState(() {
-        _currentlyPlayingUrl = null;
-      });
+      setState(() => _currentlyPlayingUrl = null);
     } else {
-      // Play new
       await _previewPlayer?.dispose();
-      setState(() {
-        _currentlyPlayingUrl = url;
-      });
+      setState(() => _currentlyPlayingUrl = url);
       _previewPlayer = VideoPlayerController.networkUrl(Uri.parse(url));
       await _previewPlayer!.initialize();
       _previewPlayer!.setLooping(true);
@@ -1108,157 +1373,212 @@ class _AudioSearchSheetState extends State<_AudioSearchSheet> {
   Widget build(BuildContext context) {
     final c = context.appColors;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: c.surface.withValues(alpha: 0.75),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(
+              top: BorderSide(
+                  color: c.border.withValues(alpha: 0.18), width: 0.8),
+            ),
+          ),
+          padding: EdgeInsets.only(
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Search Audio Tracks',
-                style: TextStyle(
-                  color: c.textHi,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: c.border.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Search Audio Tracks',
+                      style: TextStyle(
+                          color: c.textHi,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: Icon(Icons.close, color: c.textMuted),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(color: c.textHi, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search audio title or creator...',
+                      prefixIcon: Icon(Icons.search_rounded, color: c.primary),
+                      filled: true,
+                      fillColor: c.field.withValues(alpha: 0.5),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                            color: c.border.withValues(alpha: 0.18),
+                            width: 0.8),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                            color: c.border.withValues(alpha: 0.18),
+                            width: 0.8),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                            color: c.primary.withValues(alpha: 0.5), width: 1),
+                      ),
+                    ),
+                    onChanged: (val) =>
+                        setState(() => _searchQuery = val.trim().toLowerCase()),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('audios')
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(
+                          child: CircularProgressIndicator(color: c.primary));
+                    }
+
+                    final docs = snapshot.data?.docs ?? [];
+                    final filteredDocs = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>? ?? {};
+                      final title =
+                          (data['title'] ?? '').toString().toLowerCase();
+                      final author =
+                          (data['authorUsername'] ?? '').toString().toLowerCase();
+                      return title.contains(_searchQuery) ||
+                          author.contains(_searchQuery);
+                    }).toList();
+
+                    if (filteredDocs.isEmpty) {
+                      return Center(
+                        child: Text('No matching audios found.',
+                            style: TextStyle(color: c.textMuted)),
+                      );
+                    }
+
+                    return ListView.builder(
+                      itemCount: filteredDocs.length,
+                      itemBuilder: (context, idx) {
+                        final doc = filteredDocs[idx];
+                        final data =
+                            doc.data() as Map<String, dynamic>? ?? {};
+                        final id = doc.id;
+                        final title =
+                            data['title'] as String? ?? 'Original Audio';
+                        final authorId = data['authorId'] as String? ?? '';
+                        final authorUser =
+                            data['authorUsername'] as String? ?? '';
+                        final audioUrl = data['audioUrl'] as String? ?? '';
+                        final echoCount = data['echoCount'] as int? ?? 1;
+                        final isPlayingThis = _currentlyPlayingUrl == audioUrl;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BackdropFilter(
+                              filter:
+                                  ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: c.field.withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: c.border.withValues(alpha: 0.18),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: ListTile(
+                                  leading: IconButton(
+                                    icon: Icon(
+                                      isPlayingThis
+                                          ? Icons.pause_circle_filled_rounded
+                                          : Icons.play_circle_fill_rounded,
+                                      color: c.primary,
+                                      size: 32,
+                                    ),
+                                    onPressed: () => _togglePreview(audioUrl),
+                                  ),
+                                  title: Text(title,
+                                      style: TextStyle(
+                                          color: c.textHi,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold)),
+                                  subtitle: Text('$authorUser · $echoCount echos',
+                                      style: TextStyle(
+                                          color: c.textMuted, fontSize: 11)),
+                                  trailing: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          c.primary.withValues(alpha: 0.9),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: () {
+                                      _previewPlayer?.pause();
+                                      widget.onSelect(
+                                          id, title, authorId, audioUrl);
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text('Select',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _searchController,
-            style: TextStyle(color: c.textHi, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Search audio title or creator...',
-              prefixIcon: Icon(Icons.search_rounded, color: c.primary),
-              filled: true,
-              fillColor: c.field,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            onChanged: (val) {
-              setState(() {
-                _searchQuery = val.trim().toLowerCase();
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('audios')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator(color: c.primary));
-                }
-
-                final docs = snapshot.data?.docs ?? [];
-                // Filter client side
-                final filteredDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>? ?? {};
-                  final title = (data['title'] ?? '').toString().toLowerCase();
-                  final author = (data['authorUsername'] ?? '').toString().toLowerCase();
-                  return title.contains(_searchQuery) || author.contains(_searchQuery);
-                }).toList();
-
-                if (filteredDocs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No matching audios found.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: filteredDocs.length,
-                  itemBuilder: (context, idx) {
-                    final doc = filteredDocs[idx];
-                    final data = doc.data() as Map<String, dynamic>? ?? {};
-                    final id = doc.id;
-                    final title = data['title'] as String? ?? 'Original Audio';
-                    final authorId = data['authorId'] as String? ?? '';
-                    final authorUser = data['authorUsername'] as String? ?? '';
-                    final audioUrl = data['audioUrl'] as String? ?? '';
-                    final echoCount = data['echoCount'] as int? ?? 1;
-
-                    final isPlayingThis = _currentlyPlayingUrl == audioUrl;
-
-                    return Card(
-                      color: c.field.withValues(alpha: 0.5),
-                      elevation: 0,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: ListTile(
-                        leading: IconButton(
-                          icon: Icon(
-                            isPlayingThis ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                            color: c.primary,
-                            size: 32,
-                          ),
-                          onPressed: () => _togglePreview(audioUrl),
-                        ),
-                        title: Text(
-                          title,
-                          style: TextStyle(
-                            color: c.textHi,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '$authorUser • $echoCount echos',
-                          style: TextStyle(
-                            color: c.textMuted,
-                            fontSize: 11,
-                          ),
-                        ),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: c.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () {
-                            _previewPlayer?.pause();
-                            widget.onSelect(id, title, authorId, audioUrl);
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text(
-                            'Select',
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
