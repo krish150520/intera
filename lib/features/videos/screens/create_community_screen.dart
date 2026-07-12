@@ -133,9 +133,9 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
     final c = context.appColors;
 
     return Scaffold(
-      backgroundColor: c.bg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: c.bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
@@ -164,9 +164,11 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
         centerTitle: true,
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
+            colors: context.isDarkMode
+                ? [const Color(0xFF2A2F55), const Color(0xFF171A30), const Color(0xFF171A30)]
+                : const [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -295,7 +297,10 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                                       decoration: BoxDecoration(
                                         color: c.primary,
                                         shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 2),
+                                        border: Border.all(
+                                          color: context.isDarkMode ? c.surface : Colors.white,
+                                          width: 2,
+                                        ),
                                       ),
                                       child: const Icon(Icons.camera_alt_outlined, size: 12, color: Colors.white),
                                     ),
@@ -339,9 +344,14 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.white.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: context.isDarkMode ? 0.15 : 0.6),
+                            width: 1.2,
+                          ),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
@@ -386,9 +396,14 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: context.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.white.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: context.isDarkMode ? 0.15 : 0.6),
+                            width: 1.2,
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,12 +467,17 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: context.isDarkMode
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.white.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: context.isDarkMode ? 0.15 : 0.6),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.01),
+                color: Colors.black.withValues(alpha: context.isDarkMode ? 0.25 : 0.01),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
@@ -496,10 +516,14 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _isPublic ? c.primary.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.4),
+                    color: _isPublic
+                        ? c.primary.withValues(alpha: 0.08)
+                        : (context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.white.withValues(alpha: 0.4)),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: _isPublic ? c.primary : Colors.white.withValues(alpha: 0.6),
+                      color: _isPublic ? c.primary : Colors.white.withValues(alpha: context.isDarkMode ? 0.15 : 0.6),
                       width: _isPublic ? 1.5 : 1.2,
                     ),
                   ),
@@ -522,10 +546,14 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: !_isPublic ? c.primary.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.4),
+                    color: !_isPublic
+                        ? c.primary.withValues(alpha: 0.08)
+                        : (context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.white.withValues(alpha: 0.4)),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: !_isPublic ? c.primary : Colors.white.withValues(alpha: 0.6),
+                      color: !_isPublic ? c.primary : Colors.white.withValues(alpha: context.isDarkMode ? 0.15 : 0.6),
                       width: !_isPublic ? 1.5 : 1.2,
                     ),
                   ),

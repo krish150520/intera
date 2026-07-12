@@ -30,7 +30,11 @@ service cloud.firestore {
     // ── Posts ─────────────────────────────────────────────────────────────────
     match /posts/{postId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && (
+        !('rewardKarma' in request.resource.data) ||
+        request.resource.data.rewardKarma == null ||
+        (request.resource.data.rewardKarma is int && request.resource.data.rewardKarma <= 100)
+      );
 
       // Only the author may delete their own post
       allow delete: if request.auth != null &&
@@ -46,6 +50,10 @@ service cloud.firestore {
           'commentCount', 'shareCount',
           'isCompleted', 'bestAnswerCommentId', 'bestAnswerUid'
         ])
+      ) && (
+        !('rewardKarma' in request.resource.data) ||
+        request.resource.data.rewardKarma == null ||
+        (request.resource.data.rewardKarma is int && request.resource.data.rewardKarma <= 100)
       );
 
     }

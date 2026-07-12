@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/routes/app_routes.dart';
+import '../../../shared/models/post_model.dart';
 import '../models/message_model.dart';
 
 class MessageBubble extends StatefulWidget {
@@ -113,6 +117,148 @@ class _MessageBubbleState extends State<MessageBubble>
                         color: c.field,
                         child: Icon(Icons.broken_image_outlined,
                             color: c.textDim),
+                      ),
+                    ),
+                  )
+                else if (widget.message.type == MessageType.sharedPost)
+                  GestureDetector(
+                    onTap: () async {
+                      try {
+                        final doc = await FirebaseFirestore.instance
+                            .collection('posts')
+                            .doc(widget.message.sharedPostId)
+                            .get();
+                        if (!doc.exists) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Post was deleted.')),
+                          );
+                          return;
+                        }
+                        final post = Post.fromFirestore(doc, FirebaseAuth.instance.currentUser?.uid ?? '');
+                        if (!mounted) return;
+                        if (widget.message.sharedPostType == 'video') {
+                          Navigator.of(context).pushNamed(
+                            AppRoutes.echoViewer,
+                            arguments: {
+                              'posts': [post],
+                              'initialIndex': 0,
+                            },
+                          );
+                        } else {
+                          Navigator.of(context).pushNamed(
+                            AppRoutes.postDetail,
+                            arguments: {
+                              'post': post,
+                              'heroTag': 'shared_post_${post.id}',
+                            },
+                          );
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error loading post: $e')),
+                        );
+                      }
+                    },
+                    child: Container(
+                      width: 220,
+                      decoration: BoxDecoration(
+                        color: widget.isMe
+                            ? c.primary.withValues(alpha: 0.9)
+                            : c.surface,
+                        borderRadius: radius,
+                        border: Border.all(
+                          color: widget.isMe
+                              ? Colors.white.withValues(alpha: 0.15)
+                              : c.border,
+                          width: 0.8,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (widget.message.sharedPostType == 'video' &&
+                              widget.message.sharedPostVideoThumbnail != null)
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Image.network(
+                                  widget.message.sharedPostVideoThumbnail!,
+                                  height: 120,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.35),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  padding: const EdgeInsets.all(8),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else if (widget.message.sharedPostImageUrl != null &&
+                              widget.message.sharedPostImageUrl!.isNotEmpty)
+                            Image.network(
+                              widget.message.sharedPostImageUrl!,
+                              height: 120,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '@${widget.message.sharedPostAuthorUsername ?? 'user'}',
+                                  style: TextStyle(
+                                    color: widget.isMe
+                                        ? Colors.white.withValues(alpha: 0.8)
+                                        : c.textMuted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  widget.message.sharedPostTitle ?? 'Shared Post',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: widget.isMe ? Colors.white : c.textHi,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.25,
+                                  ),
+                                ),
+                                if (widget.message.sharedPostBody != null &&
+                                    widget.message.sharedPostBody!.isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    widget.message.sharedPostBody!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: widget.isMe
+                                          ? Colors.white.withValues(alpha: 0.72)
+                                          : c.textMuted,
+                                      fontSize: 11,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   )

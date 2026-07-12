@@ -66,15 +66,39 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     if (!_bonusAvailable || _claimingBonus || _currentUid.isEmpty) return;
     setState(() => _claimingBonus = true);
     try {
+      final userSnap = await FirebaseFirestore.instance.collection('users').doc(_currentUid).get();
+      final userData = userSnap.data() ?? {};
+      final currentWeekly = (userData['weeklyKarma'] as num?)?.toInt() ?? 0;
+      final claimAmount = (currentWeekly + 50 > 200) ? (200 - currentWeekly) : 50;
+
+      if (claimAmount <= 0) {
+        _snack('You already hold the maximum limit of 200 weekly karma!');
+        if (mounted) setState(() => _claimingBonus = false);
+        return;
+      }
+
       final batch = FirebaseFirestore.instance.batch();
       final userRef = FirebaseFirestore.instance.collection('users').doc(_currentUid);
-      batch.update(userRef, {'karmaBalance': FieldValue.increment(100), 'lastWeeklyKarmaClaim': FieldValue.serverTimestamp()});
+      batch.update(userRef, {
+        'weeklyKarma': FieldValue.increment(claimAmount),
+        'lastWeeklyKarmaClaim': FieldValue.serverTimestamp()
+      });
       final txRef = FirebaseFirestore.instance.collection('karmaTransactions').doc();
-      batch.set(txRef, {'fromUid': null, 'toUid': _currentUid, 'amount': 100, 'type': 'weeklyBonus', 'note': 'Weekly login bonus', 'createdAt': FieldValue.serverTimestamp()});
+      batch.set(txRef, {
+        'fromUid': null,
+        'toUid': _currentUid,
+        'amount': claimAmount,
+        'type': 'weeklyBonus',
+        'note': 'Weekly login bonus',
+        'createdAt': FieldValue.serverTimestamp()
+      });
       await batch.commit();
       if (!mounted) return;
-      setState(() { _bonusAvailable = false; _nextClaimAt = DateTime.now().add(const Duration(days: 7)); });
-      _snack('🎉 +100 karma claimed! Come back next week.');
+      setState(() {
+        _bonusAvailable = false;
+        _nextClaimAt = DateTime.now().add(const Duration(days: 7));
+      });
+      _snack('🎉 +$claimAmount weekly karma claimed! Come back next week.');
     } catch (e) {
       if (mounted) _snack('Failed to claim: $e');
     } finally {
@@ -624,7 +648,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       case 'karma':
       default:
         label = 'Karma';
-        val = (ud['karmaBalance'] as num?)?.toInt() ?? 0;
+        final balance = (ud['karmaBalance'] as num?)?.toInt() ?? 0;
+        final weekly = (ud['weeklyKarma'] as num?)?.toInt() ?? 0;
+        val = balance + weekly;
         icon = Icons.bolt_rounded;
         valueColor = c.primary;
         break;

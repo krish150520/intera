@@ -13,6 +13,9 @@ import '../../features/create/screens/create_post_screen.dart';
 import '../../features/create/screens/create_community_screen.dart';
 import '../../features/home/screens/create_spark_screen.dart';
 import '../../features/echos/screens/echo_viewer_screen.dart';
+import '../../features/echos/screens/create_echo_screen.dart';
+import '../../features/echos/screens/audio_page_screen.dart';
+import '../../features/echos/screens/create_audio_screen.dart';
 import '../../shared/models/post_model.dart';
 
 /// Centralized named-route definitions for INTERA.
@@ -32,6 +35,9 @@ class AppRoutes {
   static const String createCommunity = '/create-community';
   static const String createSpark = '/create-spark';
   static const String echoViewer = '/echo-viewer';
+  static const String createEcho = '/create-echo';
+  static const String audioPage = '/audio-page';
+  static const String createAudio = '/create-audio';
 
   static Map<String, WidgetBuilder> get routes => {
         splash: (context) => const SplashScreen(),
@@ -45,6 +51,7 @@ class AppRoutes {
         createPost: (context) => const CreatePostScreen(),
         createCommunity: (context) => const CreateCommunityScreen(),
         createSpark: (context) => const CreateSparkScreen(),
+        createAudio: (context) => const CreateAudioScreen(),
       };
 
   /// For routes that need arguments (e.g. PostDetailScreen needs a [Post]),
@@ -74,6 +81,30 @@ class AppRoutes {
         final initialIndex = args?['initialIndex'] as int? ?? 0;
         return MaterialPageRoute(
           builder: (context) => EchoViewerScreen(posts: posts, initialIndex: initialIndex),
+        );
+      case createEcho:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final audioId = args?['audioId'] as String?;
+        final audioTitle = args?['audioTitle'] as String?;
+        final audioAuthorId = args?['audioAuthorId'] as String?;
+        return MaterialPageRoute(
+          builder: (context) => CreateEchoScreen(
+            audioId: audioId,
+            audioTitle: audioTitle,
+            audioAuthorId: audioAuthorId,
+          ),
+        );
+      case audioPage:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final audioId = args?['audioId'] as String? ?? '';
+        final audioTitle = args?['audioTitle'] as String?;
+        final audioAuthorId = args?['audioAuthorId'] as String?;
+        return MaterialPageRoute(
+          builder: (context) => AudioPageScreen(
+            audioId: audioId,
+            audioTitle: audioTitle,
+            audioAuthorId: audioAuthorId,
+          ),
         );
       default:
         return null;

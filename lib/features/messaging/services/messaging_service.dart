@@ -222,6 +222,76 @@ class MessagingService {
     );
   }
 
+  Future<void> sendSharedPostMessage({
+    required String conversationId,
+    required String otherUid,
+    required String postId,
+    required String postType,
+    required String postTitle,
+    required String postBody,
+    String? postImageUrl,
+    String? postVideoThumbnail,
+    required String postAuthorUsername,
+  }) async {
+    final myUid = _myUid;
+    if (myUid == null) return;
+
+    final convoRef = _db.collection('conversations').doc(conversationId);
+    final msgRef = convoRef.collection('messages').doc();
+
+    final convoSnap = await convoRef.get();
+    final convoData = convoSnap.data();
+    final isPending = convoData?['status'] == 'pending';
+    final requestedBy = convoData?['requestedBy'];
+    final shouldAutoAccept = isPending && requestedBy != myUid;
+
+    final textRepresentation = 'Shared a post: "$postTitle" by @$postAuthorUsername';
+
+    final batch = _db.batch();
+    batch.set(msgRef, {
+      'senderId': myUid,
+      'text': textRepresentation,
+      'type': 'sharedPost',
+      'createdAt': FieldValue.serverTimestamp(),
+      'status': 'sent',
+      'sharedPostId': postId,
+      'sharedPostType': postType,
+      'sharedPostTitle': postTitle,
+      'sharedPostBody': postBody,
+      if (postImageUrl != null) 'sharedPostImageUrl': postImageUrl,
+      if (postVideoThumbnail != null) 'sharedPostVideoThumbnail': postVideoThumbnail,
+      'sharedPostAuthorUsername': postAuthorUsername,
+    });
+    
+    batch.update(convoRef, {
+      'lastMessage': textRepresentation,
+      'lastMessageType': 'sharedPost',
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastSenderId': myUid,
+      'unreadCount.$otherUid': FieldValue.increment(1),
+      if (shouldAutoAccept) 'status': 'active',
+    });
+
+    await batch.commit();
+
+    // Send push notification
+    String senderName = 'Someone';
+    try {
+      final userDoc = await _db.collection('users').doc(myUid).get();
+      if (userDoc.exists) {
+        senderName = userDoc.data()?['name'] ?? 'Someone';
+      }
+    } catch (_) {}
+
+    await NotificationService.sendNotification(
+      recipientId: otherUid,
+      type: isPending ? 'messageRequest' : 'message',
+      title: isPending ? 'Message request from $senderName' : 'New message from $senderName',
+      subtitle: textRepresentation,
+      relatedId: conversationId,
+    );
+  }
+
   Future<void> sendImageMessage({
     required String conversationId,
     required String otherUid,

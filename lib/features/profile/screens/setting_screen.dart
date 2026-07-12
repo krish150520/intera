@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../home/widgets/post_card.dart';
 import '../../../shared/widgets/custom_avatar.dart';
@@ -35,94 +36,205 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: _primary),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text('Settings',
-            style: TextStyle(
-                color: _textDark, fontWeight: FontWeight.w700, fontSize: 17)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-        children: [
-          // ── Account info card ────────────────────────────────────────────
-          _AccountInfoCard(uid: _uid),
-          const SizedBox(height: 20),
-
-          // ── Content ──────────────────────────────────────────────────────
-          _SectionLabel('CONTENT'),
-          const SizedBox(height: 8),
-          _SettingsGroup(children: [
-            _SettingsTile(
-              icon: Icons.bookmark_outline_rounded,
-              label: 'Saved posts',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => SavedPostsScreen(uid: _uid))),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppTheme.themeNotifier,
+      builder: (context, currentMode, _) {
+        return Scaffold(
+          backgroundColor: _bg,
+          appBar: AppBar(
+            backgroundColor: _surface,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: _primary),
+              onPressed: () => Navigator.of(context).maybePop(),
             ),
-          ]),
-          const SizedBox(height: 20),
-
-          // ── Account ──────────────────────────────────────────────────────
-          _SectionLabel('ACCOUNT'),
-          const SizedBox(height: 8),
-          _SettingsGroup(children: [
-            _SettingsTile(
-              icon: Icons.person_outline_rounded,
-              label: 'Edit profile',
-              onTap: () => Navigator.of(context).pushNamed(AppRoutes.editProfile),
-            ),
-            _SettingsTile(
-              icon: Icons.swap_horiz_rounded,
-              label: 'Switch account',
-              onTap: () => _showSwitchAccountSheet(context),
-            ),
-            _SettingsTile(
-              icon: Icons.logout_rounded,
-              label: 'Log out',
-              onTap: () => _confirmLogout(context),
-            ),
-          ]),
-          const SizedBox(height: 20),
-
-          // ── Support ───────────────────────────────────────────────────────
-          _SectionLabel('SUPPORT'),
-          const SizedBox(height: 8),
-          _SettingsGroup(children: [
-            _SettingsTile(
-              icon: Icons.feedback_outlined,
-              label: 'Send feedback',
-              onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FeedbackScreen())),
-            ),
-          ]),
-          const SizedBox(height: 20),
-
-          // ── Danger zone ───────────────────────────────────────────────────
-          _SectionLabel('DANGER ZONE'),
-          const SizedBox(height: 8),
-          _SettingsGroup(children: [
-            _SettingsTile(
-              icon: Icons.delete_outline_rounded,
-              label: 'Delete account',
-              labelColor: _error,
-              iconColor: _error,
-              onTap: () => _confirmDeleteAccount(context),
-            ),
-          ]),
-
-          const SizedBox(height: 24),
-          Center(
-            child: Text('INTERA · v1.0.0',
-                style: TextStyle(color: _textMuted, fontSize: 11)),
+            title: Text('Settings',
+                style: TextStyle(
+                    color: _textDark, fontWeight: FontWeight.w700, fontSize: 17)),
           ),
-        ],
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+            children: [
+              // ── Account info card ────────────────────────────────────────────
+              _AccountInfoCard(uid: _uid),
+              const SizedBox(height: 20),
+
+              // ── Content ──────────────────────────────────────────────────────
+              _SectionLabel('CONTENT'),
+              const SizedBox(height: 8),
+              _SettingsGroup(children: [
+                _SettingsTile(
+                  icon: Icons.bookmark_outline_rounded,
+                  label: 'Saved posts',
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => SavedPostsScreen(uid: _uid))),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── Preferences ──────────────────────────────────────────────────
+              _SectionLabel('PREFERENCES'),
+              const SizedBox(height: 8),
+              _SettingsGroup(children: [
+                _SettingsTile(
+                  icon: Icons.dark_mode_outlined,
+                  label: 'Appearance',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        currentMode == ThemeMode.system
+                            ? 'System'
+                            : currentMode == ThemeMode.dark
+                                ? 'Dark'
+                                : 'Light',
+                        style: TextStyle(color: _textMuted, fontSize: 13),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right_rounded, color: _isDark ? AppColors.darkBorder : AppColors.lightChipBorder, size: 20),
+                    ],
+                  ),
+                  onTap: () => _showThemeSelectionSheet(context),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── Account ──────────────────────────────────────────────────────
+              _SectionLabel('ACCOUNT'),
+              const SizedBox(height: 8),
+              _SettingsGroup(children: [
+                _SettingsTile(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Edit profile',
+                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.editProfile),
+                ),
+                _SettingsTile(
+                  icon: Icons.swap_horiz_rounded,
+                  label: 'Switch account',
+                  onTap: () => _showSwitchAccountSheet(context),
+                ),
+                _SettingsTile(
+                  icon: Icons.logout_rounded,
+                  label: 'Log out',
+                  onTap: () => _confirmLogout(context),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── Support ───────────────────────────────────────────────────────
+              _SectionLabel('SUPPORT'),
+              const SizedBox(height: 8),
+              _SettingsGroup(children: [
+                _SettingsTile(
+                  icon: Icons.feedback_outlined,
+                  label: 'Send feedback',
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── Danger zone ───────────────────────────────────────────────────
+              _SectionLabel('DANGER ZONE'),
+              const SizedBox(height: 8),
+              _SettingsGroup(children: [
+                _SettingsTile(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete account',
+                  labelColor: _error,
+                  iconColor: _error,
+                  onTap: () => _confirmDeleteAccount(context),
+                ),
+              ]),
+
+              const SizedBox(height: 24),
+              Center(
+                child: Text('INTERA · v1.0.0',
+                    style: TextStyle(color: _textMuted, fontSize: 11)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Appearance Selector ───────────────────────────────────────────────────
+  void _showThemeSelectionSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (sheetCtx) {
+        return ValueListenableBuilder<ThemeMode>(
+          valueListenable: AppTheme.themeNotifier,
+          builder: (context, currentMode, _) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 14),
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(
+                        color: _border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Choose Appearance',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: _textDark,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Divider(height: 1, color: _border),
+                  _buildThemeOptionTile(sheetCtx, 'Light Mode', ThemeMode.light, Icons.light_mode_outlined, currentMode),
+                  _buildThemeOptionTile(sheetCtx, 'Dark Mode', ThemeMode.dark, Icons.dark_mode_outlined, currentMode),
+                  _buildThemeOptionTile(sheetCtx, 'System Default', ThemeMode.system, Icons.settings_brightness_outlined, currentMode),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildThemeOptionTile(
+    BuildContext sheetCtx,
+    String label,
+    ThemeMode mode,
+    IconData icon,
+    ThemeMode currentMode,
+  ) {
+    final isSelected = currentMode == mode;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? _primary : _textMuted),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? _primary : _textDark,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      trailing: isSelected ? Icon(Icons.check_rounded, color: _primary) : null,
+      onTap: () {
+        AppTheme.setTheme(mode);
+        Navigator.pop(sheetCtx);
+      },
     );
   }
 

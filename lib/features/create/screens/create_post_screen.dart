@@ -83,7 +83,13 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     );
 
     
-    if (widget.postType == 'text') {
+    if (widget.postType == 'video' || widget.isVideo == true) {
+      _selectedType = PostType.video;
+      _isVideoMedia = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _pickInitialVideo();
+      });
+    } else if (widget.postType == 'text') {
       _selectedType = PostType.text;
     } else if (widget.postType == 'photo') {
       _selectedType = PostType.image;
@@ -112,6 +118,13 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     _selectedCommunityId = widget.communityId;
     _fetchCommunities();
     _animCtrl.forward();
+  }
+
+  Future<void> _pickInitialVideo() async {
+    final file = await _picker.pickVideo(source: ImageSource.gallery);
+    if (file != null) {
+      _pickMedia(file, true);
+    }
   }
 
   @override
@@ -206,6 +219,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
     if (isHelp && title.isEmpty) {
       _snack('Please add a title for your help request.');
+      return;
+    }
+    if (isHelp && reward > 100) {
+      _snack('Karma reward cannot exceed 100.');
       return;
     }
     if (!isHelp && body.isEmpty && _selectedMediaFile == null) {

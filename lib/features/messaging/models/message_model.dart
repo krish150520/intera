@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum MessageType { text, image }
+enum MessageType { text, image, sharedPost }
 
 class MessageModel {
   final String id;
@@ -11,6 +11,15 @@ class MessageModel {
   final DateTime createdAt;
   final bool isRead;
 
+  // Shared post metadata fields
+  final String? sharedPostId;
+  final String? sharedPostType;
+  final String? sharedPostTitle;
+  final String? sharedPostBody;
+  final String? sharedPostImageUrl;
+  final String? sharedPostVideoThumbnail;
+  final String? sharedPostAuthorUsername;
+
   MessageModel({
     required this.id,
     required this.senderId,
@@ -19,18 +28,41 @@ class MessageModel {
     required this.type,
     required this.createdAt,
     this.isRead = false,
+    this.sharedPostId,
+    this.sharedPostType,
+    this.sharedPostTitle,
+    this.sharedPostBody,
+    this.sharedPostImageUrl,
+    this.sharedPostVideoThumbnail,
+    this.sharedPostAuthorUsername,
   });
 
   factory MessageModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    MessageType mType = MessageType.text;
+    final typeStr = data['type'] as String?;
+    if (typeStr == 'image') {
+      mType = MessageType.image;
+    } else if (typeStr == 'sharedPost') {
+      mType = MessageType.sharedPost;
+    }
+
     return MessageModel(
       id: doc.id,
       senderId: data['senderId'] ?? '',
       text: data['text'],
       imageUrl: data['imageUrl'],
-      type: (data['type'] == 'image') ? MessageType.image : MessageType.text,
+      type: mType,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isRead: data['status'] == 'read',
+      sharedPostId: data['sharedPostId'],
+      sharedPostType: data['sharedPostType'],
+      sharedPostTitle: data['sharedPostTitle'],
+      sharedPostBody: data['sharedPostBody'],
+      sharedPostImageUrl: data['sharedPostImageUrl'],
+      sharedPostVideoThumbnail: data['sharedPostVideoThumbnail'],
+      sharedPostAuthorUsername: data['sharedPostAuthorUsername'],
     );
   }
 
@@ -39,9 +71,22 @@ class MessageModel {
       'senderId': senderId,
       'text': text,
       'imageUrl': imageUrl,
-      'type': type == MessageType.image ? 'image' : 'text',
+      'type': type == MessageType.image
+          ? 'image'
+          : type == MessageType.sharedPost
+              ? 'sharedPost'
+              : 'text',
       'createdAt': FieldValue.serverTimestamp(),
       'status': 'sent',
+      if (sharedPostId != null) 'sharedPostId': sharedPostId,
+      if (sharedPostType != null) 'sharedPostType': sharedPostType,
+      if (sharedPostTitle != null) 'sharedPostTitle': sharedPostTitle,
+      if (sharedPostBody != null) 'sharedPostBody': sharedPostBody,
+      if (sharedPostImageUrl != null) 'sharedPostImageUrl': sharedPostImageUrl,
+      if (sharedPostVideoThumbnail != null)
+        'sharedPostVideoThumbnail': sharedPostVideoThumbnail,
+      if (sharedPostAuthorUsername != null)
+        'sharedPostAuthorUsername': sharedPostAuthorUsername,
     };
   }
 }

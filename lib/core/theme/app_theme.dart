@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'colors.dart';
 
 /// Centralized ThemeData for INTERA — light and dark.
@@ -20,6 +21,31 @@ import 'colors.dart';
 ///   Text('Hi', style: Theme.of(context).textTheme.titleMedium)
 class AppTheme {
   AppTheme._();
+
+  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.system);
+
+  static Future<void> initTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeStr = prefs.getString('theme_mode') ?? 'system';
+      themeNotifier.value = ThemeMode.values.firstWhere(
+        (e) => e.name == themeStr,
+        orElse: () => ThemeMode.system,
+      );
+    } catch (e) {
+      debugPrint('Error initializing theme: $e');
+    }
+  }
+
+  static Future<void> setTheme(ThemeMode mode) async {
+    try {
+      themeNotifier.value = mode;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('theme_mode', mode.name);
+    } catch (e) {
+      debugPrint('Error saving theme: $e');
+    }
+  }
 
   // ── Shared values ─────────────────────────────────────────────────────────
   static const String _fontFamily = 'Roboto'; // swap for your app's font

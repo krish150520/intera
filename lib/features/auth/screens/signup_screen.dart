@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intera/core/theme/app_theme.dart';
 import '../../../core/constants/strings.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/colors.dart';
@@ -188,14 +189,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text(AppStrings.signUp,
             style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
+        foregroundColor: c.textHi,
       ),
       body: SafeArea(
         child: Center(
@@ -214,13 +218,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           CircleAvatar(
                             radius: 46,
                             backgroundColor:
-                                AppColors.primary.withValues(alpha: 0.15),
+                                c.primary.withValues(alpha: 0.15),
                             backgroundImage: _profileImageFile != null
                                 ? FileImage(_profileImageFile!)
                                 : null,
                             child: _profileImageFile == null
-                                ? const Icon(Icons.person_add_alt_1_outlined,
-                                    size: 40, color: AppColors.primary)
+                                ? Icon(Icons.person_add_alt_1_outlined,
+                                    size: 40, color: c.primary)
                                 : null,
                           ),
                           Positioned(
@@ -228,9 +232,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             right: 0,
                             child: Container(
                               padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle),
+                              decoration: BoxDecoration(
+                                  color: c.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isDark ? c.surface : Colors.white,
+                                    width: 2,
+                                  )),
                               child: const Icon(Icons.camera_alt_rounded,
                                   size: 14, color: Colors.white),
                             ),
@@ -304,23 +312,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Expanded(child: Divider(color: c.border)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text('or',
-                            style: TextStyle(color: Colors.grey.shade500)),
+                            style: TextStyle(color: c.textMuted)),
                       ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Expanded(child: Divider(color: c.border)),
                     ],
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
                     onPressed: _isLoading ? null : _handleGoogleSignUp,
-                    icon: const Icon(Icons.g_mobiledata, size: 28),
-                    label: const Text('Continue with Google'),
+                    icon: Icon(Icons.g_mobiledata, size: 28, color: c.textHi),
+                    label: Text('Continue with Google', style: TextStyle(color: c.textHi)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey.shade300),
+                      side: BorderSide(color: c.border),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -328,8 +336,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: TextButton(
                       onPressed: () =>
                           Navigator.of(context).pushNamed(AppRoutes.login),
-                      child: const Text(AppStrings.alreadyHaveAccount,
-                          style: TextStyle(color: Colors.black54)),
+                      child: Text(AppStrings.alreadyHaveAccount,
+                          style: TextStyle(color: c.textSecondary)),
                     ),
                   ),
                 ],

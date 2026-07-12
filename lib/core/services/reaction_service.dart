@@ -156,19 +156,57 @@ class ReactionService {
       int totalArt = 0;
       int totalFunny = 0;
 
+      int monthBeauty = 0;
+      int monthArt = 0;
+      int monthFunny = 0;
+
+      int yearBeauty = 0;
+      int yearArt = 0;
+      int yearFunny = 0;
+
+      final now = DateTime.now();
+      final startOfMonth = DateTime(now.year, now.month, 1);
+      final startOfYear = DateTime(now.year, 1, 1);
+
       for (var doc in postsSnap.docs) {
         final data = doc.data();
-        totalBeauty += (data['beautyCount'] as num?)?.toInt() ?? 0;
-        totalArt += (data['artCount'] as num?)?.toInt() ?? 0;
-        totalFunny += (data['funnyCount'] as num?)?.toInt() ?? 0;
+        final beauty = (data['beautyCount'] as num?)?.toInt() ?? 0;
+        final art = (data['artCount'] as num?)?.toInt() ?? 0;
+        final funny = (data['funnyCount'] as num?)?.toInt() ?? 0;
+
+        totalBeauty += beauty;
+        totalArt += art;
+        totalFunny += funny;
+
+        final createdAtTs = data['createdAt'] as Timestamp?;
+        if (createdAtTs != null) {
+          final createdAt = createdAtTs.toDate();
+          if (createdAt.isAfter(startOfMonth)) {
+            monthBeauty += beauty;
+            monthArt += art;
+            monthFunny += funny;
+          }
+          if (createdAt.isAfter(startOfYear)) {
+            yearBeauty += beauty;
+            yearArt += art;
+            yearFunny += funny;
+          }
+        }
       }
 
       await _db.collection('users').doc(uid).update({
         'beautyPoints': totalBeauty,
         'artPoints': totalArt,
         'funnyPoints': totalFunny,
+        'beautyPointsThisMonth': monthBeauty,
+        'beautyPointsThisYear': yearBeauty,
+        'artPointsThisMonth': monthArt,
+        'artPointsThisYear': yearArt,
+        'funnyPointsThisMonth': monthFunny,
+        'funnyPointsThisYear': yearFunny,
       });
-      debugPrint('Successfully synced points for user $uid: Beauty=$totalBeauty, Art=$totalArt, Funny=$totalFunny');
+      debugPrint(
+          'Successfully synced points for user $uid: Beauty=$totalBeauty, Art=$totalArt, Funny=$totalFunny');
     } catch (e) {
       debugPrint('Error syncing user points for $uid: $e');
     }

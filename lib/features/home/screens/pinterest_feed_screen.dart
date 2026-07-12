@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../profile/screens/my_profile_screen.dart';
 import '../../../shared/widgets/shimmer.dart';
+import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/services/feed_algorithm.dart';
 import '../widgets/pinterest_post_card.dart';
 
@@ -18,6 +19,7 @@ class PinterestFeedScreen extends StatefulWidget {
 class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
   late final Stream<QuerySnapshot> _postsStream;
   UserFeedProfile _feedProfile = UserFeedProfile.empty('');
+  String _activeTab = 'explore'; // 'explore' | 'leaderboard'
 
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
   late AppColorsExtension _c;
@@ -110,8 +112,27 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: _c.field,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _c.border, width: 0.8),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: Row(
+                children: [
+                  _buildTopTab('explore', 'Explore 🔍'),
+                  _buildTopTab('leaderboard', 'Leaderboard 🏆'),
+                ],
+              ),
+            ),
+          ),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            child: _activeTab == 'explore'
+                ? StreamBuilder<QuerySnapshot>(
               stream: _postsStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) return _buildError(snapshot.error.toString());
@@ -192,7 +213,8 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
                   child: _buildPinterestGrid(filteredPosts),
                 );
               },
-            ),
+            )
+          : _buildLeaderboardView(),
           ),
         ],
       ),
@@ -303,6 +325,344 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
           const SizedBox(height: 4),
           Text(msg, style: TextStyle(color: _c.textDim, fontSize: 12)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTopTab(String tab, String label) {
+    final selected = _activeTab == tab;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _activeTab = tab),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? _c.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1.5),
+                    )
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? _c.textHi : _c.textMuted,
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _leaderboardCategory = 'beauty'; // 'beauty' | 'art' | 'funny'
+  String _leaderboardTimeframe = 'allTime'; // 'month' | 'year' | 'allTime'
+
+  String _getFirestoreField() {
+    switch (_leaderboardCategory) {
+      case 'beauty':
+        return _leaderboardTimeframe == 'month'
+            ? 'beautyPointsThisMonth'
+            : _leaderboardTimeframe == 'year'
+                ? 'beautyPointsThisYear'
+                : 'beautyPoints';
+      case 'art':
+        return _leaderboardTimeframe == 'month'
+            ? 'artPointsThisMonth'
+            : _leaderboardTimeframe == 'year'
+                ? 'artPointsThisYear'
+                : 'artPoints';
+      case 'funny':
+        return _leaderboardTimeframe == 'month'
+            ? 'funnyPointsThisMonth'
+            : _leaderboardTimeframe == 'year'
+                ? 'funnyPointsThisYear'
+                : 'funnyPoints';
+      default:
+        return 'beautyPoints';
+    }
+  }
+
+  Color _getCategoryColor() {
+    switch (_leaderboardCategory) {
+      case 'beauty':
+        return Colors.pinkAccent;
+      case 'art':
+        return Colors.orangeAccent;
+      case 'funny':
+        return Colors.amber;
+      default:
+        return _c.primary;
+    }
+  }
+
+  Widget _buildLeaderboardView() {
+    final orderByField = _getFirestoreField();
+    final pointColor = _getCategoryColor();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              _buildCategoryPill('beauty', '💖 Beauty'),
+              const SizedBox(width: 8),
+              _buildCategoryPill('art', '🎨 Art'),
+              const SizedBox(width: 8),
+              _buildCategoryPill('funny', '😂 Funny'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: _c.field,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _c.border, width: 0.8),
+            ),
+            padding: const EdgeInsets.all(2),
+            child: Row(
+              children: [
+                _buildTimeframeBtn('month', 'Monthly'),
+                _buildTimeframeBtn('year', 'Yearly'),
+                _buildTimeframeBtn('allTime', 'All-Time'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .orderBy(orderByField, descending: true)
+                .limit(30)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'Error: ${snapshot.error}',
+                      style: TextStyle(color: _c.textMuted, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final docs = snapshot.data?.docs ?? [];
+              final filteredDocs = docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>? ?? {};
+                final pts = (data[orderByField] as num?)?.toInt() ?? 0;
+                return pts > 0;
+              }).toList();
+
+              if (filteredDocs.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.emoji_events_outlined, size: 44, color: _c.textDim),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No points registered for this filter.',
+                        style: TextStyle(color: _c.textMuted, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: filteredDocs.length,
+                itemBuilder: (context, index) {
+                  final userDoc = filteredDocs[index];
+                  final data = userDoc.data() as Map<String, dynamic>? ?? {};
+                  final name = data['name'] ?? 'User';
+                  final username = data['username'] ?? 'user';
+                  final avatarUrl = data['profileImageUrl'] ?? data['photoURL'] ?? '';
+                  final pts = (data[orderByField] as num?)?.toInt() ?? 0;
+                  final userId = userDoc.id;
+
+                  final isTop3 = index < 3;
+                  final Color rankBgColor = switch (index) {
+                    0 => Colors.amber,
+                    1 => Colors.grey.shade400,
+                    2 => const Color(0xFFCD7F32),
+                    _ => Colors.transparent,
+                  };
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: _c.field.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _c.border.withValues(alpha: 0.5), width: 0.8),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: rankBgColor,
+                            shape: BoxShape.circle,
+                            border: isTop3 ? Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1) : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: isTop3 ? Colors.black87 : _c.textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        CustomAvatar(
+                          name: name,
+                          imageUrl: avatarUrl,
+                          userId: userId,
+                          radius: 16,
+                          clickable: true,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _c.textHi,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                '@$username',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _c.textMuted,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: pointColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: pointColor.withValues(alpha: 0.25), width: 0.8),
+                          ),
+                          child: Text(
+                            '$pts',
+                            style: TextStyle(
+                              color: pointColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryPill(String cat, String label) {
+    final selected = _leaderboardCategory == cat;
+    final catColor = _getCategoryColor();
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _leaderboardCategory = cat),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? catColor.withValues(alpha: 0.15) : _c.field,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? catColor : _c.border,
+              width: selected ? 1.2 : 0.8,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? catColor : _c.textMuted,
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeframeBtn(String tf, String label) {
+    final selected = _leaderboardTimeframe == tf;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _leaderboardTimeframe = tf),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? _c.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1.5),
+                    )
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? _c.textHi : _c.textMuted,
+              fontSize: 10.5,
+              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }

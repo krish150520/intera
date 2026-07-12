@@ -55,6 +55,7 @@ class PostCard extends StatelessWidget {
           onLike: onLike,
           onSave: onSave,
           onComment: onComment,
+          onShare: onShare,
           onReact: onReact,
           heroTag: heroTag,
         ),
@@ -68,6 +69,7 @@ class PostCard extends StatelessWidget {
           onLike: onLike,
           onSave: onSave,
           onComment: onComment,
+          onShare: onShare,
           onReact: onReact,
           heroTag: heroTag,
         ),
@@ -84,6 +86,7 @@ class _TextPostCard extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onSave;
   final VoidCallback? onComment;
+  final VoidCallback? onShare;
   final void Function(String type)? onReact;
   final String? heroTag;
 
@@ -93,6 +96,7 @@ class _TextPostCard extends StatelessWidget {
     this.onLike,
     this.onSave,
     this.onComment,
+    this.onShare,
     this.onReact,
     this.heroTag,
   });
@@ -382,6 +386,17 @@ class _TextPostCard extends StatelessWidget {
                       onTap: onComment,
                     ),
                     const SizedBox(width: 10),
+                    if (onShare != null) ...[
+                      GestureDetector(
+                        onTap: onShare,
+                        child: Icon(
+                          Icons.share_outlined,
+                          size: 18,
+                          color: iconDefaultColor,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     GestureDetector(
                       onTap: onSave,
                       child: Icon(
@@ -417,6 +432,7 @@ class _MediaPostCard extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onSave;
   final VoidCallback? onComment;
+  final VoidCallback? onShare;
   final void Function(String type)? onReact;
   final String? heroTag;
 
@@ -426,6 +442,7 @@ class _MediaPostCard extends StatelessWidget {
     this.onLike,
     this.onSave,
     this.onComment,
+    this.onShare,
     this.onReact,
     this.heroTag,
   });
@@ -533,6 +550,7 @@ class _MediaPostCard extends StatelessWidget {
                       onLike: onLike,
                       onComment: onComment,
                       onSave: onSave,
+                      onShare: onShare,
                       onReact: onReact,
                     ),
                   ],
@@ -670,6 +688,7 @@ class _MediaStatsRow extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback? onComment;
   final VoidCallback? onSave;
+  final VoidCallback? onShare;
   final void Function(String type)? onReact;
 
   const _MediaStatsRow({
@@ -679,6 +698,7 @@ class _MediaStatsRow extends StatelessWidget {
     this.onLike,
     this.onComment,
     this.onSave,
+    this.onShare,
     this.onReact,
   });
 
@@ -701,6 +721,17 @@ class _MediaStatsRow extends StatelessWidget {
         label: _compact(post.commentCount),
         onTap: onComment,
       ),
+      if (onShare != null) ...[
+        const SizedBox(width: 16),
+        GestureDetector(
+          onTap: onShare,
+          child: const Icon(
+            Icons.share_outlined,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+      ],
       const Spacer(),
       GestureDetector(
         onTap: onSave,

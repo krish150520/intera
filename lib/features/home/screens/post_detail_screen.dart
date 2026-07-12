@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
@@ -357,7 +360,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               child: _MediaHero(
                                 postId: realTimePost.id,
                                 mediaUrl: realTimePost.imageUrl ?? '',
+                                videoThumbnailUrl: realTimePost.videoThumbnailUrl,
                                 isVideo:  _isVideo,
+                                isPostAuthor: _isPostAuthor,
                                 onExpand: () => _openFullscreen(realTimePost),
                                 heroTag: widget.heroTag,
                               ),
@@ -524,14 +529,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 class _MediaHero extends StatelessWidget {
   final String postId;
   final String mediaUrl;
+  final String? videoThumbnailUrl;
   final bool isVideo;
+  final bool isPostAuthor;
   final VoidCallback onExpand;
   final String? heroTag;
 
   const _MediaHero({
     required this.postId,
     required this.mediaUrl,
+    this.videoThumbnailUrl,
     required this.isVideo,
+    required this.isPostAuthor,
     required this.onExpand,
     this.heroTag,
   });
@@ -546,7 +555,15 @@ class _MediaHero extends StatelessWidget {
           width: double.infinity,
           height: 280,
           child: isVideo
-              ? _VideoThumbnail(videoUrl: mediaUrl)
+              ? (videoThumbnailUrl != null && videoThumbnailUrl!.isNotEmpty
+                  ? Image.network(
+                      videoThumbnailUrl!,
+                      width: double.infinity,
+                      height: 280,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _VideoThumbnail(videoUrl: mediaUrl),
+                    )
+                  : _VideoThumbnail(videoUrl: mediaUrl))
               : (mediaUrl.isNotEmpty
                   ? Image.network(
                       mediaUrl,
@@ -573,31 +590,44 @@ class _MediaHero extends StatelessWidget {
           ),
         ),
 
-        // Type badge (top-right)
+        // Type/Edit badges row
         Positioned(
           top: MediaQuery.of(context).padding.top + 56,
+          left: 12,
           right: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(
-                isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
-                color: Colors.white,
-                size: 12,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                isVideo ? 'Video' : 'Image',
-                style: const TextStyle(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Edit cover button (only visible to author of video post)
+              if (isVideo && isPostAuthor)
+                _EditCoverButton(postId: postId)
+              else
+                const SizedBox(),
+
+              // Type badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(
+                    isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
                     color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500),
+                    size: 12,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isVideo ? 'Video' : 'Image',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ]),
               ),
-            ]),
+            ],
           ),
         ),
 
@@ -623,6 +653,163 @@ class _MediaHero extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EditCoverButton extends StatefulWidget {
+  final String postId;
+  const _EditCoverButton({required this.postId});
+
+  @override
+  State<_EditCoverButton> createState() => _EditCoverButtonState();
+}
+
+class _EditCoverButtonState extends State<_EditCoverButton> {
+  bool _isLoading = false;
+
+  void _showCoverMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final c = context.appColors;
+        return Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Manage Echo Cover',
+                    style: TextStyle(
+                      color: c.textHi,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.photo_library_rounded, color: c.primary),
+                  title: Text('Change Cover Thumbnail', style: TextStyle(color: c.textHi)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _pickAndUploadCover();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                  title: const Text('Remove Custom Cover', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _removeCover();
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndUploadCover() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.gallery);
+    if (file == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final ref = FirebaseStorage.instance.ref('posts/thumbnails/edit_${widget.postId}_$ts.jpg');
+      await ref.putFile(File(file.path));
+      final url = await ref.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.postId)
+          .update({'videoThumbnailUrl': url});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🎉 Cover updated successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update cover: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _removeCover() async {
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.postId)
+          .update({'videoThumbnailUrl': FieldValue.delete()});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ Custom cover removed.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove cover: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _isLoading ? null : _showCoverMenu,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _isLoading
+                ? const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.edit_rounded, color: Colors.white, size: 12),
+            const SizedBox(width: 4),
+            Text(
+              _isLoading ? 'Updating...' : 'Edit Cover',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

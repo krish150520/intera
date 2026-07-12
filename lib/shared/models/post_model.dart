@@ -30,6 +30,10 @@ class Post {
   final int? rewardKarma;
   final String? communityId;
   final String? videoThumbnailUrl;
+  final String? audioId;
+  final String? audioTitle;
+  final String? audioAuthorId;
+  final String? audioUrl;
 
   // Poll fields
   final List<String>? pollOptions;
@@ -63,6 +67,10 @@ class Post {
     this.rewardKarma,
     this.communityId,
     this.videoThumbnailUrl,
+    this.audioId,
+    this.audioTitle,
+    this.audioAuthorId,
+    this.audioUrl,
     this.pollOptions,
     this.pollVotes,
     this.pollVotedBy,
@@ -124,6 +132,10 @@ class Post {
       rewardKarma: data['karmaReward'] ?? data['rewardKarma'],
       communityId: data['communityId'] as String?,
       videoThumbnailUrl: data['videoThumbnailUrl'] as String?,
+      audioId: data['audioId'] as String?,
+      audioTitle: data['audioTitle'] as String?,
+      audioAuthorId: data['audioAuthorId'] as String?,
+      audioUrl: data['audioUrl'] as String?,
       pollOptions: data['pollOptions'] != null
           ? List<String>.from(data['pollOptions'])
           : null,
@@ -165,6 +177,10 @@ class Post {
       if (rewardKarma != null) 'rewardKarma': rewardKarma,
       if (communityId != null) 'communityId': communityId,
       if (videoThumbnailUrl != null) 'videoThumbnailUrl': videoThumbnailUrl,
+      if (audioId != null) 'audioId': audioId,
+      if (audioTitle != null) 'audioTitle': audioTitle,
+      if (audioAuthorId != null) 'audioAuthorId': audioAuthorId,
+      if (audioUrl != null) 'audioUrl': audioUrl,
       if (pollOptions != null) 'pollOptions': pollOptions,
       if (pollVotes != null) 'pollVotes': pollVotes,
       if (pollVotedBy != null) 'pollVotedBy': pollVotedBy,

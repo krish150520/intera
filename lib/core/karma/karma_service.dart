@@ -18,16 +18,22 @@ class KarmaService {
   // ── Read balance ───────────────────────────────────────────────────────────
 
   static Stream<int> balanceStream(String uid) {
-    return _db.collection('users').doc(uid).snapshots().map(
-      (snap) => (snap.data()?['karmaBalance'] as num?)?.toInt() ??
-                (snap.data()?['karmaPoints'] as num?)?.toInt() ?? 100,
-    );
+    return _db.collection('users').doc(uid).snapshots().map((snap) {
+      final data = snap.data() ?? {};
+      final balance = (data['karmaBalance'] as num?)?.toInt() ??
+                      (data['karmaPoints'] as num?)?.toInt() ?? 100;
+      final weekly = (data['weeklyKarma'] as num?)?.toInt() ?? 0;
+      return balance + weekly;
+    });
   }
 
   static Future<int> getBalance(String uid) async {
     final snap = await _db.collection('users').doc(uid).get();
-    return (snap.data()?['karmaBalance'] as num?)?.toInt() ??
-           (snap.data()?['karmaPoints'] as num?)?.toInt() ?? 100;
+    final data = snap.data() ?? {};
+    final balance = (data['karmaBalance'] as num?)?.toInt() ??
+                    (data['karmaPoints'] as num?)?.toInt() ?? 100;
+    final weekly = (data['weeklyKarma'] as num?)?.toInt() ?? 0;
+    return balance + weekly;
   }
 
   // ── Sync incoming karma (TIPS & BEST ANSWER AWARDS) ──────────────────────
@@ -66,6 +72,7 @@ class KarmaService {
       }
 
       int addedKarma = 0;
+      int earnedKarma = 0;
       Timestamp? latestTimestamp = lastSyncTimestamp;
 
       for (final doc in snap.docs) {
@@ -73,11 +80,15 @@ class KarmaService {
         final fromUid = data['fromUid'] as String?;
         final amount = (data['amount'] as num?)?.toInt() ?? 0;
         final createdAt = data['createdAt'] as Timestamp?;
+        final type = data['type'] as String?;
 
         // Only count if it's from another user (i.e. fromUid is not null and not ourselves)
         // Weekly bonus / refund are claimed by ourselves and already applied
         if (fromUid != null && fromUid != uid) {
           addedKarma += amount;
+          if (type == KarmaTxType.earnedBestAnswer.name || type == KarmaTxType.tipReceived.name) {
+            earnedKarma += amount;
+          }
         }
 
         if (createdAt != null) {
@@ -89,6 +100,12 @@ class KarmaService {
 
       final updates = <String, dynamic>{
         'karmaBalance': currentBalance + addedKarma,
+        if (earnedKarma > 0) ...{
+          'karmaEarned': FieldValue.increment(earnedKarma),
+          'karmaEarnedAllTime': FieldValue.increment(earnedKarma),
+          'karmaEarnedThisMonth': FieldValue.increment(earnedKarma),
+          'karmaEarnedThisYear': FieldValue.increment(earnedKarma),
+        },
         if (latestTimestamp != null) 'lastKarmaSyncTime': latestTimestamp,
       };
       await userRef.update(updates);
@@ -109,17 +126,34 @@ class KarmaService {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw Exception('Not logged in');
 
-    final balance = await getBalance(uid);
-    if (balance < amount) {
-      throw Exception('Insufficient karma. You have $balance karma but need $amount.');
+    final userRef = _db.collection('users').doc(uid);
+    final userSnap = await userRef.get();
+    final userData = userSnap.data() ?? {};
+
+    final balance = (userData['karmaBalance'] as num?)?.toInt() ??
+                    (userData['karmaPoints'] as num?)?.toInt() ?? 100;
+    final weekly = (userData['weeklyKarma'] as num?)?.toInt() ?? 0;
+    final totalBalance = balance + weekly;
+
+    if (totalBalance < amount) {
+      throw Exception('Insufficient karma. You have $totalBalance karma but need $amount.');
     }
 
     final batch = _db.batch();
 
-    // Deduct from poster
-    batch.update(_db.collection('users').doc(uid), {
-      'karmaBalance': FieldValue.increment(-amount),
-    });
+    // Deduct from weekly karma first, then main karma balance
+    final deductWeekly = (weekly >= amount) ? amount : weekly;
+    final deductMain = amount - deductWeekly;
+
+    final updates = <String, dynamic>{};
+    if (deductWeekly > 0) {
+      updates['weeklyKarma'] = FieldValue.increment(-deductWeekly);
+    }
+    if (deductMain > 0) {
+      updates['karmaBalance'] = FieldValue.increment(-deductMain);
+    }
+
+    batch.update(userRef, updates);
 
     // Ledger entry
     final txRef = _db.collection('karmaTransactions').doc();

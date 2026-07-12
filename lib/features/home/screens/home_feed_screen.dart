@@ -14,6 +14,7 @@ import '../../notifications/screens/notifications_screen.dart';
 import '../../messaging/screens/messages_list_screen.dart';
 import '../../search/screens/search_screen.dart';
 import '../../profile/screens/my_profile_screen.dart';
+import '../../../shared/widgets/share_post_sheet.dart';
 import 'spark_viewer_screen.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/feed_algorithm.dart';
@@ -376,6 +377,42 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
+  Future<void> _openEchoViewer() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('type', isEqualTo: 'video')
+          .orderBy('createdAt', descending: true)
+          .limit(40)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No Echos (videos) found yet!')),
+        );
+        return;
+      }
+
+      final posts = snap.docs.map((doc) => Post.fromFirestore(doc, _myUid)).toList();
+      
+      if (!mounted) return;
+      Navigator.of(context).pushNamed(
+        AppRoutes.echoViewer,
+        arguments: {
+          'posts': posts,
+          'initialIndex': 0,
+        },
+      );
+    } catch (e) {
+      debugPrint('Error loading echos: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading echos: $e')),
+      );
+    }
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -475,6 +512,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                           ),
                         ),
                       ),
+                      _GlassIconButton(
+                        icon: Icons.play_circle_fill_rounded,
+                        onTap: () {
+                          _closeSidebar();
+                          _openEchoViewer();
+                        },
+                        isDark: isDark,
+                        color: Colors.redAccent,
+                      ),
+                      const SizedBox(width: 8),
                       _GlassIconButton(
                         icon: Icons.close_rounded,
                         onTap: _closeSidebar,
@@ -961,17 +1008,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
                           'heroTag': 'home_post_${post.id}',
                         });
                   },
-                  onShare: () {
-                    Clipboard.setData(ClipboardData(
-                        text:
-                            'Check out this post on INTERA by ${post.authorUsername}:\n\n${post.title}\n${post.body}'));
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: const Text('Post copied to clipboard!'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ));
-                  },
+                  onShare: () => SharePostSheet.show(context, post, _myUid),
                 ),
               );
             },

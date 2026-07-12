@@ -423,7 +423,7 @@ class _LeaderboardTab extends StatefulWidget {
 }
 
 class _LeaderboardTabState extends State<_LeaderboardTab> {
-  String _selectedCategory = 'karma';
+  String _selectedCategory = 'karmaMonth';
 
   @override
   Widget build(BuildContext context) {
@@ -448,9 +448,19 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
         icon = Icons.emoji_emotions_rounded;
         pointColor = Colors.amber;
         break;
-      case 'karma':
+      case 'karmaYear':
+        orderByField = 'karmaEarnedThisYear';
+        icon = Icons.bolt_rounded;
+        pointColor = c.primary;
+        break;
+      case 'karmaAllTime':
+        orderByField = 'karmaEarnedAllTime';
+        icon = Icons.bolt_rounded;
+        pointColor = c.primary;
+        break;
+      case 'karmaMonth':
       default:
-        orderByField = 'karmaBalance';
+        orderByField = 'karmaEarnedThisMonth';
         icon = Icons.bolt_rounded;
         pointColor = c.primary;
         break;
@@ -467,9 +477,21 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
             child: Row(
               children: [
                 _FilterChip(
-                  label: 'Karma ⚡',
-                  selected: _selectedCategory == 'karma',
-                  onTap: () => setState(() => _selectedCategory = 'karma'),
+                  label: 'Monthly Karma ⚡',
+                  selected: _selectedCategory == 'karmaMonth',
+                  onTap: () => setState(() => _selectedCategory = 'karmaMonth'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Yearly Karma ⚡',
+                  selected: _selectedCategory == 'karmaYear',
+                  onTap: () => setState(() => _selectedCategory = 'karmaYear'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'All-Time Karma ⚡',
+                  selected: _selectedCategory == 'karmaAllTime',
+                  onTap: () => setState(() => _selectedCategory = 'karmaAllTime'),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(

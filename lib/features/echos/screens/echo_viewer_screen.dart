@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -9,6 +10,8 @@ import '../../../shared/widgets/custom_avatar.dart';
 import '../../../shared/widgets/live_username.dart';
 import '../../../core/services/reaction_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../create/screens/create_post_screen.dart';
+import '../../../shared/widgets/share_post_sheet.dart';
 
 class EchoViewerScreen extends StatefulWidget {
   final List<Post> posts;
@@ -98,6 +101,7 @@ class _EchoPlayerItem extends StatefulWidget {
 class _EchoPlayerItemState extends State<_EchoPlayerItem>
     with SingleTickerProviderStateMixin {
   VideoPlayerController? _controller;
+  VideoPlayerController? _audioController;
   bool _isInitialized = false;
   bool _isPlaying = false;
 
@@ -148,6 +152,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
   Future<void> _initVideo() async {
     if (_controller != null) {
       _controller!.play();
+      _audioController?.play();
       setState(() {
         _isPlaying = true;
       });
@@ -160,7 +165,25 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.post.imageUrl!),
       );
+
+      final hasCustomAudio = widget.post.audioUrl != null &&
+          widget.post.audioUrl!.isNotEmpty &&
+          widget.post.audioUrl != widget.post.imageUrl;
+
+      if (hasCustomAudio) {
+        _audioController = VideoPlayerController.networkUrl(
+          Uri.parse(widget.post.audioUrl!),
+        );
+      }
+
       await _controller!.initialize();
+
+      if (hasCustomAudio) {
+        _controller!.setVolume(0.0);
+        await _audioController!.initialize();
+        _audioController!.setLooping(true);
+      }
+
       if (!mounted) return;
       setState(() {
         _isInitialized = true;
@@ -168,13 +191,15 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
       });
       _controller!.setLooping(true);
       _controller!.play();
+      _audioController?.play();
     } catch (e) {
-      debugPrint('[EchoPlayer] Error initializing video: $e');
+      debugPrint('[EchoPlayer] Error initializing video/audio: $e');
     }
   }
 
   void _pauseVideo() {
     _controller?.pause();
+    _audioController?.pause();
     if (mounted) {
       setState(() {
         _isPlaying = false;
@@ -185,6 +210,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
   @override
   void dispose() {
     _controller?.dispose();
+    _audioController?.dispose();
     _heartAnimController.dispose();
     super.dispose();
   }
@@ -194,6 +220,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
     HapticFeedback.lightImpact();
     if (_controller!.value.isPlaying) {
       _controller!.pause();
+      _audioController?.pause();
       setState(() {
         _isPlaying = false;
         _overlayIcon = Icons.pause_rounded;
@@ -201,6 +228,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
       });
     } else {
       _controller!.play();
+      _audioController?.play();
       setState(() {
         _isPlaying = true;
         _overlayIcon = Icons.play_arrow_rounded;
@@ -293,18 +321,9 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
   }
 
   void _sharePost() {
-    Clipboard.setData(
-      ClipboardData(
-        text: 'Watch this Echo by ${widget.post.authorUsername} on INTERA:\n\n"${widget.post.title}"\n${widget.post.body}',
-      ),
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Echo link copied to clipboard!'),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (myUid.isEmpty) return;
+    SharePostSheet.show(context, widget.post, myUid);
   }
 
   @override
@@ -406,6 +425,38 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
           ),
         ),
 
+        // ── Create Echo Button (Top Right) ────────────────────────────────────
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          right: 16,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    width: 0.8,
+                  ),
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.video_call_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/create-echo');
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+
         // ── Overlay Controls (Bottom Left Information) ───────────────────────
         Positioned(
           left: 14,
@@ -475,6 +526,52 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                   ),
                 ),
               ],
+              const SizedBox(height: 10),
+              // Audio Pill
+              GestureDetector(
+                onTap: () {
+                  if (widget.post.audioId != null) {
+                    Navigator.of(context).pushNamed(
+                      '/audio-page',
+                      arguments: {
+                        'audioId': widget.post.audioId!,
+                        'audioTitle': widget.post.audioTitle ?? 'Original audio',
+                        'audioAuthorId': widget.post.audioAuthorId,
+                      },
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          widget.post.audioTitle ?? 'Original audio · ${widget.post.authorUsername}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -511,10 +608,46 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                 label: 'Share',
                 onTap: _sharePost,
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
+
+              // Use Audio button
+              _SidebarAction(
+                icon: Icons.music_video_rounded,
+                iconColor: Colors.white,
+                label: 'Use Audio',
+                onTap: () {
+                  if (widget.post.audioId != null) {
+                    Navigator.of(context).pushNamed(
+                      '/create-echo',
+                      arguments: {
+                        'audioId': widget.post.audioId!,
+                        'audioTitle': widget.post.audioTitle ?? 'Original audio',
+                        'audioAuthorId': widget.post.audioAuthorId,
+                      },
+                    );
+                  } else {
+                    Navigator.of(context).pushNamed('/create-echo');
+                  }
+                },
+              ),
+              const SizedBox(height: 25),
 
               // Spinning record disc simulation
-              _SpinningDisc(avatarUrl: widget.post.authorAvatarUrl),
+              GestureDetector(
+                onTap: () {
+                  if (widget.post.audioId != null) {
+                    Navigator.of(context).pushNamed(
+                      '/audio-page',
+                      arguments: {
+                        'audioId': widget.post.audioId!,
+                        'audioTitle': widget.post.audioTitle ?? 'Original audio',
+                        'audioAuthorId': widget.post.audioAuthorId,
+                      },
+                    );
+                  }
+                },
+                child: _SpinningDisc(avatarUrl: widget.post.authorAvatarUrl),
+              ),
             ],
           ),
         ),
