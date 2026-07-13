@@ -34,6 +34,7 @@ class Post {
   final String? audioTitle;
   final String? audioAuthorId;
   final String? audioUrl;
+  final String? imageAlignment;
 
   // Poll fields
   final List<String>? pollOptions;
@@ -71,6 +72,7 @@ class Post {
     this.audioTitle,
     this.audioAuthorId,
     this.audioUrl,
+    this.imageAlignment,
     this.pollOptions,
     this.pollVotes,
     this.pollVotedBy,
@@ -136,6 +138,7 @@ class Post {
       audioTitle: data['audioTitle'] as String?,
       audioAuthorId: data['audioAuthorId'] as String?,
       audioUrl: data['audioUrl'] as String?,
+      imageAlignment: data['imageAlignment'] as String?,
       pollOptions: data['pollOptions'] != null
           ? List<String>.from(data['pollOptions'])
           : null,
@@ -181,6 +184,7 @@ class Post {
       if (audioTitle != null) 'audioTitle': audioTitle,
       if (audioAuthorId != null) 'audioAuthorId': audioAuthorId,
       if (audioUrl != null) 'audioUrl': audioUrl,
+      if (imageAlignment != null) 'imageAlignment': imageAlignment,
       if (pollOptions != null) 'pollOptions': pollOptions,
       if (pollVotes != null) 'pollVotes': pollVotes,
       if (pollVotedBy != null) 'pollVotedBy': pollVotedBy,

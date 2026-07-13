@@ -42,7 +42,8 @@ class _PinterestPostCardState extends State<PinterestPostCard> {
     final hasDisplayImage = displayUrl != null && displayUrl.isNotEmpty;
 
     // Pinterest varies aspect ratio per-pin to create the masonry rhythm.
-    final aspectRatio = post.hashCode.isEven ? 0.72 : 1.05;
+    // If it is a video, we force it to be a vertical rectangle (aspect ratio 0.62).
+    final aspectRatio = isVideo ? 0.62 : (post.hashCode.isEven ? 0.72 : 1.05);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -64,6 +65,11 @@ class _PinterestPostCardState extends State<PinterestPostCard> {
                         ? Image.network(
                             displayUrl,
                             fit: BoxFit.cover,
+                            alignment: post.imageAlignment == 'top'
+                                ? Alignment.topCenter
+                                : (post.imageAlignment == 'bottom'
+                                    ? Alignment.bottomCenter
+                                    : Alignment.center),
                             width: double.infinity,
                             errorBuilder: (_, __, ___) => Container(
                               color: c.surface,

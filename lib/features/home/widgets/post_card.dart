@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
@@ -47,6 +48,21 @@ class PostCard extends StatelessWidget {
     }
 
     if (_hasMedia || _isMediaType) {
+      if (post.type == PostType.helpRequest) {
+        return _DoubleTapLikeWrapper(
+          onDoubleTapLike: onReact != null ? () => onReact!('like') : onLike,
+          child: _MediaHelpPostCard(
+            post: post,
+            onTap: onTap,
+            onLike: onLike,
+            onSave: onSave,
+            onComment: onComment,
+            onShare: onShare,
+            onReact: onReact,
+            heroTag: heroTag,
+          ),
+        );
+      }
       return _DoubleTapLikeWrapper(
         onDoubleTapLike: onReact != null ? () => onReact!('like') : onLike,
         child: _MediaPostCard(
@@ -479,7 +495,7 @@ class _MediaPostCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: SizedBox(
-          height: 360,
+          height: isVideo ? 480 : 360,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -487,6 +503,11 @@ class _MediaPostCard extends StatelessWidget {
                   ? Image.network(
                       displayUrl,
                       fit: BoxFit.cover,
+                      alignment: post.imageAlignment == 'top'
+                          ? Alignment.topCenter
+                          : (post.imageAlignment == 'bottom'
+                              ? Alignment.bottomCenter
+                              : Alignment.center),
                       errorBuilder: (_, __, ___) => const _FallbackBg(),
                     )
                   : const _FallbackBg(),
@@ -1013,6 +1034,407 @@ class _DoubleTapLikeWrapperState extends State<_DoubleTapLikeWrapper>
                         offset: Offset(0, 4),
                       ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MediaHelpPostCard extends StatelessWidget {
+  final Post post;
+  final VoidCallback? onTap;
+  final VoidCallback? onLike;
+  final VoidCallback? onSave;
+  final VoidCallback? onComment;
+  final VoidCallback? onShare;
+  final void Function(String type)? onReact;
+  final String? heroTag;
+
+  const _MediaHelpPostCard({
+    required this.post,
+    this.onTap,
+    this.onLike,
+    this.onSave,
+    this.onComment,
+    this.onShare,
+    this.onReact,
+    this.heroTag,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? c.surface : Colors.white;
+    final borderCol = isDark ? c.border.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04);
+
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final myReaction = post.reactions[myUid];
+    final bool hasReacted = myReaction != null;
+
+    final IconData reactionIcon = switch (myReaction) {
+      'beauty' => Icons.favorite_rounded,
+      'art' => Icons.palette_rounded,
+      'funny' => Icons.emoji_emotions_rounded,
+      'like' => Icons.favorite_rounded,
+      _ => Icons.favorite_border_rounded,
+    };
+    final Color reactionColor = switch (myReaction) {
+      'beauty' => Colors.pinkAccent,
+      'art' => Colors.orangeAccent,
+      'funny' => Colors.amber,
+      'like' => const Color(0xFFEF4444),
+      _ => isDark ? const Color(0xFF8B86B7) : const Color(0xFFB0ADDE),
+    };
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('posts').doc(post.id).snapshots(),
+      builder: (context, snapshot) {
+        bool isCompleted = false;
+        int reward = (post.rewardKarma ?? 0);
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          isCompleted = data['isCompleted'] == true;
+          reward = (data['karmaReward'] ?? data['rewardKarma'] ?? reward) as int;
+        }
+
+        return GestureDetector(
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 0),
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 0),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: borderCol, width: 0.8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Header (Avatar, Username, Timestamp, Chips, More Menu)
+                Row(
+                  children: [
+                    // User Avatar
+                    CustomAvatar(
+                      name: post.authorName,
+                      imageUrl: post.authorAvatarUrl,
+                      userId: post.authorId,
+                      radius: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    // Username & Timestamp
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            post.authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isDark ? c.textHi : const Color(0xFF1E293B),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatTime(post.createdAt),
+                            style: TextStyle(
+                              color: isDark ? c.textMuted : const Color(0xFF64748B),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Chips Row
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Reward Chip (⚡ X karma)
+                        if (reward > 0) ...[
+                          Container(
+                            height: 28,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF3B2F1D) : const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isDark ? const Color(0xFF685123) : const Color(0xFFFDE68A),
+                                width: 1,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.electric_bolt_rounded,
+                                  color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                                  size: 13,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$reward karma',
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        // Status Chip (Open / Resolved)
+                        Container(
+                          height: 28,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: isCompleted
+                                ? (isDark ? const Color(0xFF2E2222) : const Color(0xFFFEE2E2))
+                                : (isDark ? const Color(0xFF1B3B2B) : const Color(0xFFDCFCE7)),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isCompleted
+                                  ? (isDark ? const Color(0xFF5C3333) : const Color(0xFFFCA5A5))
+                                  : (isDark ? const Color(0xFF26543C) : const Color(0xFF86EFAC)),
+                              width: 1,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isCompleted
+                                      ? (isDark ? const Color(0xFFEF4444) : const Color(0xFFDC2626))
+                                      : (isDark ? const Color(0xFF10B981) : const Color(0xFF16A34A)),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isCompleted ? 'Resolved' : 'Open',
+                                style: TextStyle(
+                                  color: isCompleted
+                                      ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B))
+                                      : (isDark ? const Color(0xFF86EFAC) : const Color(0xFF166534)),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        // More Menu Button
+                        IconButton(
+                          icon: Icon(
+                            Icons.more_vert_rounded,
+                            color: isDark ? c.textMuted : const Color(0xFF64748B),
+                            size: 18,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () {},
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16), // Header → Title = 16dp
+
+                // 2. Title
+                Text(
+                  post.title,
+                  style: TextStyle(
+                    color: isDark ? c.textHi : const Color(0xFF0F172A),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 8), // Title → Description = 8dp
+
+                // 3. Description
+                if (post.body.isNotEmpty && post.body.trim() != post.title.trim()) ...[
+                  Text(
+                    post.body,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isDark ? c.textMuted : const Color(0xFF64748B),
+                      fontSize: 13,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 16), // Description → Image = 16dp
+                ] else ...[
+                  const SizedBox(height: 8),
+                ],
+
+                // 4. Media (Rounded image aligned to card padding)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? c.field : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: borderCol,
+                        width: 0.8,
+                      ),
+                    ),
+                    child: _buildMediaWidget(context),
+                  ),
+                ),
+                const SizedBox(height: 12), // Image → Actions = 12dp
+
+                // 5. Action Row
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      // Like
+                      _MediaStatBtn(
+                        icon: reactionIcon,
+                        iconColor: hasReacted ? reactionColor : (isDark ? c.textMuted : const Color(0xFF64748B)),
+                        label: _compact(post.likeCount),
+                        onTap: onReact != null ? () => onReact!('like') : onLike,
+                        onLongPress: onReact != null
+                            ? () => _showReactionSheet(context, onReact!)
+                            : null,
+                      ),
+                      const SizedBox(width: 20),
+                      // Comment
+                      _MediaStatBtn(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        iconColor: isDark ? c.textMuted : const Color(0xFF64748B),
+                        label: _compact(post.commentCount),
+                        onTap: onComment,
+                      ),
+                      const SizedBox(width: 20),
+                      // Share
+                      if (onShare != null) ...[
+                        GestureDetector(
+                          onTap: onShare,
+                          child: Icon(
+                            Icons.share_outlined,
+                            color: isDark ? c.textMuted : const Color(0xFF64748B),
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      // Bookmark
+                      GestureDetector(
+                        onTap: onSave,
+                        child: Icon(
+                          post.isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                          color: post.isSaved
+                              ? (isDark ? const Color(0xFFA597EC) : const Color(0xFF6C63D5))
+                              : (isDark ? c.textMuted : const Color(0xFF64748B)),
+                          size: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16), // Actions → Offer Help Button = 16dp
+
+                // 6. Offer Help Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: c.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: onComment,
+                    icon: const Icon(Icons.handshake_outlined, size: 20),
+                    label: const Text(
+                      'Offer Help',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16), // Button → Bottom = 16dp
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMediaWidget(BuildContext context) {
+    final isVideo = post.type == PostType.video;
+    final displayUrl = (isVideo && post.videoThumbnailUrl != null && post.videoThumbnailUrl!.isNotEmpty)
+        ? post.videoThumbnailUrl!
+        : post.imageUrl;
+
+    if (displayUrl == null || displayUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return AspectRatio(
+      aspectRatio: 1.6,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            displayUrl,
+            fit: BoxFit.cover,
+            alignment: post.imageAlignment == 'top'
+                ? Alignment.topCenter
+                : (post.imageAlignment == 'bottom'
+                    ? Alignment.bottomCenter
+                    : Alignment.center),
+            errorBuilder: (_, __, ___) => const _FallbackBg(),
+          ),
+          if (isVideo)
+            Positioned.fill(
+              child: Container(
+                alignment: Alignment.center,
+                color: Colors.black12,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 28,
                   ),
                 ),
               ),

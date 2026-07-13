@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../shared/widgets/custom_avatar.dart';
@@ -30,10 +33,13 @@ class EchoViewerScreen extends StatefulWidget {
 class _EchoViewerScreenState extends State<EchoViewerScreen> {
   late PageController _pageController;
   int _currentIndex = 0;
+  List<Post> _postsList = [];
+  bool _isReloading = false;
 
   @override
   void initState() {
     super.initState();
+    _postsList = List.from(widget.posts);
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
   }
@@ -44,9 +50,59 @@ class _EchoViewerScreenState extends State<EchoViewerScreen> {
     super.dispose();
   }
 
+  Future<void> _reloadPosts() async {
+    if (_isReloading) return;
+    setState(() => _isReloading = true);
+    try {
+      final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      Query query = FirebaseFirestore.instance
+          .collection('posts')
+          .where('type', isEqualTo: 'video');
+
+      if (widget.posts.isNotEmpty) {
+        final first = widget.posts.first;
+        // 1. Audio Page context
+        final allShareAudio = widget.posts.every((p) => p.audioId == first.audioId && first.audioId != null);
+        if (allShareAudio) {
+          query = query.where('audioId', isEqualTo: first.audioId);
+        } else {
+          // 2. Profile context
+          final allShareAuthor = widget.posts.every((p) => p.authorId == first.authorId);
+          if (allShareAuthor) {
+            query = query.where('authorId', isEqualTo: first.authorId);
+          }
+        }
+      }
+
+      final snap = await query.orderBy('createdAt', descending: true).limit(40).get();
+      if (snap.docs.isNotEmpty) {
+        final reloaded = snap.docs.map((doc) => Post.fromFirestore(doc, myUid)).toList();
+        setState(() {
+          _postsList = reloaded;
+          if (_currentIndex >= _postsList.length) {
+            _currentIndex = 0;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Feed reloaded!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error reloading EchoViewer: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to reload: $e')),
+      );
+    } finally {
+      setState(() => _isReloading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (widget.posts.isEmpty) {
+    if (_postsList.isEmpty) {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
@@ -60,24 +116,32 @@ class _EchoViewerScreenState extends State<EchoViewerScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical,
-        itemCount: widget.posts.length,
-        onPageChanged: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        itemBuilder: (context, index) {
-          final post = widget.posts[index];
-          final isActive = index == _currentIndex;
-          return _EchoPlayerItem(
-            post: post,
-            isActive: isActive,
-            onBack: () => Navigator.of(context).pop(),
-          );
-        },
+      body: RefreshIndicator(
+        color: Colors.white,
+        backgroundColor: const Color(0xFF1E1E1E),
+        onRefresh: _reloadPosts,
+        child: PageView.builder(
+          controller: _pageController,
+          scrollDirection: Axis.vertical,
+          itemCount: _postsList.length,
+          physics: const AlwaysScrollableScrollPhysics(),
+          onPageChanged: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          itemBuilder: (context, index) {
+            final post = _postsList[index];
+            final isActive = index == _currentIndex;
+            return _EchoPlayerItem(
+              post: post,
+              isActive: isActive,
+              onBack: () => Navigator.of(context).pop(),
+              onReload: _reloadPosts,
+              isReloading: _isReloading,
+            );
+          },
+        ),
       ),
     );
   }
@@ -87,11 +151,15 @@ class _EchoPlayerItem extends StatefulWidget {
   final Post post;
   final bool isActive;
   final VoidCallback onBack;
+  final VoidCallback onReload;
+  final bool isReloading;
 
   const _EchoPlayerItem({
     required this.post,
     required this.isActive,
     required this.onBack,
+    required this.onReload,
+    required this.isReloading,
   });
 
   @override
@@ -104,6 +172,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
   VideoPlayerController? _audioController;
   bool _isInitialized = false;
   bool _isPlaying = false;
+  String? _currentCoverUrl;
 
   bool _showHeartAnimation = false;
 
@@ -122,6 +191,7 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
   void initState() {
     super.initState();
     _likeCount = widget.post.likeCount;
+    _currentCoverUrl = widget.post.videoThumbnailUrl;
     final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     _isLiked = widget.post.isLiked || widget.post.reactions.containsKey(myUid);
 
@@ -326,6 +396,124 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
     SharePostSheet.show(context, widget.post, myUid);
   }
 
+  bool get _isPostAuthor {
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return widget.post.authorId == myUid && myUid.isNotEmpty;
+  }
+
+  void _showCoverMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final c = context.appColors;
+        return Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Manage Echo Cover',
+                    style: TextStyle(
+                      color: c.textHi,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.photo_library_rounded, color: c.primary),
+                  title: Text('Change Cover Thumbnail', style: TextStyle(color: c.textHi)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _pickAndUploadCover();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                  title: const Text('Remove Custom Cover', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _removeCover();
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndUploadCover() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.gallery);
+    if (file == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Uploading cover...'), duration: Duration(seconds: 1)),
+    );
+
+    try {
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final ref = FirebaseStorage.instance.ref('posts/thumbnails/edit_${widget.post.id}_$ts.jpg');
+      await ref.putFile(File(file.path));
+      final url = await ref.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .update({'videoThumbnailUrl': url});
+
+      if (mounted) {
+        setState(() {
+          _currentCoverUrl = url;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🎉 Cover updated successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update cover: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeCover() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .update({'videoThumbnailUrl': FieldValue.delete()});
+
+      if (mounted) {
+        setState(() {
+          _currentCoverUrl = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ Custom cover removed!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove cover: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
 
@@ -350,14 +538,27 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                       ),
                     ),
                   )
-                : Container(
-                    color: Colors.black,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (_currentCoverUrl != null &&
+                          _currentCoverUrl!.isNotEmpty)
+                        Image.network(
+                          _currentCoverUrl!,
+                          fit: BoxFit.cover,
+                        )
+                      else
+                        Container(color: Colors.black),
+                      BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.3),
+                        ),
                       ),
-                    ),
+                      const Center(
+                        child: _PulseLoader(),
+                      ),
+                    ],
                   ),
           ),
         ),
@@ -422,6 +623,45 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                 ),
               ),
             ],
+          ),
+        ),
+
+        // ── Reload Button (Top Right, Left of Create) ────────────────────────
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          right: 68,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    width: 0.8,
+                  ),
+                ),
+                child: IconButton(
+                  icon: widget.isReloading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.refresh_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                  onPressed: widget.onReload,
+                ),
+              ),
+            ),
           ),
         ),
 
@@ -631,6 +871,16 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
                 },
               ),
               const SizedBox(height: 25),
+
+              if (_isPostAuthor) ...[
+                _SidebarAction(
+                  icon: Icons.photo_camera_back_outlined,
+                  iconColor: Colors.white,
+                  label: 'Cover',
+                  onTap: _showCoverMenu,
+                ),
+                const SizedBox(height: 20),
+              ],
 
               // Spinning record disc simulation
               GestureDetector(
@@ -1074,3 +1324,58 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
     );
   }
 }
+
+class _PulseLoader extends StatefulWidget {
+  const _PulseLoader();
+
+  @override
+  State<_PulseLoader> createState() => _PulseLoaderState();
+}
+
+class _PulseLoaderState extends State<_PulseLoader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.85, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _animation,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.25),
+            width: 1.5,
+          ),
+        ),
+        child: const Icon(
+          Icons.music_note_rounded,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+    );
+  }
+}
+

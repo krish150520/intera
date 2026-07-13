@@ -16,6 +16,7 @@ import '../../features/echos/screens/echo_viewer_screen.dart';
 import '../../features/echos/screens/create_echo_screen.dart';
 import '../../features/echos/screens/audio_page_screen.dart';
 import '../../features/echos/screens/create_audio_screen.dart';
+import '../../features/create/screens/create_help_post_screen.dart';
 import '../../shared/models/post_model.dart';
 
 /// Centralized named-route definitions for INTERA.
@@ -38,6 +39,7 @@ class AppRoutes {
   static const String createEcho = '/create-echo';
   static const String audioPage = '/audio-page';
   static const String createAudio = '/create-audio';
+  static const String createHelpPost = '/create-help-post';
 
   static Map<String, WidgetBuilder> get routes => {
         splash: (context) => const SplashScreen(),
@@ -52,6 +54,7 @@ class AppRoutes {
         createCommunity: (context) => const CreateCommunityScreen(),
         createSpark: (context) => const CreateSparkScreen(),
         createAudio: (context) => const CreateAudioScreen(),
+        createHelpPost: (context) => const CreateHelpPostScreen(),
       };
 
   /// For routes that need arguments (e.g. PostDetailScreen needs a [Post]),
@@ -105,6 +108,12 @@ class AppRoutes {
             audioTitle: audioTitle,
             audioAuthorId: audioAuthorId,
           ),
+        );
+      case createHelpPost:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final communityId = args?['communityId'] as String?;
+        return MaterialPageRoute(
+          builder: (context) => CreateHelpPostScreen(initialCommunityId: communityId),
         );
       default:
         return null;

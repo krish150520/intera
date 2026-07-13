@@ -56,6 +56,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   // Intera Additions (Optional UI fields)
   String? _selectedMood;
   bool _isAnonymous = false;
+  String _imageAlignment = 'center';
   String _selectedVisibility = 'Public';
   bool _allowComments = true;
   String? _selectedCommunityId;
@@ -330,6 +331,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         content: isHelp ? '$title\n$body' : body,
         imageUrl: mediaUrl,
         videoThumbnailUrl: videoThumbnailUrl,
+        imageAlignment: _imageAlignment,
         likeCount: 0,
         commentCount: 0,
         shareCount: 0,
@@ -488,6 +490,14 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  if (_selectedMediaFile != null && !_isVideoMedia) ...[
+                    _buildStaggeredEntrance(
+                      delayMs: 75,
+                      child: _buildSquareCropFocusCard(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // 2. Title & Caption Card (Staggered Delay: 100ms)
                   _buildStaggeredEntrance(
@@ -1010,6 +1020,87 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           const SizedBox(height: 14),
           child,
         ],
+      ),
+    );
+  }
+
+  Widget _buildSquareCropFocusCard() {
+    final c = context.appColors;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.crop_free_rounded, color: c.primary, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'Square Grid Crop Position',
+                style: TextStyle(color: c.textHi, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Choose which area of the image to focus on in square card/profile feeds:',
+            style: TextStyle(color: c.textMuted, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildAlignmentChip('top', '⬆️ Top'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildAlignmentChip('center', '↔️ Center'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildAlignmentChip('bottom', '⬇️ Bottom'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlignmentChip(String value, String label) {
+    final c = context.appColors;
+    final isSelected = _imageAlignment == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _imageAlignment = value;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? c.primary.withValues(alpha: 0.15) : c.field,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? c.primary : c.border.withValues(alpha: 0.3),
+            width: 1.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? c.primary : c.textMuted,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

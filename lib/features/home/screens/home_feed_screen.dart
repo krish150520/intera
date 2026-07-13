@@ -894,6 +894,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
               return _FeedFilterWrapper(post: post, visibility: visibility, scheduledAt: scheduledAt);
             })
             .where((w) {
+              if (w.post.type == PostType.helpRequest) return false;
               if (w.post.communityId != null && w.post.communityId!.isNotEmpty) return false;
               if (w.scheduledAt != null && w.scheduledAt!.toDate().isAfter(DateTime.now())) {
                 if (w.post.authorId != currentUid) return false;

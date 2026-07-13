@@ -117,7 +117,7 @@ class CustomAvatar extends StatelessWidget {
 
     final String passedTag = heroTag ?? 'avatar_${userId ?? 'default'}_${identityHashCode(avatarWidget)}';
 
-    if (!clickable || userId == null || userId!.isEmpty) {
+    if (!clickable || userId == null || userId!.isEmpty || userId == 'anonymous') {
       return heroTag != null
           ? Hero(tag: heroTag!, child: avatarWidget)
           : avatarWidget;

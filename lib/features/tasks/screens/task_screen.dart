@@ -9,7 +9,7 @@ import '../../../core/karma/karma_ledger_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
 import '../../../core/services/notification_service.dart';
-import '../../create/screens/create_post_screen.dart';
+import '../../create/screens/create_help_post_screen.dart';
 
 class HelpRequestScreen extends StatefulWidget {
   const HelpRequestScreen({super.key});
@@ -62,9 +62,7 @@ class _HelpRequestScreenState extends State<HelpRequestScreen>
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const CreatePostScreen(
-                  isHelpRequest: true,
-                ),
+                builder: (_) => const CreateHelpPostScreen(),
               ),
             );
           },
@@ -327,17 +325,18 @@ class _HelpCard extends StatelessWidget {
           },
           onComment: onTap,
         ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Row(
-            children: [
-              if (reward > 0) _RewardBadge(reward: reward),
-              if (reward > 0) const SizedBox(width: 6),
-              _StatusBadge(isCompleted: isCompleted),
-            ],
+        if (post.imageUrl == null || post.imageUrl!.isEmpty)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Row(
+              children: [
+                if (reward > 0) _RewardBadge(reward: reward),
+                if (reward > 0) const SizedBox(width: 6),
+                _StatusBadge(isCompleted: isCompleted),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }

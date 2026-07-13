@@ -790,7 +790,7 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          height: 190,
+          height: 160,
           decoration: BoxDecoration(
             color: hasVideo ? Colors.black : null,
             gradient: hasVideo
@@ -975,7 +975,7 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          height: 190,
+          height: 160,
           decoration: BoxDecoration(
             gradient: imageFile == null
                 ? LinearGradient(
