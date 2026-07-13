@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/post_model.dart';
@@ -247,6 +248,112 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     ctrl.dispose();
   }
 
+  void _deletePost() async {
+    final post = widget.post;
+    if (post == null) return;
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? c.surface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Post?', style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? c.textHi : const Color(0xFF1E293B), fontSize: 16)),
+        content: const Text('Are you sure you want to permanently delete this post? This cannot be undone.', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: TextStyle(color: isDark ? c.textMuted : const Color(0xFF64748B))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                // Show loading indicator
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (loadingCtx) => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+
+                // Force refresh ID token to ensure it is fresh and sent with the callable request
+                await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+                await FirebaseFunctions.instanceFor(region: 'us-central1')
+                    .httpsCallable('deletePost')
+                    .call({'postId': post.id});
+
+                if (mounted) {
+                  Navigator.pop(context); // Dismiss loading indicator
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Post deleted successfully.'), behavior: SnackBarBehavior.floating),
+                  );
+                  Navigator.of(context).pop();
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context); // Dismiss loading indicator
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteComment(String commentId) async {
+    final post = widget.post;
+    if (post == null) return;
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? c.surface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Comment?', style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? c.textHi : const Color(0xFF1E293B), fontSize: 16)),
+        content: const Text('Are you sure you want to delete this comment?', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: TextStyle(color: isDark ? c.textMuted : const Color(0xFF64748B))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final postRef = FirebaseFirestore.instance.collection('posts').doc(post.id);
+                final batch = FirebaseFirestore.instance.batch();
+                batch.delete(postRef.collection('comments').doc(commentId));
+                batch.update(postRef, {'commentCount': FieldValue.increment(-1)});
+                await batch.commit();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Comment deleted.'), behavior: SnackBarBehavior.floating),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete comment: $e'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Open fullscreen viewer ─────────────────────────────────────────────────
 
   void _openFullscreen(Post post) {
@@ -305,6 +412,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 ),
               ),
               systemOverlayStyle: SystemUiOverlayStyle.light,
+              actions: [
+                if (_isPostAuthor || widget.post?.realAuthorId == _myUid)
+                  GestureDetector(
+                    onTap: _deletePost,
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.delete_outline_rounded,
+                          size: 18, color: Colors.redAccent),
+                    ),
+                  ),
+              ],
             )
           : AppBar(
               title: Text('Discussion',
@@ -322,6 +445,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       size: 16, color: c.primary),
                 ),
               ),
+              actions: [
+                if (_isPostAuthor || widget.post?.realAuthorId == _myUid)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                    onPressed: _deletePost,
+                  ),
+              ],
             ),
       body: post == null
           ? const Center(child: Text('Post context missing.'))
@@ -445,6 +575,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                           data['authorId'] != _myUid,
                                       showTipBtn: data['authorId'] != _myUid &&
                                           _myUid.isNotEmpty,
+                                      canDelete: data['authorId'] == _myUid || _isPostAuthor || realTimePost.realAuthorId == _myUid,
+                                      onDelete: () => _deleteComment(cmtId),
                                       onAward: () => _awardBestAnswer(
                                         commentId:    cmtId,
                                         answererUid:  data['authorId'] ?? '',
@@ -1306,12 +1438,17 @@ class _CommentTile extends StatelessWidget {
   final VoidCallback onAward;
   final VoidCallback onTip;
 
+  final bool canDelete;
+  final VoidCallback onDelete;
+
   const _CommentTile({
     required this.commentId,
     required this.data,
     required this.isBestAnswer,
     required this.showAwardBtn,
     required this.showTipBtn,
+    required this.canDelete,
+    required this.onDelete,
     required this.onAward,
     required this.onTip,
   });
@@ -1371,6 +1508,14 @@ class _CommentTile extends StatelessWidget {
                               fontWeight: FontWeight.w700)),
                     ),
                   ],
+                  const Spacer(),
+                  if (canDelete)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: onDelete,
+                    ),
                 ]),
                 const SizedBox(height: 4),
                 Text(content,

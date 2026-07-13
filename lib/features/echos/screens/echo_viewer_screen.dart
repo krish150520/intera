@@ -13,7 +13,6 @@ import '../../../shared/widgets/custom_avatar.dart';
 import '../../../shared/widgets/live_username.dart';
 import '../../../core/services/reaction_service.dart';
 import '../../../core/services/notification_service.dart';
-import '../../create/screens/create_post_screen.dart';
 import '../../../shared/widgets/share_post_sheet.dart';
 
 class EchoViewerScreen extends StatefulWidget {
@@ -386,7 +385,11 @@ class _EchoPlayerItemState extends State<_EchoPlayerItem>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _EchoCommentsSheet(postId: widget.post.id),
+      builder: (context) => _EchoCommentsSheet(
+        postId: widget.post.id,
+        postAuthorId: widget.post.authorId,
+        postRealAuthorId: widget.post.realAuthorId,
+      ),
     );
   }
 
@@ -1048,7 +1051,13 @@ class _SpinningDiscState extends State<_SpinningDisc>
 
 class _EchoCommentsSheet extends StatefulWidget {
   final String postId;
-  const _EchoCommentsSheet({required this.postId});
+  final String postAuthorId;
+  final String? postRealAuthorId;
+  const _EchoCommentsSheet({
+    required this.postId,
+    required this.postAuthorId,
+    this.postRealAuthorId,
+  });
 
   @override
   State<_EchoCommentsSheet> createState() => _EchoCommentsSheetState();
@@ -1128,9 +1137,54 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
     }
   }
 
+  void _deleteComment(String commentId) async {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? c.surface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Comment?', style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? c.textHi : const Color(0xFF1E293B), fontSize: 16)),
+        content: const Text('Are you sure you want to delete this comment?', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: TextStyle(color: isDark ? c.textMuted : const Color(0xFF64748B))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final postRef = FirebaseFirestore.instance.collection('posts').doc(widget.postId);
+                final batch = FirebaseFirestore.instance.batch();
+                batch.delete(postRef.collection('comments').doc(commentId));
+                batch.update(postRef, {'commentCount': FieldValue.increment(-1)});
+                await batch.commit();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Comment deleted.'), behavior: SnackBarBehavior.floating),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete comment: $e'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final paddingBottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -1249,6 +1303,14 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                                         fontSize: 10,
                                       ),
                                     ),
+                                    const Spacer(),
+                                    if (authorId == myUid || widget.postAuthorId == myUid || widget.postRealAuthorId == myUid)
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () => _deleteComment(docs[index].id),
+                                      ),
                                   ],
                                 ),
                                 const SizedBox(height: 3),

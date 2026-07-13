@@ -286,6 +286,7 @@ class _CreateHelpPostScreenState extends State<CreateHelpPostScreen> {
       final post = Post(
         id: '',
         authorId: _isAnonymous ? 'anonymous' : user.uid,
+        realAuthorId: user.uid,
         authorName: displayName,
         authorUsername: username,
         authorAvatarUrl: avatarUrl.isNotEmpty ? avatarUrl : null,

@@ -143,6 +143,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final networkBanner = widget.currentData['bannerUrl'] as String?;
     final networkAvatar = widget.currentData['avatarUrl'] as String?;
 
@@ -202,9 +203,11 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE5E7FF), Color(0xFFF8F9FF), Colors.white],
+            colors: isDark
+                ? [c.bg, c.surface, c.bg]
+                : [const Color(0xFFE5E7FF), const Color(0xFFF8F9FF), Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -378,9 +381,9 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: isDark ? c.surface.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+                          border: Border.all(color: isDark ? c.border.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.6), width: 1.2),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
@@ -425,9 +428,9 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: isDark ? c.surface.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.4),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+                          border: Border.all(color: isDark ? c.border.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.6), width: 1.2),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,6 +476,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
     int maxLines = 1,
   }) {
     final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -489,9 +493,9 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: isDark ? c.surface.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.2),
+            border: Border.all(color: isDark ? c.border.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.6), width: 1.2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.01),
@@ -519,6 +523,7 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
   }
 
   Widget _buildPrivacySection(AppColorsExtension c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -533,10 +538,10 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _isPublic ? c.primary.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.4),
+                    color: _isPublic ? c.primary.withValues(alpha: 0.08) : (isDark ? c.surface.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.4)),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: _isPublic ? c.primary : Colors.white.withValues(alpha: 0.6),
+                      color: _isPublic ? c.primary : (isDark ? c.border.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.6)),
                       width: _isPublic ? 1.5 : 1.2,
                     ),
                   ),
@@ -559,10 +564,10 @@ class _EditCommunityScreenState extends State<EditCommunityScreen> {
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: !_isPublic ? c.primary.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.4),
+                    color: !_isPublic ? c.primary.withValues(alpha: 0.08) : (isDark ? c.surface.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.4)),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: !_isPublic ? c.primary : Colors.white.withValues(alpha: 0.6),
+                      color: !_isPublic ? c.primary : (isDark ? c.border.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.6)),
                       width: !_isPublic ? 1.5 : 1.2,
                     ),
                   ),

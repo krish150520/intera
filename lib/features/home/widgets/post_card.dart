@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../../shared/models/post_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/custom_avatar.dart';
@@ -1254,7 +1255,10 @@ class _MediaHelpPostCard extends StatelessWidget {
                           ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          onPressed: () {},
+                          onPressed: () => _showOptionsSheet(
+                            context,
+                            myUid == post.authorId || myUid == post.realAuthorId,
+                          ),
                         ),
                       ],
                     ),
@@ -1392,6 +1396,150 @@ class _MediaHelpPostCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  void _showOptionsSheet(BuildContext context, bool isAuthor) {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? c.surface : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (isAuthor) ...[
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  title: const Text(
+                    'Delete Help Request',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetCtx).pop();
+                    _showDeleteConfirmDialog(context);
+                  },
+                ),
+              ],
+              ListTile(
+                leading: Icon(Icons.share_outlined, color: isDark ? c.textHi : const Color(0xFF1E293B)),
+                title: Text(
+                  'Share Request',
+                  style: TextStyle(color: isDark ? c.textHi : const Color(0xFF1E293B)),
+                ),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  onShare?.call();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmDialog(BuildContext context) {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? c.surface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete Help Request?',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: isDark ? c.textHi : const Color(0xFF1E293B),
+            fontSize: 16,
+          ),
+        ),
+        content: const Text(
+          'Are you sure you want to delete this help request? This action cannot be undone.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: isDark ? c.textMuted : const Color(0xFF64748B)),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                // Show loading indicator
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (loadingCtx) => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+
+                // Force refresh ID token to ensure it is fresh and sent with the callable request
+                await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+                await FirebaseFunctions.instanceFor(region: 'us-central1')
+                    .httpsCallable('deletePost')
+                    .call({'postId': post.id});
+
+                if (context.mounted) {
+                  Navigator.pop(context); // Dismiss loading indicator
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Help request deleted successfully.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context); // Dismiss loading indicator
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete: $e'),
+                      backgroundColor: Colors.redAccent,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
