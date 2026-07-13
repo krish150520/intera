@@ -1065,11 +1065,16 @@ class _EchoCommentsSheet extends StatefulWidget {
 
 class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
   final _commentController = TextEditingController();
+  final _commentFocusNode = FocusNode();
   bool _isSending = false;
+
+  String? _replyingToCommentId;
+  String? _replyingToUsername;
 
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -1095,37 +1100,82 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
       final displayName = ud['name'] ?? user.displayName ?? 'Anonymous';
 
       final postRef = FirebaseFirestore.instance.collection('posts').doc(widget.postId);
-      final commentRef = postRef.collection('comments').doc();
 
-      final batch = FirebaseFirestore.instance.batch();
-      batch.set(commentRef, {
-        'authorId': user.uid,
-        'authorName': displayName,
-        'authorUsername': username,
-        'authorAvatar': user.photoURL ?? '',
-        'content': text,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      batch.update(postRef, {'commentCount': FieldValue.increment(1)});
-      await batch.commit();
+      if (_replyingToCommentId != null) {
+        final commentRef = postRef.collection('comments').doc(_replyingToCommentId);
+        final batch = FirebaseFirestore.instance.batch();
 
-      // Trigger comment notification
-      try {
-        final postSnap = await postRef.get();
-        final postData = postSnap.data() ?? {};
-        final recipientId = postData['authorId'] as String?;
-        if (recipientId != null) {
-          await NotificationService.sendNotification(
-            recipientId: recipientId,
-            type: 'comment',
-            title: '$displayName commented on your Echo',
-            subtitle: text,
-            relatedId: widget.postId,
-          );
-        }
-      } catch (_) {}
+        final replyData = {
+          'id': FirebaseFirestore.instance.collection('posts').doc().id,
+          'authorId': user.uid,
+          'authorName': displayName,
+          'authorUsername': username,
+          'authorAvatar': user.photoURL ?? '',
+          'content': text,
+          'createdAt': DateTime.now().toIso8601String(),
+        };
+
+        batch.update(commentRef, {
+          'replies': FieldValue.arrayUnion([replyData]),
+        });
+        batch.update(postRef, {'commentCount': FieldValue.increment(1)});
+        await batch.commit();
+
+        try {
+          final postSnap = await postRef.get();
+          final postData = postSnap.data() ?? {};
+          final recipientId = postData['authorId'] as String?;
+          if (recipientId != null) {
+            await NotificationService.sendNotification(
+              recipientId: recipientId,
+              type: 'comment',
+              title: '$displayName replied to a comment on your Echo',
+              subtitle: text,
+              relatedId: widget.postId,
+            );
+          }
+        } catch (_) {}
+
+        setState(() {
+          _replyingToCommentId = null;
+          _replyingToUsername = null;
+        });
+      } else {
+        final commentRef = postRef.collection('comments').doc();
+        final batch = FirebaseFirestore.instance.batch();
+
+        batch.set(commentRef, {
+          'authorId': user.uid,
+          'authorName': displayName,
+          'authorUsername': username,
+          'authorAvatar': user.photoURL ?? '',
+          'content': text,
+          'createdAt': FieldValue.serverTimestamp(),
+          'likeCount': 0,
+          'likedBy': [],
+          'replies': [],
+        });
+        batch.update(postRef, {'commentCount': FieldValue.increment(1)});
+        await batch.commit();
+
+        try {
+          final postSnap = await postRef.get();
+          final postData = postSnap.data() ?? {};
+          final recipientId = postData['authorId'] as String?;
+          if (recipientId != null) {
+            await NotificationService.sendNotification(
+              recipientId: recipientId,
+              type: 'comment',
+              title: '$displayName commented on your Echo',
+              subtitle: text,
+              relatedId: widget.postId,
+            );
+          }
+        } catch (_) {}
+      }
 
       _commentController.clear();
+      _commentFocusNode.unfocus();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1134,6 +1184,36 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  void _toggleLikeComment(String commentId, Map<String, dynamic> data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final commentRef = FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.postId)
+        .collection('comments')
+        .doc(commentId);
+
+    final List likedBy = data['likedBy'] ?? [];
+    final isLiked = likedBy.contains(user.uid);
+
+    try {
+      if (isLiked) {
+        await commentRef.update({
+          'likedBy': FieldValue.arrayRemove([user.uid]),
+          'likeCount': FieldValue.increment(-1),
+        });
+      } else {
+        await commentRef.update({
+          'likedBy': FieldValue.arrayUnion([user.uid]),
+          'likeCount': FieldValue.increment(1),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling comment like: $e');
     }
   }
 
@@ -1181,6 +1261,87 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
     );
   }
 
+  void _deleteReply(String commentId, Map<String, dynamic> replyMap) async {
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? c.surface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Reply?', style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? c.textHi : const Color(0xFF1E293B), fontSize: 16)),
+        content: const Text('Are you sure you want to delete this reply?', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: TextStyle(color: isDark ? c.textMuted : const Color(0xFF64748B))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final postRef = FirebaseFirestore.instance.collection('posts').doc(widget.postId);
+                final batch = FirebaseFirestore.instance.batch();
+                batch.update(postRef.collection('comments').doc(commentId), {
+                  'replies': FieldValue.arrayRemove([replyMap]),
+                });
+                batch.update(postRef, {'commentCount': FieldValue.increment(-1)});
+                await batch.commit();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reply deleted.'), behavior: SnackBarBehavior.floating),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete reply: $e'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color bg,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
@@ -1189,7 +1350,7 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: paddingBottom),
-      child: Container(
+      child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.65,
         child: Column(
           children: [
@@ -1263,12 +1424,18 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                     itemCount: docs.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 14),
                     itemBuilder: (context, index) {
+                      final cmtId = docs[index].id;
                       final data = docs[index].data() as Map<String, dynamic>;
                       final authorName = data['authorName'] ?? 'Anonymous';
                       final authorUsername = data['authorUsername'] ?? '@user';
                       final content = data['content'] ?? '';
                       final avatar = data['authorAvatar'] as String?;
                       final authorId = data['authorId'] as String?;
+
+                      final likedBy = data['likedBy'] as List? ?? [];
+                      final likeCount = (data['likeCount'] as num?)?.toInt() ?? 0;
+                      final replies = data['replies'] as List? ?? [];
+                      final isLiked = likedBy.contains(myUid);
 
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1285,6 +1452,7 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       authorName,
@@ -1292,6 +1460,18 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                                         color: c.textHi,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 1),
+                                      child: Text(
+                                        '·',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: c.textMuted,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 4),
@@ -1305,19 +1485,141 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
                                     ),
                                     const Spacer(),
                                     if (authorId == myUid || widget.postAuthorId == myUid || widget.postRealAuthorId == myUid)
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        onPressed: () => _deleteComment(docs[index].id),
+                                      GestureDetector(
+                                        onTap: () => _deleteComment(cmtId),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          color: Colors.transparent,
+                                          child: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 16,
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
                                       ),
                                   ],
                                 ),
-                                const SizedBox(height: 3),
+                                const SizedBox(height: 5),
                                 Text(
                                   content,
                                   style: TextStyle(color: c.textSecondary, fontSize: 13),
                                 ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    _buildActionChip(
+                                      icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                      label: likeCount > 0 ? '$likeCount' : 'Like',
+                                      color: isLiked ? Colors.redAccent : c.textMuted,
+                                      bg: isLiked ? Colors.redAccent.withValues(alpha: 0.08) : c.field,
+                                      onTap: () => _toggleLikeComment(cmtId, data),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildActionChip(
+                                      icon: Icons.chat_bubble_outline_rounded,
+                                      label: 'Reply',
+                                      color: c.primary,
+                                      bg: c.primary.withValues(alpha: 0.08),
+                                      onTap: () {
+                                        setState(() {
+                                          _replyingToCommentId = cmtId;
+                                          _replyingToUsername = authorName;
+                                        });
+                                        _commentFocusNode.requestFocus();
+                                      },
+                                    ),
+                                  ],
+                                ),
+
+                                // Indented Nested replies
+                                if (replies.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.only(left: 10, top: 2, bottom: 2),
+                                    decoration: BoxDecoration(
+                                      border: Border(left: BorderSide(color: c.border.withValues(alpha: 0.5), width: 1.5)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: replies.map<Widget>((replyMap) {
+                                        final reply = replyMap as Map<String, dynamic>;
+                                        final rAuthorName = reply['authorName'] ?? 'Anonymous';
+                                        final rAuthorUsername = reply['authorUsername'] ?? '@user';
+                                        final rContent = reply['content'] ?? '';
+                                        final rAvatar = reply['authorAvatar'] ?? '';
+                                        final rAuthorId = reply['authorId'] ?? '';
+
+                                        final canDeleteReply = rAuthorId == myUid || authorId == myUid || widget.postAuthorId == myUid || widget.postRealAuthorId == myUid;
+
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 4),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              CustomAvatar(
+                                                name: rAuthorName,
+                                                radius: 8,
+                                                imageUrl: rAvatar.isNotEmpty ? rAvatar : null,
+                                                userId: rAuthorId,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          rAuthorName,
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 10,
+                                                            color: c.textHi,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Padding(
+                                                          padding: const EdgeInsets.only(top: 1),
+                                                          child: Text('·', style: TextStyle(fontSize: 9, color: c.textMuted, fontWeight: FontWeight.bold)),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        LiveUsername(
+                                                          userId: rAuthorId,
+                                                          fallback: rAuthorUsername,
+                                                          style: TextStyle(fontSize: 8, color: c.textMuted),
+                                                        ),
+                                                        const Spacer(),
+                                                        if (canDeleteReply)
+                                                          GestureDetector(
+                                                            onTap: () => _deleteReply(cmtId, reply),
+                                                            child: const Icon(
+                                                              Icons.delete_outline_rounded,
+                                                              size: 12,
+                                                              color: Colors.redAccent,
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      rContent,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        height: 1.3,
+                                                        color: c.textSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1331,54 +1633,93 @@ class _EchoCommentsSheetState extends State<_EchoCommentsSheet> {
 
             // Comment textfield at bottom
             const Divider(height: 1),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              color: c.surface,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: c.field,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: c.border, width: 0.8),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: TextField(
-                        controller: _commentController,
-                        style: TextStyle(color: c.textPrimary, fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Share your feedback...',
-                          hintStyle: TextStyle(color: c.textMuted),
-                          border: InputBorder.none,
-                          isDense: true,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_replyingToCommentId != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: c.primary.withValues(alpha: 0.06),
+                      border: Border(top: BorderSide(color: c.border)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.reply_rounded, size: 16, color: c.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Replying to @$_replyingToUsername',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: c.textHi,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _replyingToCommentId = null;
+                              _replyingToUsername = null;
+                            });
+                          },
+                          child: Icon(Icons.close_rounded, size: 16, color: c.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  color: c.surface,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: c.field,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: c.border, width: 0.8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: TextField(
+                            controller: _commentController,
+                            focusNode: _commentFocusNode,
+                            style: TextStyle(color: c.textPrimary, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'Share your feedback...',
+                              hintStyle: TextStyle(color: c.textMuted),
+                              border: InputBorder.none,
+                              isDense: true,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _isSending ? null : _submitComment,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: c.primary,
-                        shape: BoxShape.circle,
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _isSending ? null : _submitComment,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: c.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _isSending
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 1.5),
+                                  ),
+                                )
+                              : const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 16),
+                        ),
                       ),
-                      child: _isSending
-                          ? const Center(
-                              child: SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 1.5),
-                              ),
-                            )
-                          : const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 16),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),

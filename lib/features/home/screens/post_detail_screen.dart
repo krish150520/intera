@@ -28,7 +28,11 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
+  final _commentFocusNode = FocusNode();
   bool _isSending = false;
+
+  String? _replyingToCommentId;
+  String? _replyingToUsername;
 
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
   bool get _isHelpPost   => widget.post?.type == PostType.helpRequest;
@@ -43,6 +47,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -67,41 +72,114 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           : '@${user.email?.split('@')[0] ?? 'user'}';
       final displayName = ud['name'] ?? user.displayName ?? 'Anonymous';
 
-      final postRef    = FirebaseFirestore.instance.collection('posts').doc(post.id);
-      final commentRef = postRef.collection('comments').doc();
-      final batch      = FirebaseFirestore.instance.batch();
+      final postRef = FirebaseFirestore.instance.collection('posts').doc(post.id);
 
-      batch.set(commentRef, {
-        'authorId':       user.uid,
-        'authorName':     displayName,
-        'authorUsername': username,
-        'authorAvatar':   user.photoURL ?? '',
-        'content':        text,
-        'createdAt':      FieldValue.serverTimestamp(),
-      });
-      batch.update(postRef, {'commentCount': FieldValue.increment(1)});
-      await batch.commit();
+      if (_replyingToCommentId != null) {
+        final commentRef = postRef.collection('comments').doc(_replyingToCommentId);
+        final batch = FirebaseFirestore.instance.batch();
 
-      // Trigger comment notification
-      try {
-        await NotificationService.sendNotification(
-          recipientId: post.authorId,
-          type: 'comment',
-          title: '$displayName commented on your post',
-          subtitle: text,
-          relatedId: post.id,
-        );
-      } catch (e) {
-        debugPrint('Error sending comment notification: $e');
+        final replyData = {
+          'id': FirebaseFirestore.instance.collection('posts').doc().id,
+          'authorId': user.uid,
+          'authorName': displayName,
+          'authorUsername': username,
+          'authorAvatar': user.photoURL ?? '',
+          'content': text,
+          'createdAt': DateTime.now().toIso8601String(),
+        };
+
+        batch.update(commentRef, {
+          'replies': FieldValue.arrayUnion([replyData]),
+        });
+        batch.update(postRef, {'commentCount': FieldValue.increment(1)});
+        await batch.commit();
+
+        try {
+          await NotificationService.sendNotification(
+            recipientId: post.authorId,
+            type: 'comment',
+            title: '$displayName replied to a comment on your post',
+            subtitle: text,
+            relatedId: post.id,
+          );
+        } catch (e) {
+          debugPrint('Error sending reply notification: $e');
+        }
+
+        setState(() {
+          _replyingToCommentId = null;
+          _replyingToUsername = null;
+        });
+      } else {
+        final commentRef = postRef.collection('comments').doc();
+        final batch      = FirebaseFirestore.instance.batch();
+
+        batch.set(commentRef, {
+          'authorId':       user.uid,
+          'authorName':     displayName,
+          'authorUsername': username,
+          'authorAvatar':   user.photoURL ?? '',
+          'content':        text,
+          'createdAt':      FieldValue.serverTimestamp(),
+          'likeCount':      0,
+          'likedBy':        [],
+          'replies':        [],
+        });
+        batch.update(postRef, {'commentCount': FieldValue.increment(1)});
+        await batch.commit();
+
+        try {
+          await NotificationService.sendNotification(
+            recipientId: post.authorId,
+            type: 'comment',
+            title: '$displayName commented on your post',
+            subtitle: text,
+            relatedId: post.id,
+          );
+        } catch (e) {
+          debugPrint('Error sending comment notification: $e');
+        }
       }
 
       _commentController.clear();
-      FocusScope.of(context).unfocus();
+      _commentFocusNode.unfocus();
     } catch (e) {
       if (!mounted) return;
       _showSnack('Could not publish comment: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  void _toggleLikeComment(String commentId, Map<String, dynamic> data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final post = widget.post;
+    if (post == null) return;
+
+    final commentRef = FirebaseFirestore.instance
+        .collection('posts')
+        .doc(post.id)
+        .collection('comments')
+        .doc(commentId);
+
+    final List likedBy = data['likedBy'] ?? [];
+    final isLiked = likedBy.contains(user.uid);
+
+    try {
+      if (isLiked) {
+        await commentRef.update({
+          'likedBy': FieldValue.arrayRemove([user.uid]),
+          'likeCount': FieldValue.increment(-1),
+        });
+      } else {
+        await commentRef.update({
+          'likedBy': FieldValue.arrayUnion([user.uid]),
+          'likeCount': FieldValue.increment(1),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling comment like: $e');
     }
   }
 
@@ -354,6 +432,54 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  void _deleteReply(String commentId, Map<String, dynamic> replyMap) async {
+    final post = widget.post;
+    if (post == null) return;
+    final c = context.appColors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? c.surface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Reply?', style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? c.textHi : const Color(0xFF1E293B), fontSize: 16)),
+        content: const Text('Are you sure you want to delete this reply?', style: TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: TextStyle(color: isDark ? c.textMuted : const Color(0xFF64748B))),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+              try {
+                final postRef = FirebaseFirestore.instance.collection('posts').doc(post.id);
+                final batch = FirebaseFirestore.instance.batch();
+                batch.update(postRef.collection('comments').doc(commentId), {
+                  'replies': FieldValue.arrayRemove([replyMap]),
+                });
+                batch.update(postRef, {'commentCount': FieldValue.increment(-1)});
+                await batch.commit();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reply deleted.'), behavior: SnackBarBehavior.floating),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete reply: $e'), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Open fullscreen viewer ─────────────────────────────────────────────────
 
   void _openFullscreen(Post post) {
@@ -589,6 +715,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                         postId:    post.id,
                                         commentId: cmtId,
                                       ),
+                                      onLike: () => _toggleLikeComment(cmtId, data),
+                                      onReply: () {
+                                        setState(() {
+                                          _replyingToCommentId = cmtId;
+                                          _replyingToUsername = data['authorName'] ?? 'Anonymous';
+                                        });
+                                        _commentFocusNode.requestFocus();
+                                      },
+                                      onDeleteReply: (replyMap) => _deleteReply(cmtId, replyMap),
                                     ),
                                     if (i < commentDocs.length - 1)
                                       Divider(
@@ -643,11 +778,50 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     );
                   }
 
-                  return _CommentInput(
-                    controller:    _commentController,
-                    isSending:     _isSending,
-                    userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
-                    onSend:        _submitComment,
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_replyingToCommentId != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: c.primary.withValues(alpha: 0.06),
+                            border: Border(top: BorderSide(color: c.border)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.reply_rounded, size: 16, color: c.primary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Replying to @$_replyingToUsername',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: c.textHi,
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _replyingToCommentId = null;
+                                    _replyingToUsername = null;
+                                  });
+                                },
+                                child: Icon(Icons.close_rounded, size: 16, color: c.textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      _CommentInput(
+                        controller:    _commentController,
+                        focusNode:     _commentFocusNode,
+                        isSending:     _isSending,
+                        userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
+                        onSend:        _submitComment,
+                      ),
+                    ],
                   );
                 },
               ),
@@ -1441,6 +1615,10 @@ class _CommentTile extends StatelessWidget {
   final bool canDelete;
   final VoidCallback onDelete;
 
+  final VoidCallback onLike;
+  final VoidCallback onReply;
+  final Function(Map<String, dynamic>) onDeleteReply;
+
   const _CommentTile({
     required this.commentId,
     required this.data,
@@ -1451,6 +1629,9 @@ class _CommentTile extends StatelessWidget {
     required this.onDelete,
     required this.onAward,
     required this.onTip,
+    required this.onLike,
+    required this.onReply,
+    required this.onDeleteReply,
   });
 
   @override
@@ -1462,94 +1643,245 @@ class _CommentTile extends StatelessWidget {
     final avatar   = data['authorAvatar']   as String? ?? '';
     final authorId = data['authorId']       as String? ?? '';
 
+    final likedBy = data['likedBy'] as List? ?? [];
+    final likeCount = (data['likeCount'] as num?)?.toInt() ?? 0;
+    final replies = data['replies'] as List? ?? [];
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final isLiked = likedBy.contains(myUid);
+
     return Container(
       color: isBestAnswer
           ? c.successBg
           : Colors.transparent,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          CustomAvatar(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CustomAvatar(
               name: name,
               radius: 16,
               imageUrl: avatar.isNotEmpty ? avatar : null,
-              userId: authorId),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Text(name,
-                      style: TextStyle(
+              userId: authorId,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-                          color: c.textHi)),
-                  const SizedBox(width: 6),
-                  LiveUsername(
-                    userId: authorId,
-                    fallback: username,
-                    style: TextStyle(
-                        fontSize: 11, color: c.textMuted),
-                  ),
-                  if (isBestAnswer) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: c.success,
-                        borderRadius: BorderRadius.circular(8),
+                          color: c.textHi,
+                        ),
                       ),
-                      child: const Text('Best answer',
+                      const SizedBox(width: 6),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
+                        child: Text(
+                          '·',
                           style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: c.textMuted,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      LiveUsername(
+                        userId: authorId,
+                        fallback: username,
+                        style: TextStyle(fontSize: 11, color: c.textMuted),
+                      ),
+                      if (isBestAnswer) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: c.success,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Best answer',
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 9,
-                              fontWeight: FontWeight.w700)),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      if (canDelete)
+                        GestureDetector(
+                          onTap: onDelete,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            color: Colors.transparent,
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 16,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    content,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.35,
+                      color: c.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      if (showAwardBtn)
+                        _ActionChip(
+                          icon: Icons.emoji_events_rounded,
+                          label: 'Best answer',
+                          color: c.success,
+                          bg: c.successBg,
+                          onTap: onAward,
+                        ),
+                      if (showAwardBtn) const SizedBox(width: 8),
+                      if (showTipBtn)
+                        _ActionChip(
+                          icon: Icons.bolt_rounded,
+                          label: 'Tip',
+                          color: c.warningKarma,
+                          bg: c.warningKarmaBg,
+                          onTap: onTip,
+                        ),
+                      if (showTipBtn) const SizedBox(width: 8),
+
+                      // Comment Like
+                      _ActionChip(
+                        icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        label: likeCount > 0 ? '$likeCount' : 'Like',
+                        color: isLiked ? Colors.redAccent : c.textMuted,
+                        bg: isLiked ? Colors.redAccent.withValues(alpha: 0.08) : c.field,
+                        onTap: onLike,
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Comment Reply
+                      _ActionChip(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: 'Reply',
+                        color: c.primary,
+                        bg: c.primary.withValues(alpha: 0.08),
+                        onTap: onReply,
+                      ),
+
+                      const Spacer(),
+                      if (authorId.isNotEmpty)
+                        KarmaBadge(uid: authorId, size: KarmaBadgeSize.small),
+                    ],
+                  ),
+
+                  // ── Indented Nested replies thread ──
+                  if (replies.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+                      decoration: BoxDecoration(
+                        border: Border(left: BorderSide(color: c.border.withValues(alpha: 0.5), width: 1.5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: replies.map<Widget>((replyMap) {
+                          final reply = replyMap as Map<String, dynamic>;
+                          final rAuthorName = reply['authorName'] ?? 'Anonymous';
+                          final rAuthorUsername = reply['authorUsername'] ?? '@user';
+                          final rContent = reply['content'] ?? '';
+                          final rAvatar = reply['authorAvatar'] ?? '';
+                          final rAuthorId = reply['authorId'] ?? '';
+
+                          final canDeleteReply = rAuthorId == myUid || authorId == myUid || canDelete;
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CustomAvatar(
+                                  name: rAuthorName,
+                                  radius: 10,
+                                  imageUrl: rAvatar.isNotEmpty ? rAvatar : null,
+                                  userId: rAuthorId,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            rAuthorName,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11,
+                                              color: c.textHi,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 1),
+                                            child: Text('·', style: TextStyle(fontSize: 10, color: c.textMuted, fontWeight: FontWeight.bold)),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          LiveUsername(
+                                            userId: rAuthorId,
+                                            fallback: rAuthorUsername,
+                                            style: TextStyle(fontSize: 9, color: c.textMuted),
+                                          ),
+                                          const Spacer(),
+                                          if (canDeleteReply)
+                                            GestureDetector(
+                                              onTap: () => onDeleteReply(reply),
+                                              child: const Icon(
+                                                Icons.delete_outline_rounded,
+                                                size: 13,
+                                                color: Colors.redAccent,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        rContent,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.3,
+                                          color: c.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ],
-                  const Spacer(),
-                  if (canDelete)
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: onDelete,
-                    ),
-                ]),
-                const SizedBox(height: 4),
-                Text(content,
-                    style: TextStyle(
-                        fontSize: 13,
-                        height: 1.35,
-                        color: c.textPrimary)),
-                const SizedBox(height: 8),
-                Row(children: [
-                  if (showAwardBtn)
-                    _ActionChip(
-                      icon:  Icons.emoji_events_rounded,
-                      label: 'Best answer',
-                      color: c.success,
-                      bg:    c.successBg,
-                      onTap: onAward,
-                    ),
-                  if (showAwardBtn) const SizedBox(width: 8),
-                  if (showTipBtn)
-                    _ActionChip(
-                      icon:  Icons.bolt_rounded,
-                      label: 'Tip',
-                      color: c.warningKarma,
-                      bg:    c.warningKarmaBg,
-                      onTap: onTip,
-                    ),
-                  const Spacer(),
-                  if (authorId.isNotEmpty)
-                    KarmaBadge(uid: authorId, size: KarmaBadgeSize.small),
-                ]),
-              ],
+                ],
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -1754,12 +2086,14 @@ class _TipSheetState extends State<_TipSheet> {
 
 class _CommentInput extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final bool isSending;
   final String? userAvatarUrl;
   final VoidCallback onSend;
 
   const _CommentInput({
     required this.controller,
+    this.focusNode,
     required this.isSending,
     this.userAvatarUrl,
     required this.onSend,
@@ -1798,6 +2132,7 @@ class _CommentInput extends StatelessWidget {
             ),
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
               maxLines: null,
               textCapitalization: TextCapitalization.sentences,
               style: TextStyle(color: c.textHi),
