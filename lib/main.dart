@@ -9,7 +9,7 @@ void main() async {
   runApp(const InteraApp());
 }
 
-/// Root widget for the INTERA app.
+
 class InteraApp extends StatelessWidget {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 

@@ -66,6 +66,24 @@ service cloud.firestore {
         resource.data.authorId == request.auth.uid;
     }
 
+    // Allow post creators/authors to update or delete comments on their posts
+    match /posts/{postId}/comments/{commentId} {
+      allow update, delete: if request.auth != null && (
+        resource.data.authorId == request.auth.uid ||
+        get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid ||
+        get(/databases/$(database)/documents/posts/$(postId)).data.realAuthorId == request.auth.uid
+      );
+    }
+
+    // Allow post creators/authors to update or delete comments on community posts
+    match /communities/{communityId}/posts/{postId}/comments/{commentId} {
+      allow update, delete: if request.auth != null && (
+        resource.data.authorId == request.auth.uid ||
+        get(/databases/$(database)/documents/communities/{communityId}/posts/{postId}).data.authorId == request.auth.uid ||
+        get(/databases/$(database)/documents/communities/{communityId}/posts/{postId}).data.realAuthorId == request.auth.uid
+      );
+    }
+
     // ── Notifications ──────────────────────────────────────────────────────────
     match /notifications/{notifId} {
       // Only the recipient can read or mark as read / delete
