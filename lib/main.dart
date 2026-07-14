@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/constants/strings.dart';
 import 'core/routes/app_routes.dart';
 import 'core/theme/app_theme.dart';
+import 'shared/widgets/custom_scaffold_messenger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +46,7 @@ class InteraApp extends StatelessWidget {
                     end: Alignment.bottomRight,
                   ),
                 ),
-                child: child,
+                child: CustomScaffoldMessenger(child: child!),
               ),
             );
           },
