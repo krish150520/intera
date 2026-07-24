@@ -26,7 +26,7 @@ class AuthService {
     return isGoogleUser || user.emailVerified;
   }
 
-  // ---------- Email / password ----------
+  // Email / password 
 
   Future<UserCredential> signIn({required String email, required String password}) {
     return _auth.signInWithEmailAndPassword(email: email.trim(), password: password.trim());
@@ -46,29 +46,25 @@ class AuthService {
     }
   }
 
-  /// Re-fetches the user from Firebase so emailVerified reflects reality.
-  /// Wrapped in try/catch so offline/network failures don't crash the splash
-  /// screen — callers get the last-known cached state instead.
+  
   Future<void> reloadUser() async {
     try {
       await _auth.currentUser?.reload();
     } catch (_) {
-      // Ignore — stale cached state is fine as a fallback.
+      
     }
   }
 
-  /// Forces the Firebase ID token to refresh so Firestore security rules
-  /// see the updated email_verified claim immediately after verification.
-  /// Call this once right after reloadUser() confirms isVerified == true.
+
   Future<void> refreshIdToken() async {
     try {
       await _auth.currentUser?.getIdToken(true);
     } catch (_) {
-      // Non-fatal — token will refresh naturally on next request anyway.
+      
     }
   }
 
-  // ---------- Google ----------
+  //  Google 
 
   Future<UserCredential> signInWithGoogle() async {
     final googleUser = await _googleSignIn.signIn();
@@ -88,7 +84,7 @@ class AuthService {
     return _auth.signInWithCredential(credential);
   }
 
-  // ---------- Shared ----------
+  // Shared 
 
   Future<void> signOut() async {
     await _googleSignIn.signOut();
@@ -114,8 +110,7 @@ class AuthService {
         'id': user.uid,
         'name': name ?? user.displayName ?? 'New User',
         'username': resolvedUsername,
-        // Stripped of '@' and lowercased — this is what search_screen.dart
-        // queries against via orderBy('usernameLower').startAt([query]).
+
         'usernameLower': usernameLower,
         'bio': 'Welcome to my INTERA workspace profile!',
         'avatarUrl': avatarUrl ?? user.photoURL ?? '',

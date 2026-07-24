@@ -7,7 +7,7 @@ const List<String> kAllInterestTags = [
   'music', 'food', 'travel', 'sports', 'science', 'fashion', 'business',
 ];
 
-/// Holds the signals needed to score posts for a specific user.
+// Holds the signals needed to score posts for a specific user.
 class UserFeedProfile {
   final String uid;
   final Set<String> followingIds;

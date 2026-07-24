@@ -1,7 +1,4 @@
-/// Centralized asset paths for INTERA.
-///
-/// Add these files under the corresponding folders and register them
-/// in pubspec.yaml under flutter > assets.
+
 class AppAssets {
   AppAssets._();
 
