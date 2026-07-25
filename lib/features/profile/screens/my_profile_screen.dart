@@ -587,7 +587,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             ),
             Divider(height: 1, color: c.divider),
             _pointTypeTile(sheetCtx, 'karma', 'Karma ⚡', currentType),
-            _pointTypeTile(sheetCtx, 'beauty', 'Beauty 💖', currentType),
+            _pointTypeTile(sheetCtx, 'beauty', 'Radiance 💖', currentType),
             _pointTypeTile(sheetCtx, 'art', 'Art 🎨', currentType),
             _pointTypeTile(sheetCtx, 'funny', 'Funny 😂', currentType),
           ],
@@ -628,7 +628,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
     switch (displayedType) {
       case 'beauty':
-        label = 'Beauty';
+        label = 'Radiance';
         val = (ud['beautyPoints'] as num?)?.toInt() ?? 0;
         icon = Icons.favorite_rounded;
         valueColor = Colors.pinkAccent;

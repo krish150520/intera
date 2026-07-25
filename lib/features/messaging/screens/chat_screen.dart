@@ -41,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isUploadingImage = false;
   bool _isResponding = false;
   final Set<String> _animatedMessageIds = {};
+  bool _deletedByMe = false;
 
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _convoStream;
 
@@ -217,6 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (confirmed != true) return;
 
     try {
+      _deletedByMe = true;
       await _deleteConversationPermanently(widget.conversationId);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -286,7 +288,7 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (context, convoSnapshot) {
             if (convoSnapshot.hasData && !convoSnapshot.data!.exists) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
+                if (mounted && !_deletedByMe) {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('This conversation has been deleted.')),

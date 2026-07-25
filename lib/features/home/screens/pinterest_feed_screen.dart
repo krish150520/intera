@@ -114,20 +114,11 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color: _c.field,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _c.border, width: 0.8),
-              ),
-              padding: const EdgeInsets.all(3),
-              child: Row(
-                children: [
-                  _buildTopTab('explore', 'Explore 🔍'),
-                  _buildTopTab('leaderboard', 'Leaderboard 🏆'),
-                ],
-              ),
+            child: Row(
+              children: [
+                _buildTopTab('explore', 'Explore 🔍'),
+                _buildTopTab('leaderboard', 'Leaderboard 🏆'),
+              ],
             ),
           ),
           Expanded(
@@ -334,28 +325,22 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _activeTab = tab),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? _c.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1.5),
-                    )
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? _c.textHi : _c.textMuted,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-            ),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: selected ? _c.textHi : _c.textMuted,
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -414,7 +399,7 @@ class _PinterestFeedScreenState extends State<PinterestFeedScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              _buildCategoryPill('beauty', '💖 Beauty'),
+              _buildCategoryPill('beauty', '💖 Radiance'),
               const SizedBox(width: 8),
               _buildCategoryPill('art', '🎨 Art'),
               const SizedBox(width: 8),

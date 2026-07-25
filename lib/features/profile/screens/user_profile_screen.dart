@@ -260,7 +260,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                       switch (dispType) {
                         case 'beauty':
-                          label = 'Beauty';
+                          label = 'Radiance';
                           val = (userData['beautyPoints'] as num?)?.toInt() ?? 0;
                           icon = Icons.favorite_rounded;
                           valColor = Colors.pinkAccent;

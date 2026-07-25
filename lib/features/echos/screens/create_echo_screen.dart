@@ -639,7 +639,7 @@ class _CreateEchoScreenState extends State<CreateEchoScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            _buildCategoryChip('beauty', '💖 Beauty', c),
+                            _buildCategoryChip('beauty', '💖 Radiance', c),
                             _buildCategoryChip('art', '🎨 Art', c),
                             _buildCategoryChip('funny', '😂 Funny', c),
                           ],

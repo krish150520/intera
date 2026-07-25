@@ -494,7 +494,7 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
-                  label: 'Beauty 💖',
+                  label: 'Radiance 💖',
                   selected: _selectedCategory == 'beauty',
                   onTap: () => setState(() => _selectedCategory = 'beauty'),
                 ),

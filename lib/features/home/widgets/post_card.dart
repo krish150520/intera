@@ -861,7 +861,7 @@ void _showReactionSheet(BuildContext context, void Function(String) onSelect) {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _reactionItem(sheetCtx, 'like', '👍', 'Like', onSelect),
-                  _reactionItem(sheetCtx, 'beauty', '💖', 'Beauty', onSelect),
+                  _reactionItem(sheetCtx, 'beauty', '💖', 'Radiance', onSelect),
                   _reactionItem(sheetCtx, 'art', '🎨', 'Art', onSelect),
                   _reactionItem(sheetCtx, 'funny', '😂', 'Funny', onSelect),
                 ],
