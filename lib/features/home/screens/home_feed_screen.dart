@@ -413,7 +413,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  //  Build 
   @override
   Widget build(BuildContext context) {
     _c = context.appColors;
@@ -429,7 +429,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  // ── Sidebar overlay ────────────────────────────────────────────────────────
+  //  Sidebar overlay 
   Widget _buildSidebarOverlay() {
     return AnimatedBuilder(
       animation: _sidebarController,
@@ -461,7 +461,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  // ── Glass panel ────────────────────────────────────────────────────────────
+  //  Glass panel 
   Widget _buildGlassPanel() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -552,7 +552,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
-  // ── Polished tab bar ───────────────────────────────────────────────────────
+  //  Polished tab bar 
   Widget _buildSidebarTabBar(bool isDark) {
     return StreamBuilder<int>(
       stream: NotificationService.unreadCountStream(_myUid),
@@ -854,7 +854,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     );
     }
 
-  // ── Tab body ───────────────────────────────────────────────────────────────
+  //  Tab body 
   Widget _buildSidebarTabBody() {
     switch (_sidebarTab) {
       case _SidebarTab.sparks:
@@ -868,7 +868,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
-  // ── Feed ───────────────────────────────────────────────────────────────────
+  //  Feed 
   Widget _buildFeed() {
     final currentUid = _myUid;
     return StreamBuilder<QuerySnapshot>(
@@ -1042,9 +1042,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  // ── AppBar ─────────────────────────────────────────────────────────────────
-  // Option B: hamburger icon on the left opens the sidebar, INTERA centered
-  // as static branding, profile avatar stays on the right.
+  //  AppBar 
+  
   AppBar _buildAppBar() {
     final user = FirebaseAuth.instance.currentUser;
     return AppBar(
@@ -1153,7 +1152,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen>
   }
 }
 
-// ── Reusable glass icon button ─────────────────────────────────────────────────
+// Reusable glass icon button 
 class _GlassIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -1196,7 +1195,7 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
-// ── Feed filter wrapper helper ────────────────────────────────────────────────
+// Feed filter wrapper 
 
 class _FeedFilterWrapper {
   final Post post;

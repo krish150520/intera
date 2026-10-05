@@ -57,8 +57,7 @@ class AppRoutes {
         createHelpPost: (context) => const CreateHelpPostScreen(),
       };
 
-  /// For routes that need arguments (e.g. PostDetailScreen needs a [Post]),
-  /// use onGenerateRoute in MaterialApp pointing here.
+ 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case postDetail:

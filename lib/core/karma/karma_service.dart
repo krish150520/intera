@@ -4,18 +4,18 @@ import 'package:flutter/foundation.dart';
 
 /// Transaction types stored in Firestore ledger.
 enum KarmaTxType {
-  earnedBestAnswer,   // answerer was marked best → earned reward
-  tipGiven,           // poster tipped any commenter
-  tipReceived,        // receiver side of tip
-  deductedHelpPost,   // reserved karma when help post created
-  refundedHelpPost,   // refunded if post cancelled without awarding
+  earnedBestAnswer,   
+  tipGiven,           
+  tipReceived,        
+  deductedHelpPost,   
+  refundedHelpPost,   
 }
 
 class KarmaService {
   static final _db   = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
 
-  // ── Read balance ───────────────────────────────────────────────────────────
+  //  Read balance 
 
   static Stream<int> balanceStream(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((snap) {
@@ -36,11 +36,7 @@ class KarmaService {
     return balance + weekly;
   }
 
-  // ── Sync incoming karma (TIPS & BEST ANSWER AWARDS) ──────────────────────
-  // Since clients cannot modify other users' documents, when a user is tipped
-  // or awarded karma, the sender creates the ledger transaction but does not
-  // modify the recipient's user document. The recipient's client will pull
-  // and sync these updates when they launch the app or open their profile.
+  
   static Future<void> syncKarmaBalance(String uid) async {
     if (uid.isEmpty) return;
     try {
@@ -170,8 +166,7 @@ class KarmaService {
     await batch.commit();
   }
 
-  // ── Award best answer ──────────────────────────────────────────────────────
-  // Marks the post completed, transfers the reserved reward to the answerer.
+  
 
   static Future<void> awardBestAnswer({
     required String postId,
@@ -218,7 +213,7 @@ class KarmaService {
     await batch.commit();
   }
 
-  // ── Tip any commenter ──────────────────────────────────────────────────────
+  // Tip any commenter 
 
   static Future<void> tipUser({
     required String toUid,
@@ -273,7 +268,7 @@ class KarmaService {
     await batch.commit();
   }
 
-  // ── Refund if post deleted before awarding ─────────────────────────────────
+  // Refund if post deleted before awarding 
 
   static Future<void> refundHelpPost({
     required String postId,
@@ -303,7 +298,7 @@ class KarmaService {
     await batch.commit();
   }
 
-  // ── Transaction history for a user ────────────────────────────────────────
+  //  Transaction history for a user 
 
   static Stream<QuerySnapshot> transactionStream(String uid) {
     return _db
